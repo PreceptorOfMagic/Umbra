@@ -59,14 +59,19 @@ namespace beta_profile {
      * `beta_profile.conf`, beside sunshine.conf. Absent = this module is inert.
      *
      *     # every host that serves BOTH a live and a beta Aurora. NOT on VEGA.
-     *     client = Aurora Beta
+     *     client_uuid = <the beta certificate's uuid>   # PREFERRED -- guaranteed distinct
+     *     client = Aurora Beta                          # only if the name is actually distinct
      *     gop_length = 300
      *     coop_pad_rows = 16
      *
-     * `client` may repeat. Matching is exact on the paired certificate's name.
+     * Either key may repeat; a session matches if EITHER its uuid or its name is listed.
+     * PREFER `client_uuid`: measured 2026-09-07, SKYNET's only paired client is named
+     * "Legacy Moonlight Client", so both Auroras would very likely share a name and
+     * name-matching would silently never fire.
      */
     struct profile_t {
       std::vector<std::string> clients;
+      std::vector<std::string> uuids;
       std::vector<std::pair<std::string, int>> values;
       bool loaded = false;
     };
@@ -98,6 +103,12 @@ namespace beta_profile {
           }
           continue;
         }
+        if (key == "client_uuid") {
+          if (!val.empty()) {
+            p.uuids.push_back(val);
+          }
+          continue;
+        }
         try {
           p.values.emplace_back(key, std::stoi(val));
         } catch (...) {
@@ -109,7 +120,7 @@ namespace beta_profile {
 
   }  // namespace
 
-  bool apply_for_client(const std::string &client_name) {
+  bool apply_for_client(const std::string &client_name, const std::string &client_uuid) {
     std::lock_guard lock(mtx);
 
     // A session that never cleanly ended must not leak its overrides into the next one.
@@ -129,15 +140,22 @@ namespace beta_profile {
     }
 
     bool match = false;
+    for (const auto &u : p.uuids) {
+      if (u == client_uuid) {
+        match = true;
+        break;
+      }
+    }
     for (const auto &c : p.clients) {
-      if (c == client_name) {
+      if (!match && c == client_name) {
         match = true;
         break;
       }
     }
     if (!match) {
-      BOOST_LOG(info) << "beta_profile: client '"sv << client_name
-                      << "' is not listed -- using this host's normal config"sv;
+      // Print the uuid: it is what the conf should list, and it is otherwise hard to find.
+      BOOST_LOG(info) << "beta_profile: client '"sv << client_name << "' uuid "sv << client_uuid
+                      << " is not listed -- using this host's normal config"sv;
       return false;
     }
 

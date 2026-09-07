@@ -40,13 +40,20 @@ namespace beta_profile {
   /**
    * @brief Apply this client's overrides, if it is a configured beta client.
    * @param client_name `launch_session_t::device_name` — the PAIRED CERTIFICATE's name.
+   * @param client_uuid `launch_session_t::unique_id` — that certificate's uuid.
+   *
+   * MATCH ON THE UUID, NOT THE NAME, UNLESS YOU HAVE CHECKED THE NAME IS DISTINCT. Measured
+   * 2026-09-07 on SKYNET: the only paired client is named "Legacy Moonlight Client" — a generic
+   * name Aurora does not override, so the beta app would very likely pair under the SAME name and
+   * name-matching would silently never fire. The uuid is per-certificate and the beta app has its
+   * own conf/, so it is guaranteed distinct.
    * @return true if overrides were applied (and must later be restored).
    *
    * Safe to call when no `beta_profile.conf` exists: it returns false and changes nothing.
    * Calling it twice without an intervening restore restores first, so a session that never
    * cleanly ended cannot leak its overrides into the next one.
    */
-  bool apply_for_client(const std::string &client_name);
+  bool apply_for_client(const std::string &client_name, const std::string &client_uuid);
 
   /**
    * @brief Put back whatever `apply_for_client` changed. Idempotent; safe if nothing was applied.

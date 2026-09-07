@@ -467,7 +467,7 @@ namespace nvhttp {
     // so a host serving BOTH the live and the beta Aurora answers each with different settings for
     // the duration of its session. Inert unless beta_profile.conf exists -- and it must NOT exist
     // on VEGA, which serves the beta client only.
-    beta_profile::apply_for_client(launch_session->device_name);
+    beta_profile::apply_for_client(launch_session->device_name, launch_session->unique_id);
 #endif
     launch_session->unique_id = named_cert_p->uuid;
     launch_session->perm = named_cert_p->perm;
