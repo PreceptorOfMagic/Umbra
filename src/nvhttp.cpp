@@ -462,14 +462,16 @@ namespace nvhttp {
     }
 
     launch_session->device_name = named_cert_p->name.empty() ? "ApolloDisplay"s : named_cert_p->name;
+    launch_session->unique_id = named_cert_p->uuid;
 #ifdef APOLLO_BETA_PROFILE
     // BETA-ONLY, REMOVE FOR RELEASE (src/beta_profile.h). One Apollo cannot run twice on a host,
     // so a host serving BOTH the live and the beta Aurora answers each with different settings for
     // the duration of its session. Inert unless beta_profile.conf exists -- and it must NOT exist
-    // on VEGA, which serves the beta client only.
+    // on VEGA, which serves the beta client only. MUST come AFTER unique_id is assigned above:
+    // matching is by uuid because both Auroras pair under the same generic name, and calling this
+    // one line too early passed an EMPTY uuid and fell through to a name that never matches.
     beta_profile::apply_for_client(launch_session->device_name, launch_session->unique_id);
 #endif
-    launch_session->unique_id = named_cert_p->uuid;
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));
     launch_session->surround_info = util::from_view(get_arg(args, "surroundAudioInfo", "196610"));
