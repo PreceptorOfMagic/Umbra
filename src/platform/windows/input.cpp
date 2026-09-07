@@ -22,12 +22,11 @@
 #include "src/logging.h"
 #include "src/platform/common.h"
 
-#ifdef __MINGW32__
-DECLARE_HANDLE(HSYNTHETICPOINTERDEVICE);
-WINUSERAPI HSYNTHETICPOINTERDEVICE WINAPI CreateSyntheticPointerDevice(POINTER_INPUT_TYPE pointerType, ULONG maxCount, POINTER_FEEDBACK_MODE mode);
-WINUSERAPI BOOL WINAPI InjectSyntheticPointerInput(HSYNTHETICPOINTERDEVICE device, CONST POINTER_TYPE_INFO *pointerInfo, UINT32 count);
-WINUSERAPI VOID WINAPI DestroySyntheticPointerDevice(HSYNTHETICPOINTERDEVICE device);
-#endif
+// The synthetic pointer API used to be missing from mingw-w64's winuser.h, so this
+// file declared it itself under __MINGW32__. Current mingw-w64 declares it (see
+// ucrt64/include/winuser.h:2963), and the local copy is then a redefinition that
+// fails the build. Dropped rather than version-gated: the toolchain we build with
+// provides it, and a stale shim silently shadowing the SDK is the worse failure.
 
 namespace platf {
   using namespace std::literals;

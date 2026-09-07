@@ -19,6 +19,11 @@ install(FILES ${VIGEMBUS_INSTALLER}
         COMPONENT gamepad)
 
 # Adding tools
+# Aurora Link ships next to sunshine.exe, in the SAME component as the
+# application, so it is installed and uninstalled with Apollo -- the whole point
+# of moving it out of the hand-built script tree.
+install(TARGETS aurora-link RUNTIME DESTINATION "." COMPONENT application)
+
 install(TARGETS dxgi-info RUNTIME DESTINATION "tools" COMPONENT dxgi)
 install(TARGETS audio-info RUNTIME DESTINATION "tools" COMPONENT audio)
 

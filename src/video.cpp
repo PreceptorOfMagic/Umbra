@@ -811,6 +811,24 @@ namespace video {
         {"usage"s, &config::video.amd.amd_usage_h264},
         {"vbaq"s, &config::video.amd.amd_vbaq},
         {"enforce_hrd"s, &config::video.amd.amd_enforce_hrd},
+        // ROLLING INTRA REFRESH -- ffmpeg's h264_amf already exposes this ("Intra Refresh MBs
+        // Number Per Slot in Macroblocks"); Apollo simply never passed it, so the AMF path had
+        // no way to repair a damaged reference except a full keyframe.
+        //
+        // WHY IT IS NEEDED, for mixed-vendor co-op splicing: the composite stacks an NVENC pane
+        // over an AMF pane, and NVENC can be told not to predict across the seam
+        // (nvenc_constrained) while AMF has no equivalent property at all. A guard band bounds
+        // how DEEP the resulting contamination reaches; only a refresh bounds how LONG it
+        // persists. Every whole-frame refresh mechanism was rejected on the panel: an infinite
+        // GOP visibly corrupts within ~2 minutes, and gop_length 30/60 (and all-intra) repaint
+        // the whole pane at coarse QP, which the user reports as an unacceptable flash.
+        // Intra refresh reseeds a few macroblock slots per frame, so NO frame ever repaints the
+        // pane -- it cannot flash by construction, which is the entire reason it is the only
+        // remaining option.
+        //
+        // Unset by default: absent key -> std::optional stays empty -> the option is never
+        // applied -> stock behaviour, bit for bit.
+        {"intra_refresh_mb"s, &config::video.amd.amd_intra_refresh_mb},
       },
       {},  // SDR-specific options
       {},  // HDR-specific options
@@ -869,7 +887,24 @@ namespace video {
       // 'keyint=-1' in the parameters ourselves.
       {
         {"forced-idr"s, 1},
-        {"x265-params"s, "info=0:keyint=-1"s},
+        {"x265-params"s, [](const config_t &) {
+           // keyint=-1 is x265's INFINITE GOP and silently overrides ctx->gop_size,
+           // so a periodic IDR needs the keyint set here too.
+           //
+           // open-gop=0 is not optional. MEASURED 2026-08-23 with ffmpeg 8.0.1:
+           // libx265 at -g 30 puts random-access points on period (pictures 0/29/59/89)
+           // but only the first is an IDR -- the rest are CRA_NUT with RASL leading
+           // pictures, i.e. an OPEN GOP that does NOT reset the reference chain. With
+           // open-gop=0 the same command yields IDR_N_LP at 0/30/60/90, interval [30].
+           // Apollo cannot detect the difference: its check keys on AV_PKT_FLAG_KEY,
+           // which is set for a CRA just as it is for an IDR.
+           auto g = config::video.gop_length;
+           if (g > 0) {
+             auto n = std::to_string(g);
+             return "info=0:open-gop=0:keyint="s + n + ":min-keyint="s + n;
+           }
+           return "info=0:keyint=-1"s;
+         }},
         {"preset"s, &config::video.sw.sw_preset},
         {"tune"s, &config::video.sw.sw_tune},
       },
@@ -1581,12 +1616,24 @@ namespace video {
       // B-frames delay decoder output, so never use them
       ctx->max_b_frames = 0;
 
-      // Use an infinite GOP length since I-frames are generated on demand
-      ctx->gop_size = encoder.flags & LIMITED_GOP_SIZE ?
-                        std::numeric_limits<std::int16_t>::max() :
-                        std::numeric_limits<int>::max();
+      // Stock behaviour is an infinite GOP, because I-frames are generated on demand.
+      // gop_length > 0 asks for a PERIODIC IDR instead, which co-op's seam fix needs:
+      // the divider limits how much damage is INJECTED, a short GOP limits how long it
+      // STAYS, and neither works alone. This is the avcodec-path equivalent of
+      // nvenc_gop_length, which reaches only the native nvenc encoder.
+      //
+      // Setting keyint_min == gop_size asks for a FIXED period rather than a minimum,
+      // so the interval is predictable instead of scene-cut driven.
+      if (config::video.gop_length > 0) {
+        ctx->gop_size = config::video.gop_length;
+        ctx->keyint_min = config::video.gop_length;
+      } else {
+        ctx->gop_size = encoder.flags & LIMITED_GOP_SIZE ?
+                          std::numeric_limits<std::int16_t>::max() :
+                          std::numeric_limits<int>::max();
 
-      ctx->keyint_min = std::numeric_limits<int>::max();
+        ctx->keyint_min = std::numeric_limits<int>::max();
+      }
 
       // Some client decoders have limits on the number of reference frames
       if (config.numRefFrames) {
@@ -1600,6 +1647,28 @@ namespace video {
       // We forcefully reset the flags to avoid clash on reuse of AVCodecContext
       ctx->flags = 0;
       ctx->flags |= AV_CODEC_FLAG_CLOSED_GOP | AV_CODEC_FLAG_LOW_DELAY;
+      // DEBLOCKING FILTER: ON. This RESTORES ffmpeg's own `{"flags","+loop"}` codec default,
+      // which the `ctx->flags = 0` reset above wipes. Without it amfenc_h264.c:203/:511 assign
+      // AMF_VIDEO_ENCODER_DE_BLOCKING_FILTER = false and every AMF slice carries
+      // disable_deblocking_filter_idc = 1, measured on the wire 2026-09-01 to be the cause of the
+      // constant fine blockiness on the AMD half. NVENC ignores this flag (it keeps its own
+      // disableDeblockingFilterIDC = 0), so on this rig it moves VEGA only.
+      //
+      // SCOPE, ACCURATELY: this sits in make_avcodec_encode_session() (~:1535), the GENERIC
+      // avcodec session builder shared by AMF, VAAPI, QSV and Apollo's software x264/x265
+      // fallback -- it is NOT an AMD-only branch. NVENC is unaffected only because its native
+      // path never reaches this function. It therefore also applies to VEGA's SOLO streams, not
+      // just the co-op peer. Judged safe because it restores ffmpeg's own documented default
+      // rather than imposing something co-op-specific.
+      //
+      // THIS LINE REQUIRES THE MATCHING CLIENT CHANGE AND MUST NOT BE SHIPPED WITHOUT IT.
+      // Turning the filter on makes AMF stop coding deblocking_filter_control_present_flag,
+      // moving VEGA's PPS out of agreement with the NVENC primary's. On its own that made Aurora
+      // refuse every splice (measured 2026-09-01: refincompat=117, avccomposed=0, no video in 3
+      // launch attempts). Aurora 2026-09-02 handles it: coop_avc.c rewrites the deblocking field
+      // per the DESTINATION PPS rather than the source's, and coop_avc_compatible() requires only
+      // that the DESTINATION can carry the field.
+      ctx->flags |= AV_CODEC_FLAG_LOOP_FILTER;
 
       ctx->flags2 |= AV_CODEC_FLAG2_FAST;
 
@@ -1759,6 +1828,29 @@ namespace video {
           ctx->rc_buffer_size = bitrate / ((config.framerate * 10) / 15);
         } else {
           ctx->rc_buffer_size = bitrate / config.framerate;
+
+          // THE AMD ENCODER WAS RUNNING A 1.0-FRAME VBV, BELOW AMD'S OWN DOCUMENTED FLOOR.
+          //
+          // The line above sets VBV_BUFFER_SIZE to exactly one frame's bit budget, and the
+          // vbv_percentage_increase escape below is gated to `encoder.name == "nvenc"`, so on
+          // AMF there was no way out of it. AMD's rate-control documentation states that under
+          // LCVBR (`vbr_latency`, Apollo's default `amd_rc`) "the VBV buffer can be set to be
+          // 1.1 to 3 frames", and that LCVBR reaches its latency target "at the compromise of
+          // encoded video quality".
+          //
+          // A 1.0-frame CPB forbids any access unit meaningfully larger than one frame's
+          // budget. MEASURED 2026-09-01: 185 peer IDRs produced only 2 pictures over 100 KiB --
+          // a full intra pane in ~63 KB = 0.11 bits/pixel. That is the coarse intra repaint the
+          // user sees as a flash, and the same starvation is what blocks smooth gradients.
+          // It also explains why RAISING the bitrate did not help and measured worse: bit_rate,
+          // rc_max_rate and rc_buffer_size all scale together, so the RATIO never changes while
+          // the peak the link and the decoder must absorb goes up.
+          //
+          // 2.0 frames sits mid-range of AMD's stated 1.1-3.0 and is the smallest value that is
+          // unambiguously inside it. Kept OFF the nvenc path, which has its own tested knob.
+          if (encoder.name == "amdvce") {
+            ctx->rc_buffer_size = (bitrate / config.framerate) * 2;
+          }
 
 #ifndef __APPLE__
           if (encoder.name == "nvenc" && config::video.nv_legacy.vbv_percentage_increase > 0) {

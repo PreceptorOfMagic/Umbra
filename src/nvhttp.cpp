@@ -40,6 +40,14 @@
 
 #ifdef _WIN32
   #include "platform/windows/virtual_display.h"
+
+  /* DECLARED, NOT INCLUDED, AND ON PURPOSE. The definition lives in
+   * platform/windows/utils.cpp, but platform/windows/utils.h drags <windows.h> and
+   * <wtsapi32.h> into this translation unit -- and this one is cross-platform, full of
+   * boost and Simple-Web-Server templates that windows.h's macros (ERROR, min/max,
+   * SendMessage) are notorious for breaking. One line costs nothing and cannot do that;
+   * a signature drift still fails loudly, at link time, on a symbol that names itself. */
+  bool is_user_session_locked();
 #endif
 
 using namespace std::literals;
@@ -998,6 +1006,34 @@ namespace nvhttp {
       tree.put("root.currentgame", current_appid);
       tree.put("root.currentgameuuid", proc::proc.get_running_app_uuid());
       tree.put("root.state", current_appid > 0 ? "SUNSHINE_SERVER_BUSY" : "SUNSHINE_SERVER_FREE");
+
+      /* IS SOMEONE LOOKING AT A LOCK SCREEN RIGHT NOW.
+       *
+       * A client cannot work this out for itself: a signed-in but LOCKED machine
+       * answers this very query perfectly well, so "online" has never meant "usable".
+       * Aurora's PIN auto-entry had to assume the worst and type the credential at
+       * every host it was about to stream from, which on an already-unlocked PC meant
+       * a stray Enter and the PIN going into whatever had focus -- and then a quit +
+       * relaunch on top, purely to re-negotiate HDR off the secure desktop.
+       *
+       * Answered fresh on every request, never cached: WTSQuerySessionInformationW is
+       * asked about the CURRENT active console session each time, so this tracks a
+       * lock or unlock that happens between two polls with no state on either side.
+       *
+       * UNKNOWN DELIBERATELY READS AS 0. is_user_session_locked() returns false on
+       * every failure path, and false is the safe answer here -- a client that
+       * believes a host is unlocked simply skips the login sequence, which is the
+       * conservative outcome. The dangerous direction is claiming "locked" when it is
+       * not, because that is what types a password into a running game.
+       *
+       * HTTPS-ONLY, with currentgame and state, and for the same reason they are:
+       * whether somebody is sitting at this machine is not something to hand to an
+       * unpaired scanner on the LAN. */
+#ifdef _WIN32
+      tree.put("root.SessionLocked", is_user_session_locked() ? 1 : 0);
+#else
+      tree.put("root.SessionLocked", 0);
+#endif
     } else {
       tree.put("root.currentgame", 0);
       tree.put("root.currentgameuuid", "");

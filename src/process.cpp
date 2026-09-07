@@ -288,11 +288,37 @@ namespace proc {
           target_fps *= 2;
         }
 
+        // CO-OP SEAM PADDING. The ENCODE stays at the client's requested size; only the
+        // VIRTUAL DISPLAY is shrunk, by 2 * coop_pad_rows. Apollo's own aspect-preserving
+        // centring (display_vram.cpp) then leaves coop_pad_rows BLACK ROWS at the top and
+        // bottom of every encoded frame -- which is what makes H.264 edge extension TRUE at a
+        // spliced pane boundary (see config.h for the measurement).
+        //
+        // The width is deliberately untouched: the capture then fits the encode frame exactly
+        // in width, so the centring is a pure vertical offset with NO resampling.
+        uint32_t vdisplay_height = render_height;
+        {
+          const int pad = config::video.coop_pad_rows;
+          // Refuse a value that would leave nothing to display, or that is not macroblock
+          // aligned -- an unaligned inset puts the content on a half-macroblock boundary and
+          // every row below it is coded against a shifted grid.
+          if (pad > 0 && (pad % 16) == 0 && (uint32_t)(2 * pad) < render_height / 2) {
+            vdisplay_height = render_height - (uint32_t)(2 * pad);
+            BOOST_LOG(info) << "Co-op seam padding: virtual display "sv << render_width << 'x'
+                            << vdisplay_height << " inside a "sv << render_width << 'x'
+                            << render_height << " encode ("sv << pad << " black rows per edge)"sv;
+          } else if (pad != 0) {
+            BOOST_LOG(warning) << "coop_pad_rows = "sv << pad
+                               << " REFUSED (must be a positive multiple of 16 and leave at "
+                                  "least half the height); no padding applied"sv;
+          }
+        }
+
         std::wstring vdisplayName = VDISPLAY::createVirtualDisplay(
           device_uuid_str.c_str(),
           device_name.c_str(),
           render_width,
-          render_height,
+          vdisplay_height,
           target_fps,
           launch_session->display_guid
         );
@@ -307,13 +333,16 @@ namespace proc {
           // Don't change display settings when no params are given
           if (launch_session->width && launch_session->height && launch_session->fps) {
             // Apply display settings
-            VDISPLAY::changeDisplaySettings(vdisplayName.c_str(), render_width, render_height, target_fps);
+            // vdisplay_height, NOT render_height: this call re-applies the display mode after
+            // creation, so passing the ENCODE height here would immediately undo the co-op
+            // seam inset and put the desktop back to the full frame size.
+            VDISPLAY::changeDisplaySettings(vdisplayName.c_str(), render_width, vdisplay_height, target_fps);
           }
 
           // Check the ISOLATED DISPLAY configuration setting and rearrange the displays
           if (config::video.isolated_virtual_display_option == true) {
             // Apply the isolated display settings
-            VDISPLAY::changeDisplaySettings2(vdisplayName.c_str(), render_width, render_height, target_fps, true);
+            VDISPLAY::changeDisplaySettings2(vdisplayName.c_str(), render_width, vdisplay_height, target_fps, true);
           }
 
           // Set virtual_display to true when everything went fine
@@ -932,6 +961,43 @@ namespace proc {
     return ss.str();
   }
 
+  /**
+   * @brief Copy the global prep/state commands onto an app defined in CODE, not apps.json.
+   *
+   * The apps.json parse loop merges config::sunshine.{prep,state}_cmds into every app it
+   * builds. Apps constructed in C++ (Virtual Display, Remote Input, ...) never went through
+   * that loop, so their command lists stayed EMPTY -- and proc_t::resume()/execute() both
+   * short-circuit on an empty list. On Aurora that meant selecting Virtual Desktop ran
+   * neither global_prep_cmd (the pad/mic cable hooks) nor global_state_cmd (dispwake
+   * physical-off), so the PC monitor was never switched off and the desktop stayed two
+   * displays wide. Measured 2026-08-13: no `Executing Resume Cmd` in any Virtual Display
+   * session, while every apps.json app logged one.
+   *
+   * Kept as a helper rather than inlined so a built-in app opts in with one line, and so
+   * the env expansion stays identical to the apps.json path.
+   */
+  void apply_global_cmds(proc::ctx_t &ctx, boost::process::v1::native_environment &env) {
+    // prep_cmd_t only constructs from rvalues, and these sources are the GLOBAL config --
+    // parse_env_val already returns fresh strings, and bool() copies, so nothing here
+    // hollows out config::sunshine.
+    ctx.prep_cmds.reserve(config::sunshine.prep_cmds.size());
+    for (auto &prep_cmd : config::sunshine.prep_cmds) {
+      ctx.prep_cmds.emplace_back(
+        parse_env_val(env, prep_cmd.do_cmd),
+        parse_env_val(env, prep_cmd.undo_cmd),
+        bool(prep_cmd.elevated)
+      );
+    }
+    ctx.state_cmds.reserve(config::sunshine.state_cmds.size());
+    for (auto &state_cmd : config::sunshine.state_cmds) {
+      ctx.state_cmds.emplace_back(
+        parse_env_val(env, state_cmd.do_cmd),
+        parse_env_val(env, state_cmd.undo_cmd),
+        bool(state_cmd.elevated)
+      );
+    }
+  }
+
   std::string validate_app_image_path(std::string app_image_path) {
     if (app_image_path.empty()) {
       return DEFAULT_APP_IMAGE_PATH;
@@ -1457,15 +1523,37 @@ namespace proc {
       ctx.image_path = parse_env_val(this_env, "virtual_desktop.png");
       ctx.virtual_display = true;
       ctx.scale_factor = 100;
-      ctx.use_app_identity = false;
+      /* ITS OWN DISPLAY IDENTITY, NOT THE CLIENT'S. With use_app_identity false the VDD is
+         named+GUID'd from the CLIENT, so a Virtual Display stream and a co-op stream
+         produced the SAME virtual display and Wallpaper Engine could not tell them apart
+         (per-display wallpapers were impossible). true names it "Virtual Display" with
+         VIRTUAL_DISPLAY_UUID, which is stable run to run -- per_client stays false because
+         a wallpaper assigned to a display that changes GUID would not stick. */
+      ctx.use_app_identity = true;
       ctx.per_client_app_identity = false;
       ctx.allow_client_commands = false;
-      ctx.terminate_on_pause = false;
+      /* Terminate rather than linger paused. This is the honest behaviour: pausing already
+         destroys the VDD, so the desktop is gone either way, and a dead session should not
+         be resurrected. NOTE: an earlier comment here claimed this flag was why the PC
+         monitor stayed lit, on the theory that state commands "run on a session LAUNCH, not
+         on a RESUME". THAT IS WRONG -- proc_t::resume() runs state_cmds too (see above).
+         The monitor stayed lit because this app's command lists were EMPTY; see
+         apply_global_cmds below. Leaving the flag true, but do not credit it with the fix. */
+      ctx.terminate_on_pause = true;
 
       ctx.elevated = false;
       ctx.auto_detach = true;
       ctx.wait_all = false;
       ctx.exit_timeout = 5s;
+
+      /* THIS APP IS BUILT IN CODE, SO NOTHING GAVE IT THE GLOBAL COMMANDS. Without this the
+         Virtual Desktop stream ran no global_prep_cmd and no global_state_cmd at all: the
+         pad/mic cable hooks never started and dispwake never switched the physical monitor
+         off, so the desktop stayed 6400x2160 across two displays with the PC panel primary.
+         It also restores the teardown: the prep UNDO is what reaches apollo-display.cmd
+         sessionend, which is the only thing that lights the panel again once
+         terminate_on_pause has skipped the pause command. */
+      apply_global_cmds(ctx, this_env);
 
       auto possible_ids = calculate_app_id(ctx.name, ctx.image_path, i++);
       if (ids.count(std::get<0>(possible_ids)) == 0) {
