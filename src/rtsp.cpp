@@ -27,6 +27,9 @@ extern "C" {
 #include "logging.h"
 #include "network.h"
 #include "rtsp.h"
+#ifdef APOLLO_BETA_PROFILE
+#include "beta_profile.h"  // BETA-ONLY, remove for release
+#endif
 #include "stream.h"
 #include "sync.h"
 #include "video.h"
@@ -647,6 +650,11 @@ namespace rtsp_stream {
 
   void launch_session_clear(uint32_t launch_session_id) {
     server.session_clear(launch_session_id);
+#ifdef APOLLO_BETA_PROFILE
+    // BETA-ONLY, REMOVE FOR RELEASE (src/beta_profile.h). Overrides last exactly one session, so
+    // the next client -- which may be the LIVE one -- gets this host's normal config back.
+    beta_profile::restore();
+#endif
   }
 
   int session_count() {

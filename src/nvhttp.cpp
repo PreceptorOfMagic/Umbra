@@ -28,6 +28,9 @@
 #include "logging.h"
 #include "network.h"
 #include "nvhttp.h"
+#ifdef APOLLO_BETA_PROFILE
+#include "beta_profile.h"  // BETA-ONLY, remove for release
+#endif
 #include "platform/common.h"
 #include "process.h"
 #include "rtsp.h"
@@ -459,6 +462,13 @@ namespace nvhttp {
     }
 
     launch_session->device_name = named_cert_p->name.empty() ? "ApolloDisplay"s : named_cert_p->name;
+#ifdef APOLLO_BETA_PROFILE
+    // BETA-ONLY, REMOVE FOR RELEASE (src/beta_profile.h). One Apollo cannot run twice on a host,
+    // so a host serving BOTH the live and the beta Aurora answers each with different settings for
+    // the duration of its session. Inert unless beta_profile.conf exists -- and it must NOT exist
+    // on VEGA, which serves the beta client only.
+    beta_profile::apply_for_client(launch_session->device_name);
+#endif
     launch_session->unique_id = named_cert_p->uuid;
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));

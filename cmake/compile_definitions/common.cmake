@@ -85,6 +85,10 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/httpcommon.h"
         "${CMAKE_SOURCE_DIR}/src/confighttp.cpp"
         "${CMAKE_SOURCE_DIR}/src/confighttp.h"
+        # BETA-ONLY, REMOVE FOR RELEASE -- see src/beta_profile.h. Compiled out entirely unless
+        # APOLLO_BETA_PROFILE is defined (below), so a release build carries none of it.
+        "${CMAKE_SOURCE_DIR}/src/beta_profile.cpp"
+        "${CMAKE_SOURCE_DIR}/src/beta_profile.h"
         "${CMAKE_SOURCE_DIR}/src/rtsp.cpp"
         "${CMAKE_SOURCE_DIR}/src/rtsp.h"
         "${CMAKE_SOURCE_DIR}/src/stream.cpp"
@@ -122,6 +126,18 @@ endif()
 list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_ASSETS_DIR="${SUNSHINE_ASSETS_DIR_DEF}")
 
 list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_TRAY=${SUNSHINE_TRAY})
+
+# BETA-ONLY, REMOVE FOR RELEASE -- src/beta_profile.h.
+# Lets ONE Apollo answer the live and the beta Aurora client with different settings, because two
+# Apollo instances cannot run on one host (fixed ports, one capture device, one virtual display).
+# OFF makes the feature vanish at compile time: both hooks are #ifdef'd and the translation unit
+# has no other callers.
+#     cmake -DAPOLLO_BETA_PROFILE=OFF     <- the release build
+option(APOLLO_BETA_PROFILE "BETA-ONLY: per-client config overrides for the beta Aurora client" ON)
+if (APOLLO_BETA_PROFILE)
+    list(APPEND SUNSHINE_DEFINITIONS APOLLO_BETA_PROFILE=1)
+    message(STATUS "APOLLO_BETA_PROFILE is ON -- this is a BETA build, not a release build")
+endif ()
 
 # Publisher metadata
 list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_PUBLISHER_NAME="${SUNSHINE_PUBLISHER_NAME}")
