@@ -136,6 +136,7 @@ namespace proc {
     std::string get_last_run_app_name();
     std::string get_running_app_uuid();
     boost::process::v1::environment get_env();
+    bool prepare_gpu_hevc_resume(const rtsp_stream::launch_session_t& session);
     void resume();
     void pause();
     void terminate(bool immediate = false, bool needs_refresh = true);

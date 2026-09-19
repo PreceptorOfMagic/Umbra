@@ -393,6 +393,9 @@ namespace nvhttp {
     auto launch_session = std::make_shared<rtsp_stream::launch_session_t>();
 
     launch_session->id = ++session_id_counter;
+#ifdef APOLLO_BETA_PROFILE
+    launch_session->aurora_gpu_hevc = get_arg(args, "auroraGpuHevc", "0") == "1";
+#endif
 
     // If launched from client
     if (named_cert_p->uuid != http::unique_id) {
@@ -463,15 +466,6 @@ namespace nvhttp {
 
     launch_session->device_name = named_cert_p->name.empty() ? "ApolloDisplay"s : named_cert_p->name;
     launch_session->unique_id = named_cert_p->uuid;
-#ifdef APOLLO_BETA_PROFILE
-    // BETA-ONLY, REMOVE FOR RELEASE (src/beta_profile.h). One Apollo cannot run twice on a host,
-    // so a host serving BOTH the live and the beta Aurora answers each with different settings for
-    // the duration of its session. Inert unless beta_profile.conf exists -- and it must NOT exist
-    // on VEGA, which serves the beta client only. MUST come AFTER unique_id is assigned above:
-    // matching is by uuid because both Auroras pair under the same generic name, and calling this
-    // one line too early passed an EMPTY uuid and fell through to a name that never matches.
-    beta_profile::apply_for_client(launch_session->device_name, launch_session->unique_id);
-#endif
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));
     launch_session->surround_info = util::from_view(get_arg(args, "surroundAudioInfo", "196610"));
@@ -1286,6 +1280,22 @@ namespace nvhttp {
 
     host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p);
+    tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
+#ifdef APOLLO_BETA_PROFILE
+    // Before display setup, app launch or encoder probing. A retained proc launch
+    // object must not keep settings alive after an HTTP failure.
+    try {
+      launch_session->beta_profile = beta_profile::acquire_for_client(launch_session->device_name, launch_session->unique_id);
+    } catch (const std::runtime_error &err) {
+      BOOST_LOG(error) << err.what();
+      tree.put("root.<xmlattr>.status_code", 503);
+      tree.put("root.<xmlattr>.status_message", err.what());
+      tree.put("root.gamesession", 0);
+      tree.put("root.resume", 0);
+      return;
+    }
+    auto profile_failure = util::fail_guard([&]() { beta_profile::release(launch_session->beta_profile); });
+#endif
 
     auto encryption_mode = net::encryption_mode_for_address(request->remote_endpoint().address());
     if (!launch_session->rtsp_cipher && encryption_mode == config::ENCRYPTION_MODE_MANDATORY) {
@@ -1327,6 +1337,13 @@ namespace nvhttp {
 
         if (current_appid == proc::input_only_app_id) {
           launch_session->input_only = true;
+        }
+
+        if (no_active_sessions && !proc::proc.prepare_gpu_hevc_resume(*launch_session)) {
+          tree.put("root.gamesession", 0);
+          tree.put("root.<xmlattr>.status_code", 503);
+          tree.put("root.<xmlattr>.status_message", "Beta HEVC could not resize the resumed virtual display");
+          return;
         }
 
         if (no_active_sessions && !proc::proc.virtual_display) {
@@ -1382,6 +1399,9 @@ namespace nvhttp {
     tree.put("root.gamesession", 1);
 
     rtsp_stream::launch_session_raise(launch_session);
+#ifdef APOLLO_BETA_PROFILE
+    profile_failure.disable();  // Pending launch / streaming session now owns the lease.
+#endif
   }
 
   void resume(bool &host_audio, resp_https_t response, req_https_t request) {
@@ -1436,6 +1456,22 @@ namespace nvhttp {
       host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     }
     auto launch_session = make_launch_session(host_audio, false, args, named_cert_p);
+    tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
+#ifdef APOLLO_BETA_PROFILE
+    // Before display setup, app launch or encoder probing. A retained proc launch
+    // object must not keep settings alive after an HTTP failure.
+    try {
+      launch_session->beta_profile = beta_profile::acquire_for_client(launch_session->device_name, launch_session->unique_id);
+    } catch (const std::runtime_error &err) {
+      BOOST_LOG(error) << err.what();
+      tree.put("root.<xmlattr>.status_code", 503);
+      tree.put("root.<xmlattr>.status_message", err.what());
+      tree.put("root.gamesession", 0);
+      tree.put("root.resume", 0);
+      return;
+    }
+    auto profile_failure = util::fail_guard([&]() { beta_profile::release(launch_session->beta_profile); });
+#endif
 
     if (!proc::proc.allow_client_commands || !named_cert_p->allow_client_commands) {
       launch_session->client_do_cmds.clear();
@@ -1444,6 +1480,13 @@ namespace nvhttp {
 
     if (config::input.enable_input_only_mode && current_appid == proc::input_only_app_id) {
       launch_session->input_only = true;
+    }
+
+    if (no_active_sessions && !proc::proc.prepare_gpu_hevc_resume(*launch_session)) {
+      tree.put("root.resume", 0);
+      tree.put("root.<xmlattr>.status_code", 503);
+      tree.put("root.<xmlattr>.status_message", "Beta HEVC could not resize the resumed virtual display");
+      return;
     }
 
     if (no_active_sessions && !proc::proc.virtual_display) {
@@ -1481,6 +1524,9 @@ namespace nvhttp {
     tree.put("root.resume", 1);
 
     rtsp_stream::launch_session_raise(launch_session);
+#ifdef APOLLO_BETA_PROFILE
+    profile_failure.disable();  // Pending launch / streaming session now owns the lease.
+#endif
 
 #if defined SUNSHINE_TRAY && SUNSHINE_TRAY >= 1
     system_tray::update_tray_client_connected(named_cert_p->name);

@@ -298,7 +298,9 @@ namespace proc {
         // in width, so the centring is a pure vertical offset with NO resampling.
         uint32_t vdisplay_height = render_height;
         {
-          const int pad = config::video.coop_pad_rows;
+          // The GPU encoder confines the complete prediction footprint to its
+          // pane. AVC seam padding must not change its capture geometry.
+          const int pad = launch_session->aurora_gpu_hevc ? 0 : config::video.coop_pad_rows;
           // Refuse a value that would leave nothing to display, or that is not macroblock
           // aligned -- an unaligned inset puts the content on a half-macroblock boundary and
           // every row below it is coded against a shifted grid.
@@ -628,6 +630,61 @@ namespace proc {
     }
 
     return 0;
+  }
+
+  bool proc_t::prepare_gpu_hevc_resume(const rtsp_stream::launch_session_t& session) {
+    if (!session.aurora_gpu_hevc || !virtual_display) return true;
+#ifdef _WIN32
+    // Called before capture, only with no active streams. Ordinary hardware
+    // sessions retain Apollo's existing resume behavior. The GPU path requires
+    // a native-sized capture, so a previous co-op orientation cannot be reused.
+    if (display_name.empty() || session.width < 64 || session.height < 64 ||
+        session.width > 8192 || session.height > 8192 || session.width % 32 || session.height % 32)
+      return false;
+    auto name = platf::from_utf8(display_name);
+    DEVMODEW mode{}; mode.dmSize = sizeof(mode);
+    if (!EnumDisplaySettingsW(name.c_str(), ENUM_CURRENT_SETTINGS, &mode)) return false;
+    if (mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(session.height)) {
+      int fps = session.fps < 1000 ? session.fps * 1000 : session.fps;
+      if (config::video.double_refreshrate) fps *= 2;
+      auto result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, session.height, fps);
+      if (result != ERROR_SUCCESS && _launch_session) {
+        // SudoVDA can retain only the custom mode supplied when its monitor was
+        // created. Recreate this paused virtual monitor with its SAME identity;
+        // do not resize/crop the captured desktop or change an active stream.
+        BOOST_LOG(info) << "[AURORA-GPU-HEVC] rebuilding paused virtual display for "
+          << session.width << "x" << session.height << " after resize rc=" << result;
+        if (!VDISPLAY::removeVirtualDisplay(_launch_session->display_guid)) return false;
+        uuid_util::uuid_t identity;
+        memcpy(&identity, &_launch_session->display_guid, sizeof(GUID));
+        const std::string device_name = _app.use_app_identity ? _app.name : _launch_session->device_name;
+        name = VDISPLAY::createVirtualDisplay(identity.string().c_str(), device_name.c_str(),
+          session.width, session.height, fps, _launch_session->display_guid);
+        if (name.empty()) return false;
+        display_name = platf::to_utf8(name);
+        config::video.output_name = display_device::map_display_name(display_name);
+        result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, session.height, fps);
+        display_device::reset_persistence();
+      }
+      mode = {}; mode.dmSize = sizeof(mode);
+      if (result != ERROR_SUCCESS || !EnumDisplaySettingsW(name.c_str(), ENUM_CURRENT_SETTINGS, &mode) ||
+          mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(session.height)) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] resumed display resize failed rc=" << result
+          << " requested=" << session.width << "x" << session.height;
+        return false;
+      }
+    }
+    // Resume commands also need the current geometry, not the original launch.
+    _env["SUNSHINE_CLIENT_WIDTH"] = std::to_string(session.width);
+    _env["APOLLO_CLIENT_WIDTH"] = std::to_string(session.width);
+    _env["SUNSHINE_CLIENT_HEIGHT"] = std::to_string(session.height);
+    _env["APOLLO_CLIENT_HEIGHT"] = std::to_string(session.height);
+    _env["APOLLO_CLIENT_RENDER_WIDTH"] = std::to_string(session.width);
+    _env["APOLLO_CLIENT_RENDER_HEIGHT"] = std::to_string(session.height);
+    BOOST_LOG(info) << "[AURORA-GPU-HEVC] resumed virtual display verified "
+      << mode.dmPelsWidth << "x" << mode.dmPelsHeight;
+#endif
+    return true;
   }
 
   void proc_t::resume() {

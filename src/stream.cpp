@@ -412,6 +412,9 @@ namespace stream {
     } control;
 
     std::uint32_t launch_session_id;
+#ifdef APOLLO_BETA_PROFILE
+    beta_profile::lease_t beta_profile;
+#endif
     std::string device_name;
     std::string device_uuid;
     crypto::PERM permission;
@@ -2083,6 +2086,9 @@ namespace stream {
         platf::streaming_will_stop();
       }
 
+#ifdef APOLLO_BETA_PROFILE
+      session.beta_profile.reset();  // Encoder threads are joined; normal config is safe again.
+#endif
       BOOST_LOG(debug) << "Session ended"sv;
     }
 
@@ -2146,12 +2152,21 @@ namespace stream {
     }
 
     std::shared_ptr<session_t> alloc(config_t &config, rtsp_stream::launch_session_t &launch_session) {
+#ifdef APOLLO_BETA_PROFILE
+      auto profile = beta_profile::retain(launch_session.beta_profile);
+      if (!profile) {
+        return nullptr;  // The HTTP launch was cancelled or expired before ANNOUNCE.
+      }
+#endif
       auto session = std::make_shared<session_t>();
 
       auto mail = std::make_shared<safe::mail_raw_t>();
 
       session->shutdown_event = mail->event<bool>(mail::shutdown);
       session->launch_session_id = launch_session.id;
+#ifdef APOLLO_BETA_PROFILE
+      session->beta_profile = std::move(profile);
+#endif
       session->device_name = launch_session.device_name;
       session->device_uuid = launch_session.unique_id;
       session->permission = launch_session.perm;

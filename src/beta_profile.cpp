@@ -1,89 +1,78 @@
 /**
  * @file src/beta_profile.cpp
- * @brief Per-client config overrides for the beta Aurora client. BETA-ONLY — see beta_profile.h.
+ * @brief Per-client config overrides for Aurora beta. BETA-ONLY — see beta_profile.h.
  */
 #include "beta_profile.h"
 
+#include <charconv>
+#include <cstdint>
 #include <fstream>
 #include <mutex>
+#include <stdexcept>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "config.h"
 #include "logging.h"
 #include "platform/common.h"
 
-using namespace std::literals;  // the "..."sv literals below, as config.cpp does
+using namespace std::literals;
 
 namespace beta_profile {
-
   namespace {
+    using target_t = std::variant<int *, bool *>;
+    using setting_t = std::variant<std::pair<int *, int>, std::pair<bool *, bool>>;
 
-    /**
-     * THE OVERRIDABLE SET, and it is short ON PURPOSE.
-     *
-     * A setting may only live here if it is read at SESSION or ENCODER setup, i.e. after
-     * `apply_for_client()` has run. Both of these are:
-     *   gop_length     -> video.cpp, at encoder creation
-     *   coop_pad_rows  -> process.cpp, at virtual-display creation
-     *
-     * Anything consumed once at SERVICE START cannot be switched per session and would sit here
-     * looking effective while doing nothing — the exact failure this project has paid for
-     * repeatedly. If you add a key, first find its read site and prove it runs per session.
-     */
     struct knob_t {
       const char *name;
-      int *target;
+      target_t target;
     };
 
     std::vector<knob_t> knobs() {
+      // These are read AFTER the HTTP hook: video.cpp encoder creation,
+      // process.cpp display creation, and display_vram.cpp -> nvenc_base.cpp.
       return {
         {"gop_length", &config::video.gop_length},
         {"coop_pad_rows", &config::video.coop_pad_rows},
+        {"nvenc_h264_main", &config::video.nv.h264_main_profile},
       };
     }
 
     std::mutex mtx;
-    bool applied = false;
-    std::vector<std::pair<int *, int>> saved;  // target -> original value
+    std::weak_ptr<scope_t> active;
+    std::uint64_t generation = 0;
+    std::vector<setting_t> saved;
+    std::vector<setting_t> current;
+
+    void restore_locked() {
+      for (auto it = saved.rbegin(); it != saved.rend(); ++it) {
+        std::visit([](const auto &s) { *s.first = s.second; }, *it);
+      }
+      if (!saved.empty()) {
+        BOOST_LOG(info) << "beta_profile: "sv << saved.size() << " override(s) restored after lease release"sv;
+      }
+      saved.clear();
+      current.clear();
+    }
 
     std::string trim(std::string s) {
-      const auto ws = " \t\r\n";
-      const auto b = s.find_first_not_of(ws);
+      const auto b = s.find_first_not_of(" \t\r\n");
       if (b == std::string::npos) {
         return {};
       }
-      return s.substr(b, s.find_last_not_of(ws) - b + 1);
+      return s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1);
     }
 
-    /**
-     * `beta_profile.conf`, beside sunshine.conf. Absent = this module is inert.
-     *
-     *     # every host that serves BOTH a live and a beta Aurora. NOT on VEGA.
-     *     client_uuid = <the beta certificate's uuid>   # PREFERRED -- guaranteed distinct
-     *     client = Aurora Beta                          # only if the name is actually distinct
-     *     gop_length = 300
-     *     coop_pad_rows = 16
-     *
-     * Either key may repeat; a session matches if EITHER its uuid or its name is listed.
-     * PREFER `client_uuid`: measured 2026-09-07, SKYNET's only paired client is named
-     * "Legacy Moonlight Client", so both Auroras would very likely share a name and
-     * name-matching would silently never fire.
-     */
     struct profile_t {
       std::vector<std::string> clients;
       std::vector<std::string> uuids;
-      std::vector<std::pair<std::string, int>> values;
-      bool loaded = false;
+      std::vector<std::pair<std::string, std::string>> values;
     };
 
     profile_t load() {
       profile_t p;
-      const auto path = platf::appdata().string() + "/beta_profile.conf";
-      std::ifstream in(path);
-      if (!in.is_open()) {
-        return p;  // the normal state on a live-only host, and on VEGA
-      }
-      p.loaded = true;
+      std::ifstream in(platf::appdata().string() + "/beta_profile.conf");
       std::string line;
       while (std::getline(in, line)) {
         line = trim(line);
@@ -97,108 +86,113 @@ namespace beta_profile {
         }
         const auto key = trim(line.substr(0, eq));
         const auto val = trim(line.substr(eq + 1));
-        if (key == "client") {
+        if (key == "client" || key == "client_uuid") {
           if (!val.empty()) {
-            p.clients.push_back(val);
+            (key == "client" ? p.clients : p.uuids).push_back(val);
           }
-          continue;
-        }
-        if (key == "client_uuid") {
-          if (!val.empty()) {
-            p.uuids.push_back(val);
-          }
-          continue;
-        }
-        try {
-          p.values.emplace_back(key, std::stoi(val));
-        } catch (...) {
-          BOOST_LOG(warning) << "beta_profile: '"sv << key << "' needs an integer, got '"sv << val << "'"sv;
+        } else {
+          p.values.emplace_back(key, val);
         }
       }
       return p;
     }
 
+    setting_t parse(const knob_t &knob, const std::string &value) {
+      return std::visit([&](auto *target) -> setting_t {
+        using value_t = std::remove_pointer_t<decltype(target)>;
+        if constexpr (std::is_same_v<value_t, bool>) {
+          if (value == "true" || value == "1") {
+            return std::make_pair(target, true);
+          }
+          if (value == "false" || value == "0") {
+            return std::make_pair(target, false);
+          }
+          throw std::runtime_error("beta_profile: '"s + knob.name + "' needs true/false or 1/0");
+        } else {
+          int number = 0;
+          const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+          if (result.ec != std::errc {} || result.ptr != value.data() + value.size() || number < 0) {
+            throw std::runtime_error("beta_profile: '"s + knob.name + "' needs a nonnegative integer");
+          }
+          return std::make_pair(target, number);
+        }
+      }, knob.target);
+    }
   }  // namespace
 
-  bool apply_for_client(const std::string &client_name, const std::string &client_uuid) {
-    std::lock_guard lock(mtx);
-
-    // A session that never cleanly ended must not leak its overrides into the next one.
-    if (applied) {
-      BOOST_LOG(warning) << "beta_profile: overrides were still applied at the start of a new "
-                            "session -- restoring before re-evaluating"sv;
-      for (auto it = saved.rbegin(); it != saved.rend(); ++it) {
-        *it->first = it->second;
+  struct scope_t {
+    explicit scope_t(std::uint64_t id): id(id) {}
+    ~scope_t() {
+      std::lock_guard lock(mtx);
+      // If the last owner expired while waiting for this lock, the next acquire
+      // may already have restored it. A stale destructor must not undo that session.
+      if (id == generation) {
+        restore_locked();
       }
-      saved.clear();
-      applied = false;
     }
+    const std::uint64_t id;
+  };
 
+  lease_t acquire_for_client(const std::string &client_name, const std::string &client_uuid) {
+    // Declare before the lock: its last reference must be released AFTER unlocking.
+    lease_t lease;
+    lease_t existing;
+    std::lock_guard lock(mtx);
     const auto p = load();
-    if (!p.loaded) {
-      return false;
-    }
-
     bool match = false;
-    for (const auto &u : p.uuids) {
-      if (u == client_uuid) {
-        match = true;
-        break;
-      }
+    for (const auto &uuid : p.uuids) {
+      match = match || uuid == client_uuid;
     }
-    for (const auto &c : p.clients) {
-      if (!match && c == client_name) {
-        match = true;
-        break;
-      }
-    }
-    if (!match) {
-      // Print the uuid: it is what the conf should list, and it is otherwise hard to find.
-      BOOST_LOG(info) << "beta_profile: client '"sv << client_name << "' uuid "sv << client_uuid
-                      << " is not listed -- using this host's normal config"sv;
-      return false;
+    for (const auto &name : p.clients) {
+      match = match || name == client_name;
     }
 
-    const auto ks = knobs();
-    for (const auto &[key, value] : p.values) {
-      int *target = nullptr;
-      for (const auto &k : ks) {
-        if (key == k.name) {
-          target = k.target;
-          break;
+    std::vector<setting_t> desired;
+    if (match) {
+      const auto ks = knobs();
+      // Validate the entire profile before mutating even one setting.
+      for (const auto &[key, value] : p.values) {
+        const knob_t *found = nullptr;
+        for (const auto &k : ks) {
+          if (key == k.name) {
+            found = &k;
+            break;
+          }
         }
+        if (!found) {
+          throw std::runtime_error("beta_profile: '"s + key + "' is not an overridable setting");
+        }
+        desired.push_back(parse(*found, value));
       }
-      if (target == nullptr) {
-        // Loud, because a silently-ignored override is indistinguishable from one that applied.
-        BOOST_LOG(error) << "beta_profile: '"sv << key
-                         << "' is NOT an overridable setting and was IGNORED. Only settings read "
-                            "at session/encoder setup can be switched per session -- see "
-                            "beta_profile.cpp knobs()."sv;
-        continue;
+    }
+
+    existing = active.lock();
+    if (existing) {
+      if (desired != current) {
+        throw std::runtime_error("beta_profile: an incompatible streaming profile is still active");
       }
-      saved.emplace_back(target, *target);
-      BOOST_LOG(info) << "beta_profile: "sv << key << " "sv << *target << " -> "sv << value
-                      << " for this session"sv;
-      *target = value;
+      return existing;
     }
 
-    applied = !saved.empty();
-    BOOST_LOG(info) << "beta_profile: BETA client '"sv << client_name << "' -- "sv << saved.size()
-                    << " override(s) applied"sv;
-    return applied;
+    restore_locked();
+    ++generation;
+    lease = std::make_shared<scope_t>(generation);
+    // Allocate before applying; later assignments cannot allocate or throw.
+    saved.reserve(desired.size());
+    current = desired;
+    for (std::size_t i = 0; i < desired.size(); ++i) {
+      std::visit([&](const auto &s) {
+        BOOST_LOG(info) << "beta_profile: "sv << p.values[i].first << " "sv << *s.first
+                        << " -> "sv << s.second << " for this session"sv;
+        saved.emplace_back(std::make_pair(s.first, *s.first));
+        *s.first = s.second;
+      }, desired[i]);
+    }
+    active = lease;
+    if (match) {
+      BOOST_LOG(info) << "beta_profile: BETA client uuid "sv << client_uuid << " -- "sv
+                      << saved.size() << " override(s) applied before display/encoder setup"sv;
+    }
+    return lease;
   }
-
-  void restore() {
-    std::lock_guard lock(mtx);
-    if (!applied) {
-      return;
-    }
-    for (auto it = saved.rbegin(); it != saved.rend(); ++it) {
-      *it->first = it->second;
-    }
-    BOOST_LOG(info) << "beta_profile: "sv << saved.size() << " override(s) restored at session end"sv;
-    saved.clear();
-    applied = false;
-  }
-
 }  // namespace beta_profile

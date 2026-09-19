@@ -56,3 +56,6 @@ package-lock.json
 # Python
 *.pyc
 venv/
+
+# local scratch copies of source files (never commit)
+*.bak-*

@@ -494,6 +494,9 @@ namespace rtsp_stream {
     void session_raise(std::shared_ptr<launch_session_t> launch_session) {
       // If a launch event is still pending, don't overwrite it.
       if (launch_event.view(0s)) {
+#ifdef APOLLO_BETA_PROFILE
+        beta_profile::release(launch_session->beta_profile);
+#endif
         return;
       }
 
@@ -507,6 +510,9 @@ namespace rtsp_stream {
           auto discarded = launch_event.pop(0s);
           if (discarded) {
             BOOST_LOG(debug) << "Event timeout: "sv << discarded->unique_id;
+#ifdef APOLLO_BETA_PROFILE
+            beta_profile::release(discarded->beta_profile);  // proc may retain the launch object.
+#endif
           }
         }
       });
@@ -549,6 +555,15 @@ namespace rtsp_stream {
      * @examples_end
      */
     void clear(bool all = true) {
+#ifdef APOLLO_BETA_PROFILE
+      if (all) {
+        // Explicit cancel/shutdown also ends a launch that has not reached RTSP.
+        // proc can retain its object, so release the lease explicitly.
+        if (auto pending = launch_event.pop(0s)) {
+          beta_profile::release(pending->beta_profile);
+        }
+      }
+#endif
       auto lg = _session_slots.lock();
 
       for (auto i = _session_slots->begin(); i != _session_slots->end();) {
@@ -650,11 +665,6 @@ namespace rtsp_stream {
 
   void launch_session_clear(uint32_t launch_session_id) {
     server.session_clear(launch_session_id);
-#ifdef APOLLO_BETA_PROFILE
-    // BETA-ONLY, REMOVE FOR RELEASE (src/beta_profile.h). Overrides last exactly one session, so
-    // the next client -- which may be the LIVE one -- gets this host's normal config back.
-    beta_profile::restore();
-#endif
   }
 
   int session_count() {
@@ -822,7 +832,7 @@ namespace rtsp_stream {
       ss << "a=x-nv-video[0].refPicInvalidation:1"sv << std::endl;
     }
 
-    if (video::active_hevc_mode != 1) {
+    if (session.aurora_gpu_hevc || video::active_hevc_mode != 1) {
       ss << "sprop-parameter-sets=AAAAAU"sv << std::endl;
     }
 
@@ -1026,6 +1036,7 @@ namespace rtsp_stream {
       config.monitor.numRefFrames = util::from_view(args.at("x-nv-video[0].maxNumReferenceFrames"sv));
       config.monitor.encoderCscMode = util::from_view(args.at("x-nv-video[0].encoderCscMode"sv));
       config.monitor.videoFormat = util::from_view(args.at("x-nv-vqos[0].bitStreamFormat"sv));
+      config.monitor.aurora_gpu_hevc = session.aurora_gpu_hevc;
       config.monitor.dynamicRange = util::from_view(args.at("x-nv-video[0].dynamicRangeMode"sv));
       config.monitor.chromaSamplingType = util::from_view(args.at("x-ss-video[0].chromaSamplingType"sv));
       config.monitor.enableIntraRefresh = util::from_view(args.at("x-ss-video[0].intraRefresh"sv));
@@ -1139,7 +1150,11 @@ namespace rtsp_stream {
       config.monitor.bitrate = configuredBitrateKbps;
     }
 
-    if (config.monitor.videoFormat == 1 && video::active_hevc_mode == 1) {
+    if (session.aurora_gpu_hevc && (config.monitor.videoFormat != 1 || config.monitor.chromaSamplingType != 0)) {
+      respond(sock, session, &option, 400, "GPU HEVC requires HEVC 4:2:0", req->sequenceNumber, {});
+      return;
+    }
+    if (!session.aurora_gpu_hevc && config.monitor.videoFormat == 1 && video::active_hevc_mode == 1) {
       BOOST_LOG(warning) << "HEVC is disabled, yet the client requested HEVC"sv;
 
       respond(sock, session, &option, 400, "BAD REQUEST", req->sequenceNumber, {});
@@ -1164,16 +1179,28 @@ namespace rtsp_stream {
     }
 
     auto stream_session = stream::session::alloc(config, session);
+#ifdef APOLLO_BETA_PROFILE
+    if (!stream_session) {
+      respond(sock, session, &option, 503, "Launch cancelled or expired", req->sequenceNumber, {});
+      return;
+    }
+#endif
     server->insert(stream_session);
 
     if (stream::session::start(*stream_session, sock.remote_endpoint().address().to_string())) {
       BOOST_LOG(error) << "Failed to start a streaming session"sv;
 
       server->remove(stream_session);
+#ifdef APOLLO_BETA_PROFILE
+      beta_profile::release(session.beta_profile);
+#endif
       respond(sock, session, &option, 500, "Internal Server Error", req->sequenceNumber, {});
       return;
     }
 
+#ifdef APOLLO_BETA_PROFILE
+    beta_profile::release(session.beta_profile);  // The active stream now owns the lease.
+#endif
     respond(sock, session, &option, 200, "OK", req->sequenceNumber, {});
   }
 

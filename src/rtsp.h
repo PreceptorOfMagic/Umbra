@@ -12,6 +12,9 @@
 // local includes
 #include "crypto.h"
 #include "thread_safe.h"
+#ifdef APOLLO_BETA_PROFILE
+#include "beta_profile.h"
+#endif
 
 #ifdef _WIN32
   #include <windows.h>
@@ -27,6 +30,9 @@ namespace rtsp_stream {
 
   struct launch_session_t {
     uint32_t id;
+#ifdef APOLLO_BETA_PROFILE
+    beta_profile::lease_t beta_profile;
+#endif
 
     crypto::aes_t gcm_key;
     crypto::aes_t iv;
@@ -47,6 +53,7 @@ namespace rtsp_stream {
     int surround_info;
     std::string surround_params;
     bool enable_hdr;
+    bool aurora_gpu_hevc = false;
     bool enable_sops;
     bool virtual_display;
     uint32_t scale_factor;

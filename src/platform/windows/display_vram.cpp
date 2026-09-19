@@ -20,6 +20,7 @@ extern "C" {
 
 // local includes
 #include "display.h"
+#include "aurora_gpu_hevc.h"
 #include "misc.h"
 #include "src/config.h"
 #include "src/logging.h"
@@ -349,7 +350,7 @@ namespace platf::dxgi {
     return cursor_img;
   }
 
-  blob_t compile_shader(LPCSTR file, LPCSTR entrypoint, LPCSTR shader_model) {
+  static blob_t compile_shader(LPCSTR file, LPCSTR entrypoint, LPCSTR shader_model) {
     blob_t::pointer msg_p = nullptr;
     blob_t::pointer compiled_p;
 
@@ -375,13 +376,15 @@ namespace platf::dxgi {
     return blob_t {compiled_p};
   }
 
-  blob_t compile_pixel_shader(LPCSTR file) {
+  static blob_t compile_pixel_shader(LPCSTR file) {
     return compile_shader(file, "main_ps", "ps_5_0");
   }
 
-  blob_t compile_vertex_shader(LPCSTR file) {
+  static blob_t compile_vertex_shader(LPCSTR file) {
     return compile_shader(file, "main_vs", "vs_5_0");
   }
+
+#include "gpu_hevc_device.inc"
 
   class d3d_base_encode_device final {
   public:
@@ -1979,6 +1982,12 @@ namespace platf::dxgi {
     if (!device->init_device(shared_from_this(), adapter.get(), pix_fmt)) {
       return nullptr;
     }
+    return device;
+  }
+
+  std::unique_ptr<gpu_hevc_encode_device_t> display_vram_t::make_gpu_hevc_encode_device(const ::video::config_t& config) {
+    auto device = std::make_unique<d3d_gpu_hevc_encode_device_t>();
+    if (!device->init(adapter.get(), config, is_hdr())) return nullptr;
     return device;
   }
 

@@ -48,6 +48,7 @@ namespace video {
 
     int encodingFramerate; // Requested display framerate
     bool input_only;
+    bool aurora_gpu_hevc = false;  // Explicit session opt-in; never a global encoder replacement.
   };
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);

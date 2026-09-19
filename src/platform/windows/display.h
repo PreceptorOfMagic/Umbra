@@ -174,6 +174,13 @@ namespace platf::dxgi {
 
     int client_frame_rate;
 
+    // AURORA: the geometry THIS SESSION asked for (config.width/height at init), kept so the
+    // capture-loss recovery can re-apply the session's mode rather than whatever mode a
+    // fullscreen owner has left current. Stable across reinits: captureThread re-inits every
+    // display with the same capture_ctxs.front().config.
+    int aurora_session_width = 0;
+    int aurora_session_height = 0;
+
     DXGI_FORMAT capture_format;
     D3D_FEATURE_LEVEL feature_level;
 
@@ -276,6 +283,8 @@ namespace platf::dxgi {
     std::unique_ptr<avcodec_encode_device_t> make_avcodec_encode_device(pix_fmt_e pix_fmt) override;
 
     std::unique_ptr<nvenc_encode_device_t> make_nvenc_encode_device(pix_fmt_e pix_fmt) override;
+
+    std::unique_ptr<gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const ::video::config_t& config) override;
 
     std::atomic<uint32_t> next_image_id;
   };

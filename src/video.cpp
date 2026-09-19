@@ -429,6 +429,17 @@ namespace video {
     bool force_idr = false;
   };
 
+  class gpu_hevc_encode_session_t: public encode_session_t {
+  public:
+    explicit gpu_hevc_encode_session_t(std::unique_ptr<platf::gpu_hevc_encode_device_t> d): device(std::move(d)) {}
+    int convert(platf::img_t& img) override { return device->convert(img); }
+    void request_idr_frame() override { force_idr = true; }
+    void request_normal_frame() override { force_idr = false; }
+    void invalidate_ref_frames(int64_t, int64_t) override { force_idr = true; }
+    std::unique_ptr<platf::gpu_hevc_encode_device_t> device;
+    bool force_idr = true;
+  };
+
   struct sync_session_ctx_t {
     safe::signal_t *join_event;
     safe::mail_raw_t::event_t<bool> shutdown_event;
@@ -1348,6 +1359,7 @@ namespace video {
       auto status = disp->capture(push_captured_image_callback, pull_free_image_callback, &display_cursor);
 
       if (artificial_reinit && status != platf::capture_e::error) {
+        BOOST_LOG(info) << "[AURORA-REINIT] artificial (switch_display_event)"sv;
         status = platf::capture_e::reinit;
 
         artificial_reinit = false;
@@ -1523,7 +1535,17 @@ namespace video {
   }
 
   int encode(int64_t frame_nr, encode_session_t &session, safe::mail_raw_t::queue_t<packet_t> &packets, void *channel_data, std::optional<std::chrono::steady_clock::time_point> frame_timestamp) {
-    if (auto avcodec_session = dynamic_cast<avcodec_encode_session_t *>(&session)) {
+    if (auto gpu_session = dynamic_cast<gpu_hevc_encode_session_t *>(&session)) {
+      std::vector<uint8_t> bytes;
+      bool idr = false;
+      if (!gpu_session->device->encode(frame_nr, gpu_session->force_idr, bytes, idr) || bytes.empty()) return -1;
+      gpu_session->force_idr = false;
+      auto packet = std::make_unique<packet_raw_generic>(std::move(bytes), frame_nr, idr);
+      packet->channel_data = channel_data;
+      packet->frame_timestamp = frame_timestamp;
+      packets->raise(std::move(packet));
+      return 0;
+    } else if (auto avcodec_session = dynamic_cast<avcodec_encode_session_t *>(&session)) {
       return encode_avcodec(frame_nr, *avcodec_session, packets, channel_data, frame_timestamp);
     } else if (auto nvenc_session = dynamic_cast<nvenc_encode_session_t *>(&session)) {
       return encode_nvenc(frame_nr, *nvenc_session, packets, channel_data, frame_timestamp);
@@ -1970,7 +1992,9 @@ namespace video {
   }
 
   std::unique_ptr<encode_session_t> make_encode_session(platf::display_t *disp, const encoder_t &encoder, const config_t &config, int width, int height, std::unique_ptr<platf::encode_device_t> encode_device) {
-    if (dynamic_cast<platf::avcodec_encode_device_t *>(encode_device.get())) {
+    if (dynamic_cast<platf::gpu_hevc_encode_device_t *>(encode_device.get())) {
+      return std::make_unique<gpu_hevc_encode_session_t>(boost::dynamic_pointer_cast<platf::gpu_hevc_encode_device_t>(std::move(encode_device)));
+    } else if (dynamic_cast<platf::avcodec_encode_device_t *>(encode_device.get())) {
       auto avcodec_encode_device = boost::dynamic_pointer_cast<platf::avcodec_encode_device_t>(std::move(encode_device));
       return make_avcodec_encode_session(disp, encoder, config, width, height, std::move(avcodec_encode_device));
     } else if (dynamic_cast<platf::nvenc_encode_device_t *>(encode_device.get())) {
@@ -2158,6 +2182,10 @@ namespace video {
   }
 
   std::unique_ptr<platf::encode_device_t> make_encode_device(platf::display_t &disp, const encoder_t &encoder, const config_t &config) {
+    if (config.aurora_gpu_hevc) {
+      BOOST_LOG(info) << "[AURORA-GPU-HEVC] explicit experimental session, CTB32/minCB16, no CPU fallback";
+      return disp.make_gpu_hevc_encode_device(config);
+    }
     std::unique_ptr<platf::encode_device_t> result;
 
     auto colorspace = colorspace_from_client_config(config, disp.is_hdr());
