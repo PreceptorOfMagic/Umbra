@@ -1,6 +1,18 @@
-# Apollo
+# Umbra
 
-Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device.
+Umbra is a fork of [Apollo](https://github.com/ClassicOldSong/Apollo) -- itself a fork of [Sunshine](https://github.com/LizardByte/Sunshine) -- and is the host half of a pair with the [**Eclipse**](https://github.com/PreceptorOfMagic/eclipse) webOS client.
+
+What this fork adds on top of Apollo:
+
+- **Co-op streaming** -- two hosts compose a single picture for one client, each free-running at its own frame rate, with per-client config switching so one machine can serve both the live and the beta client (matched by UUID; the client name is not distinct).
+- **Experimental GPU HEVC encode device** -- an encoder loaded from `gpu-hevc/`, used for the mixed-vendor co-op path where the stock vendor encoders cannot agree on a picture.
+- **Capture that survives a game taking the display** -- an off-size capture is fitted into the pane with aspect-correct black bars rather than freezing the stream, and a capture that Windows revokes before it yields a frame (`DXGI_ERROR_ACCESS_LOST`) is recovered by re-applying the session's display mode, bounded and logged.
+
+> **Naming:** the fork was unnamed until 2026-09-19 and its source symbols and log tags still read `AURORA_*` / `[AURORA-GPU-HEVC]`. The rename is branding only for now.
+
+Everything below is Apollo's own README.
+
+---
 
 Major features:
 
