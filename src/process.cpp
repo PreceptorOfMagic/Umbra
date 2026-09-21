@@ -1589,14 +1589,22 @@ namespace proc {
       ctx.use_app_identity = true;
       ctx.per_client_app_identity = false;
       ctx.allow_client_commands = false;
-      /* Terminate rather than linger paused. This is the honest behaviour: pausing already
-         destroys the VDD, so the desktop is gone either way, and a dead session should not
-         be resurrected. NOTE: an earlier comment here claimed this flag was why the PC
-         monitor stayed lit, on the theory that state commands "run on a session LAUNCH, not
-         on a RESUME". THAT IS WRONG -- proc_t::resume() runs state_cmds too (see above).
-         The monitor stayed lit because this app's command lists were EMPTY; see
-         apply_global_cmds below. Leaving the flag true, but do not credit it with the fix. */
-      ctx.terminate_on_pause = true;
+      /* UPSTREAM VALUE, RESTORED 2026-09-21. Disconnect and Quit are DIFFERENT BUTTONS by
+         design: Disconnect leaves the session alive so it can be resumed, Quit ends it.
+         terminate_on_pause collapses the two -- proc_t::pause() logs "Terminating app ...
+         Pause commands are skipped" and calls terminate() -- so Disconnect quit the stream.
+         d316b272 (upstream) shipped this false; 6a9480df (co-op host patches, 2026-09-07)
+         set it true and broke it. This is a revert, not a redesign.
+         The justification that stood here was WRONG: "pausing already destroys the VDD, so
+         the desktop is gone either way". It does not. removeVirtualDisplay() is reached from
+         exactly two places -- terminate() below, and prepare_gpu_hevc_resume(), whose own
+         comment reads "Recreate this PAUSED virtual monitor with its SAME identity". There
+         is dedicated code for a paused VDD that still exists, so pausing cannot destroy it.
+         Second casualty, now also fixed: terminate_on_pause SKIPS the pause state command,
+         so global_state_cmd's undo (dispwake physical-on) never ran and the panel was left
+         to the prep-cmd undo path. That is why backlog #14's suspend/resume -- panel back on
+         while the session and game stay alive -- has never worked. */
+      ctx.terminate_on_pause = false;
 
       ctx.elevated = false;
       ctx.auto_detach = true;
