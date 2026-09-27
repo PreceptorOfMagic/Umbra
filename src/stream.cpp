@@ -2056,7 +2056,7 @@ namespace stream {
             std::error_code ec;
             auto env = proc::proc.get_env();
             boost::filesystem::path working_dir = proc::find_working_directory(cmd.cmd, env);
-            auto child = platf::run_command(cmd.elevated, true, cmd.cmd, working_dir, env, nullptr, ec, nullptr);
+            auto child = platf::run_command(cmd.elevated, false, cmd.cmd, working_dir, env, nullptr, ec, nullptr);
             BOOST_LOG(info) << "Spawning client undo command ["sv << cmd.cmd << "] in ["sv << working_dir << ']';
             if (ec) {
               BOOST_LOG(warning) << "Couldn't spawn ["sv << cmd.cmd << "]: System: "sv << ec.message();
@@ -2135,7 +2135,7 @@ namespace stream {
             std::error_code ec;
             auto env = proc::proc.get_env();
             boost::filesystem::path working_dir = proc::find_working_directory(cmd.cmd, env);
-            auto child = platf::run_command(cmd.elevated, true, cmd.cmd, working_dir, env, nullptr, ec, nullptr);
+            auto child = platf::run_command(cmd.elevated, false, cmd.cmd, working_dir, env, nullptr, ec, nullptr);
             BOOST_LOG(info) << "Spawning client do command ["sv << cmd.cmd << "] in ["sv << working_dir << ']';
             if (ec) {
               BOOST_LOG(warning) << "Couldn't spawn ["sv << cmd.cmd << "]: System: "sv << ec.message();

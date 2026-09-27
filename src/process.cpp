@@ -474,7 +474,11 @@ namespace proc {
                                               find_working_directory(cmd.do_cmd, _env) :
                                               boost::filesystem::path(_app.working_dir);
       BOOST_LOG(info) << "Executing Do Cmd: ["sv << cmd.do_cmd << "] elevated: " << cmd.elevated;
-      auto child = platf::run_command(cmd.elevated, true, cmd.do_cmd, working_dir, _env, _pipe.get(), ec, nullptr);
+      // Umbra: session hooks (prep, state and per-client commands) run WITHOUT a console window.
+      // A console-subsystem hook (cmd, powershell, aurora-link) otherwise opens a visible window
+      // in front of the user at every stream start and stop. The app itself and server commands
+      // keep upstream's interactive launch.
+      auto child = platf::run_command(cmd.elevated, false, cmd.do_cmd, working_dir, _env, _pipe.get(), ec, nullptr);
 
       if (ec) {
         BOOST_LOG(error) << "Couldn't run ["sv << cmd.do_cmd << "]: System: "sv << ec.message();
@@ -710,7 +714,7 @@ namespace proc {
                                                   find_working_directory(cmd.do_cmd, _env) :
                                                   boost::filesystem::path(app_working_dir);
           BOOST_LOG(info) << "Executing Resume Cmd: ["sv << cmd.do_cmd << "] elevated: " << cmd.elevated;
-          auto child = platf::run_command(cmd.elevated, true, cmd.do_cmd, working_dir, _env, nullptr, ec, nullptr);
+          auto child = platf::run_command(cmd.elevated, false, cmd.do_cmd, working_dir, _env, nullptr, ec, nullptr);
 
           if (ec) {
             BOOST_LOG(error) << "Couldn't run ["sv << cmd.do_cmd << "]: System: "sv << ec.message();
@@ -764,7 +768,7 @@ namespace proc {
                                                   find_working_directory(cmd.undo_cmd, _env) :
                                                   boost::filesystem::path(app_working_dir);
           BOOST_LOG(info) << "Executing Pause Cmd: ["sv << cmd.undo_cmd << "] elevated: " << cmd.elevated;
-          auto child = platf::run_command(cmd.elevated, true, cmd.undo_cmd, working_dir, _env, nullptr, ec, nullptr);
+          auto child = platf::run_command(cmd.elevated, false, cmd.undo_cmd, working_dir, _env, nullptr, ec, nullptr);
 
           if (ec) {
             BOOST_LOG(error) << "Couldn't run ["sv << cmd.undo_cmd << "]: System: "sv << ec.message();
@@ -813,7 +817,7 @@ namespace proc {
                                               find_working_directory(cmd.undo_cmd, _env) :
                                               boost::filesystem::path(_app.working_dir);
       BOOST_LOG(info) << "Executing Undo Cmd: ["sv << cmd.undo_cmd << ']';
-      auto child = platf::run_command(cmd.elevated, true, cmd.undo_cmd, working_dir, _env, _pipe.get(), ec, nullptr);
+      auto child = platf::run_command(cmd.elevated, false, cmd.undo_cmd, working_dir, _env, _pipe.get(), ec, nullptr);
 
       if (ec) {
         BOOST_LOG(warning) << "System: "sv << ec.message();
