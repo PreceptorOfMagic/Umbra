@@ -84,7 +84,7 @@ been reviewed.
 3. Verify an ordinary single-host stream before configuring co-op.
 4. For co-op, create exactly one application named **Co-op Pane**, enable the
    virtual display, and leave resolution and refresh rate client-driven.
-5. Follow the shared [Eclipse/Umbra setup guide](https://preceptorofmagic.github.io/setup.html)
+5. Follow the shared [Eclipse/Umbra setup guide](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html)
    for pairing both hosts and assigning inputs.
 
 Report host build, capture, encoding or virtual-display failures in

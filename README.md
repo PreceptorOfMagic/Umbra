@@ -6,11 +6,12 @@
 </p>
 
 <p align="center">
-  <a href="https://preceptorofmagic.github.io/">Project hub</a> ·
-  <a href="https://preceptorofmagic.github.io/setup.html">Setup guide</a> ·
+  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io">Project hub</a> ·
+  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html">Setup guide</a> ·
   <a href="https://github.com/PreceptorOfMagic/eclipse">Eclipse client</a> ·
   <a href="https://github.com/PreceptorOfMagic/umbra/releases">Umbra downloads</a> ·
-  <a href="https://preceptorofmagic.github.io/credits.html">Acknowledgements</a>
+  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html">Acknowledgements</a> ·
+  <a href="https://preceptorofmagic.github.io/">Live site after publication</a>
 </p>
 
 > [!IMPORTANT]
@@ -58,7 +59,7 @@ replacement for the standard Eclipse-to-Umbra streaming path.
 | Git clone | `git clone --recurse-submodules --branch beta/vega-coop https://github.com/PreceptorOfMagic/umbra.git` |
 | Windows source build | [Build Umbra on Windows](docs/umbra-windows-build.md) |
 | Eclipse client | [Eclipse repository](https://github.com/PreceptorOfMagic/eclipse) |
-| Complete two-host setup | [Eclipse/Umbra setup guide](https://preceptorofmagic.github.io/setup.html) |
+| Complete two-host setup | [Eclipse/Umbra setup guide source](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html) |
 
 Do not download an installer offered elsewhere under the Umbra name. Until a
 reviewed release exists, source builds are the only project-controlled path.
@@ -75,7 +76,7 @@ reviewed release exists, source builds are the only project-controlled path.
 6. In Eclipse, choose **Co-op**, select two different hosts, choose side-by-side
    or stacked layout, assign inputs and start the combined session.
 
-The full [setup guide](https://preceptorofmagic.github.io/setup.html) includes
+The full [setup guide](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html) includes
 the expected application settings, validation order and troubleshooting route.
 
 ## Host access and permissions
@@ -100,7 +101,7 @@ have been verified against this fork.
 For ordinary Moonlight-compatible host configuration concepts, the upstream
 [Sunshine documentation](https://docs.lizardbyte.dev/projects/sunshine) remains
 useful. Umbra-specific co-op instructions and release status come from the
-[Eclipse/Umbra hub](https://preceptorofmagic.github.io/).
+[Eclipse/Umbra hub](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io).
 
 ## Project map and support
 
@@ -109,7 +110,7 @@ useful. Umbra-specific co-op instructions and release status come from the
 - Use [Eclipse issues](https://github.com/PreceptorOfMagic/eclipse/issues) for
   client decoding, layout, composition and client-side input routing.
 - Optional project support is handled through the hub's
-  [support page](https://preceptorofmagic.github.io/support.html). It buys no
+  [support page](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/support.html). It buys no
   access, features, priority, rewards or influence.
 
 ## Lineage and acknowledgements
@@ -125,7 +126,7 @@ Umbra would not exist without the projects it builds on:
 - **Moonlight TV** by Mariotaku and **Aurora** by GuiDev1994, the direct client
   lineage leading to Eclipse.
 
-The [full acknowledgements](https://preceptorofmagic.github.io/credits.html)
+The [full acknowledgements](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html)
 name the wider dependency and driver contributors. That public credit page does
 not replace the licence, notice and source material required in a release.
 
