@@ -1,176 +1,140 @@
-# Apollo
+# Umbra
 
-Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device.
+<p align="center">
+  <strong>The Windows host application for the Eclipse/Umbra project.</strong><br>
+  Two Umbra gaming PCs can feed one Eclipse client for a shared couch co-op display.
+</p>
 
-Major features:
+<p align="center">
+  <a href="https://preceptorofmagic.github.io/">Project hub</a> ·
+  <a href="https://preceptorofmagic.github.io/setup.html">Setup guide</a> ·
+  <a href="https://github.com/PreceptorOfMagic/eclipse">Eclipse client</a> ·
+  <a href="https://github.com/PreceptorOfMagic/umbra/releases">Umbra downloads</a> ·
+  <a href="https://preceptorofmagic.github.io/credits.html">Acknowledgements</a>
+</p>
 
-- [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically
-- [x] Permission management for clients
-- [x] Clipboard sync
-- [x] Commands for client connection/disconnection (checkout [Auto pause/resume games](https://github.com/ClassicOldSong/Apollo/wiki/Auto-pause-resume-games))
-- [x] Input only mode
-
-## Usage
-
-Refer to LizardByte's documentation hosted on [Read the Docs](https://docs.lizardbyte.dev/projects/sunshine) for now.
-
-Currently Virtual Display support is Windows only, Linux support is planned and will be implemented in the future.
-
-## About Permission System
-
-Check out the [Wiki](https://github.com/ClassicOldSong/Apollo/wiki/Permission-System)
-
-> [!NOTE]
-> The **FIRST** client paired with Apollo will be granted with FULL permissions, then other newly paired clients will only be granted with `View Streams` and `List Apps` permission. If you encounter `Permission Denied` error when trying to launch any app, go check the permission for that device and grant `Launch Apps` permission. The same applies to the situation when you find that you can't move mouse or type with keyboard on newly paired clients, grant the corresponding client `Mouse Input` and `Keyboard Input` permissions.
-
-## About Virtual Display
-
-> [!WARNING]
-> ***It is highly recommend to remove any other virtual display solutions from your system and Apollo/Sunshine config, to reduce confusions and compatibility issues.***
+> [!IMPORTANT]
+> Umbra is the **host**. Install it on each Windows gaming PC. Eclipse is the
+> **client** at the television or shared display. For co-op, each PC runs its own
+> game session; Eclipse joins the two live streams and sends each assigned input
+> back to the correct Umbra host.
 
 > [!NOTE]
-> **TL;DR** Just treat your Artemis/Moonlight client like a dedicated PnP monitor with Apollo.
+> This repository is currently a source-first engineering preview. A reviewed
+> Umbra installer has not been published yet. Use this repository's source and
+> build guide during private testing; when a release is approved, its installer,
+> checksums and notes will appear only on the
+> [Umbra Releases page](https://github.com/PreceptorOfMagic/umbra/releases).
 
-Apollo uses SudoVDA for virtual display. It features auto resolution and framerate matching for your Artemis/Moonlight clients. The virtual display is created upon the stream starts and removed once the app quits. **If you do not see a new virtual display added or removed when the stream starts or stops, there may be a driver misconfiguration, or another persistent virtual display might still be active.**
+## What Umbra provides
 
-The virtual display works just like any physically attached monitors with SudoVDA, there's completely no need for a super complicated solution to "fix" resolution configurations for your devices. Unlike all other solutions that reuses one identity or generate a random one each time for any virtual display sessions, **Apollo assigns a fixed identity for each Artemis/Moonlight client, so your display configuration will be automatically remembered and managed by Windows natively.**
+Umbra is derived from [Apollo](https://github.com/ClassicOldSong/Apollo), which
+is derived from [Sunshine](https://github.com/LizardByte/Sunshine). It keeps the
+normal Moonlight-compatible host path and Apollo's virtual-display and
+permission features, then adds the host-side work used by Eclipse/Umbra co-op.
 
-## Configuration for dual GPU laptops
+- Low-latency hardware encoding on supported NVIDIA, AMD and Intel GPUs.
+- Pairing, application management and per-client permissions through a local
+  web interface.
+- A virtual display that can follow the client-requested resolution and frame
+  rate on Windows.
+- A dedicated `Co-op Pane` application path for two-host Eclipse composition.
+- Per-client configuration switching so the same host can serve the ordinary
+  and co-op client profiles.
+- Host-side companion handling for the project's input, audio and display
+  session lifecycle.
+- Recovery and aspect-correct fitting for capture changes encountered during
+  the current co-op path.
 
-Apollo supports dual GPUs seamlessly.
+Normal one-host streaming remains available. Co-op is an additional mode, not a
+replacement for the standard Eclipse-to-Umbra streaming path.
 
-If you want to use your dGPU, just set the `Adapter Name` to your dGPU and enable `Headless mode` in `Audio/Video` tab, save and restart your computer. No dummy plug is needed any more, the image will be rendered and encoded directly from your dGPU.
+## Download or build
 
-## About HDR
+| Need | Official route |
+|---|---|
+| Reviewed Umbra installer | [Umbra Releases](https://github.com/PreceptorOfMagic/umbra/releases) — no approved installer is published yet |
+| Current source archive | [Download the default branch as ZIP](https://github.com/PreceptorOfMagic/umbra/archive/refs/heads/beta/vega-coop.zip) |
+| Git clone | `git clone --recurse-submodules --branch beta/vega-coop https://github.com/PreceptorOfMagic/umbra.git` |
+| Windows source build | [Build Umbra on Windows](docs/umbra-windows-build.md) |
+| Eclipse client | [Eclipse repository](https://github.com/PreceptorOfMagic/eclipse) |
+| Complete two-host setup | [Eclipse/Umbra setup guide](https://preceptorofmagic.github.io/setup.html) |
 
-HDR starts supporting from Windows 11 23H2 and generally supported on 24H2. Some systems might not have HDR toggle on 23H2 and you just need to upgrade to 24H2. Any system lower than 23H2/Windows 10 will not have HDR option available.
+Do not download an installer offered elsewhere under the Umbra name. Until a
+reviewed release exists, source builds are the only project-controlled path.
 
-> [!NOTE]
-> The below section is written for professional media workers. It doesn't stop you from enabling HDR if you know what you're doing and have deep understanding about how HDR works.
->
-> Apollo and SudoVDA can handle HDR just fine like any other streaming solutions.
->
-> If you have had good experience with HDR previously, you can safely ignore this section.
->
-> If you're curious, read on, but don't blame Apollo for poor HDR support.
+## Quick start for co-op
 
-Whether HDR streaming looks good, it depends completely on your client.
+1. Build and install the same reviewed Umbra revision on two Windows gaming PCs.
+2. Open each host's web interface and complete its initial configuration.
+3. Add one application named exactly **Co-op Pane** on each host.
+4. Enable the host virtual display and leave its resolution and refresh rate set
+   to the values requested by the client.
+5. Install or build Eclipse at the shared display, pair it with each host and
+   verify an ordinary one-host stream from both PCs first.
+6. In Eclipse, choose **Co-op**, select two different hosts, choose side-by-side
+   or stacked layout, assign inputs and start the combined session.
 
-In short, ICC color correction should be totally useless while streaming HDR. It's your client's job to get HDR content displayed right, not the host. But in fact, it does affect the captured video stream and reflect changes on devices that can handle HDR correctly. On other devices that can't, the info is not respected at all.
+The full [setup guide](https://preceptorofmagic.github.io/setup.html) includes
+the expected application settings, validation order and troubleshooting route.
 
-It's very complicated to explain why HDR is a total mess, and why enabling HDR makes the image appear dark/yellow. If it's your first time got HDR streaming working, and thinks HDR looks awuful, you're right, but that's not Apollo's fault, it's your device that tone mapped SDR content to the maximum of the capability of its screen, there's no headroom for anything beyond that actual peak brightness for HDR. For details, please take a look [here](https://github.com/ClassicOldSong/Apollo/issues/164).
+## Host access and permissions
 
-Usually Apple devices that have HDR capability can be trusted to have good results, other than that, your luck depends.
+The first paired client receives full permissions under Apollo's inherited
+permission model. Later clients may need **View Streams**, **List Apps**,
+**Launch Apps**, **Mouse Input**, **Keyboard Input** or controller permissions
+enabled explicitly in the Umbra web interface.
 
-<details>
-<summary>DEPRECATION ALERT</summary>
+Umbra's configuration interface is local to the host at
+`https://localhost:47990` by default. Its locally generated certificate may
+cause the browser to show a certificate warning on first access. Do not expose
+the management interface directly to the public internet.
 
-Enabling HDR is **generally not recommended** with **ANY streaming solutions** at this moment, probably in the long term. The issue with **HDR itself** is huge, with loads of semi-incompatible standards, and massive variance between device configurations and capabilities. Game support for HDR is still choppy.
+## Current support shape
 
-SDR actually provides much more stable color accuracy, and are widely supported throughout most devices you can imagine. For games, art style can easily overcome the shortcoming with no HDR, and SDR has pretty standard workflows to ensure their visual performance. So HDR isn't *that* important in most of the cases.
+The project co-op path is being prepared around Windows 11 hosts with supported
+hardware encoders. Apollo and Sunshine include broader platform work, but the
+Eclipse/Umbra release claims deliberately stay narrower until those combinations
+have been verified against this fork.
 
-</details>
+For ordinary Moonlight-compatible host configuration concepts, the upstream
+[Sunshine documentation](https://docs.lizardbyte.dev/projects/sunshine) remains
+useful. Umbra-specific co-op instructions and release status come from the
+[Eclipse/Umbra hub](https://preceptorofmagic.github.io/).
 
-## How to run multiple instances of Apollo for multiple virtual displays
+## Project map and support
 
-Follow the instructions in the [Wiki](https://github.com/ClassicOldSong/Apollo/wiki/How-to-start-multiple-instances-of-Apollo).
+- Use [Umbra issues](https://github.com/PreceptorOfMagic/umbra/issues) for host
+  capture, encoding, service, pairing, virtual-display and installer problems.
+- Use [Eclipse issues](https://github.com/PreceptorOfMagic/eclipse/issues) for
+  client decoding, layout, composition and client-side input routing.
+- Optional project support is handled through the hub's
+  [support page](https://preceptorofmagic.github.io/support.html). It buys no
+  access, features, priority, rewards or influence.
 
-## FAQ
-Moved to [WiKi](https://github.com/ClassicOldSong/Apollo/wiki/FAQ)
+## Lineage and acknowledgements
 
-## Stuttering Clinic
-Here're some common causes and solutions for stutters: [WiKi](https://github.com/ClassicOldSong/Apollo/wiki/Stuttering-Clinic).
+Umbra would not exist without the projects it builds on:
 
-## Device specific setups
-- Pixel devices might not be able to use native resolution:
-  - Change the device resolution to High: https://github.com/ClassicOldSong/Apollo/issues/700
+- **Sunshine**, originally created by `@loki-47-6F-64` and maintained by
+  LizardByte and its contributors.
+- **Apollo**, created by `@ClassicOldSong`, which supplies Umbra's direct host
+  lineage and virtual-display foundation.
+- **Moonlight**, created at MHacks 2013 by Cameron Gutman, Diego Waxemberg,
+  Aidan Campbell, Aaron Neyer, Michelle Bergeron and Andrew Hennessy.
+- **Moonlight TV** by Mariotaku and **Aurora** by GuiDev1994, the direct client
+  lineage leading to Eclipse.
 
-## System Requirements
+The [full acknowledgements](https://preceptorofmagic.github.io/credits.html)
+name the wider dependency and driver contributors. That public credit page does
+not replace the licence, notice and source material required in a release.
 
-> **Warning**: This table is a work in progress. Do not purchase hardware based on this.
+Eclipse/Umbra is independent and is not affiliated with or endorsed by
+Moonlight, Sunshine, LG Electronics, NVIDIA, AMD, Amazon, DXC or the Eclipse
+Foundation. Third-party names are used to describe lineage or compatibility.
 
-**Minimum Requirements**
+## Licence
 
-| **Component** | **Description** |
-|---------------|-----------------|
-| GPU           | AMD: VCE 1.0 or higher, see: [obs-amd hardware support](https://github.com/obsproject/obs-amd-encoder/wiki/Hardware-Support) |
-|               | Intel: VAAPI-compatible, see: [VAAPI hardware support](https://www.intel.com/content/www/us/en/developer/articles/technical/linuxmedia-vaapi.html) |
-|               | Nvidia: NVENC enabled cards, see: [nvenc support matrix](https://developer.nvidia.com/video-encode-and-decode-gpu-support-matrix-new) |
-| CPU           | AMD: Ryzen 3 or higher |
-|               | Intel: Core i3 or higher |
-| RAM           | 4GB or more |
-| OS            | Windows: 10+ (Windows Server requires [manual installation](https://github.com/nefarius/ViGEmBus/issues/153) for gamepad support) |
-|               | macOS: 12+ |
-|               | Linux/Debian: 11 (bullseye) |
-|               | Linux/Fedora: 39+ |
-|               | Linux/Ubuntu: 22.04+ (jammy) |
-| Network       | Host: 5GHz, 802.11ac |
-|               | Client: 5GHz, 802.11ac |
-
-**4k Suggestions**
-
-| **Component** | **Description** |
-|---------------|-----------------|
-| GPU           | AMD: Video Coding Engine 3.1 or higher |
-|               | Intel: HD Graphics 510 or higher |
-|               | Nvidia: GeForce GTX 1080 or higher |
-| CPU           | AMD: Ryzen 5 or higher |
-|               | Intel: Core i5 or higher |
-| Network       | Host: CAT5e ethernet or better |
-|               | Client: CAT5e ethernet or better |
-
-**HDR Suggestions**
-
-| **Component** | **Description** |
-|---------------|-----------------|
-| GPU           | AMD: Video Coding Engine 3.4 or higher |
-|               | Intel: UHD Graphics 730 or higher |
-|               | Nvidia: Pascal-based GPU (GTX 10-series) or higher |
-| CPU           | AMD: todo |
-|               | Intel: todo |
-| Network       | Host: CAT5e ethernet or better |
-|               | Client: CAT5e ethernet or better |
-
-## Integrations
-
-SudoVDA: Virtual Display Adapter Driver used in Apollo
-
-[Artemis](https://github.com/ClassicOldSong/moonlight-android): Integrated Virtual Display options control from client side
-
-**NOTE**: Artemis currently supports Android only. Other platforms will come later.
-
-## Support
-
-Currently support is only provided via GitHub Issues/Discussions.
-
-No real time chat support will ever be provided for Apollo and Artemis. Including but not limited to:
-
-- Discord
-- Telegram
-- Whatsapp
-- QQ
-- WeChat 
-
-> When there's a chat, there're dramas. -- Confucius
-
-## Downloads
-
-[Releases](https://github.com/ClassicOldSong/Apollo/releases)
-
-## Disclaimer
-
-I got kicked from Moonlight and Sunshine's Discord server and banned from Sunshine's GitHub repo literally for helping people out.
-
-This is what I got for finding a bug, opened an issue, getting no response, troubleshoot myself, fixed the issue myself, shared it by PR to the main repo hoping my efforts can help someone else during the maintenance gap.
-
-Yes, I'm going away. [Apollo](https://github.com/ClassicOldSong/Apollo) and [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android) will no longer be compatible with OG Sunshine and OG Moonlight eventually, but they'll work even better with much more carefully designed features.
-
-The Moonlight repo had stayed silent for 5 months, with nobody actually responding to issues, and people are getting totally no help besides the limited FAQ in their Discord server. I tried to answer issues and questions, solve problems within my ability but I got kicked out just for helping others.
-
-**PRs for feature improvements are welcomed here unlike the main repo, your ideas are more likely to be appreciated and your efforts are actually being respected. We welcome people who can and willing to share their efforts, helping yourselves and other people in need.**
-
-**Update**: They have contacted me and apologized for this incident, but the fact it **happened** still motivated me to start my own fork.
-
-## License
-
-GPLv3
+Umbra is distributed under the GNU General Public License v3.0. See
+[LICENSE](LICENSE) and [NOTICE](NOTICE). Components and dependencies retain their
+own copyright and licence terms.
