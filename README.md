@@ -1,142 +1,66 @@
 # Umbra
 
-<p align="center">
-  <strong>The Windows host application for the Eclipse/Umbra project.</strong><br>
-  Two Umbra gaming PCs can feed one Eclipse client for a shared couch co-op display.
-</p>
+**The Windows host for Eclipse/Umbra game streaming.**
 
-<p align="center">
-  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io">Project hub</a> ·
-  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html">Setup guide</a> ·
-  <a href="https://github.com/PreceptorOfMagic/eclipse">Eclipse client</a> ·
-  <a href="https://github.com/PreceptorOfMagic/umbra/releases">Umbra downloads</a> ·
-  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html">Acknowledgements</a>
-</p>
+[Project Hub](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub) · [Installation Guide](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/site/setup.html) · [Eclipse](https://github.com/PreceptorOfMagic/Eclipse) · [Umbra](https://github.com/PreceptorOfMagic/Umbra) · [Development](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/site/development.html) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/site/credits.html)
 
-Canonical Pages URL after publication: `https://preceptorofmagic.github.io/`
-
-> [!IMPORTANT]
-> Umbra is the **host**. Install it on each Windows gaming PC. Eclipse is the
-> **client** at the television or shared display. For co-op, each PC runs its own
-> game session; Eclipse joins the two live streams and sends each assigned input
-> back to the correct Umbra host.
-
-> [!NOTE]
-> This repository is currently a source-first engineering preview. A reviewed
-> Umbra installer has not been published yet. Use this repository's source and
-> build guide during private testing; when a release is approved, its installer,
-> checksums and notes will appear only on the
-> [Umbra Releases page](https://github.com/PreceptorOfMagic/umbra/releases).
+Umbra is a self-hosted, Moonlight-compatible Windows server derived from Apollo and Sunshine. Install it on one gaming PC for conventional game or desktop streaming to Eclipse. Install the same compatible release on two PCs for Eclipse's side-by-side or stacked couch co-op mode.
 
 ## What Umbra provides
 
-Umbra is derived from [Apollo](https://github.com/ClassicOldSong/Apollo), which
-is derived from [Sunshine](https://github.com/LizardByte/Sunshine). It keeps the
-normal Moonlight-compatible host path and Apollo's virtual-display and
-permission features, then adds the host-side work used by Eclipse/Umbra co-op.
+- PIN pairing, application management and local browser configuration.
+- Granular per-device viewing, application launch, input, clipboard and command permissions.
+- On-demand Windows virtual display creation at the client-requested resolution and refresh rate, with per-device display overrides and lifecycle-aware cleanup.
+- Client-requested HDR where Windows, the GPU, driver, display and receiving client support it.
+- Runtime probing of NVIDIA NVENC, AMD AMF, Intel Quick Sync and software encoder paths.
+- Low-delay stereo, 5.1 and 7.1 audio for ordinary sessions; co-op requests compatible stereo streams for client-side mixing or selection.
+- Keyboard, mouse and controller input, optional input-only access, clipboard synchronisation, connection hooks and resumable sessions.
+- Host capabilities, session events and logs that Eclipse can include in its diagnostic bundle.
 
-- Low-latency hardware encoding on supported NVIDIA, AMD and Intel GPUs.
-- Pairing, application management and per-client permissions through a local
-  web interface.
-- A virtual display that can follow the client-requested resolution and frame
-  rate on Windows.
-- A dedicated `Co-op Pane` application path for two-host Eclipse composition.
-- Per-client configuration switching so the same host can serve the ordinary
-  and co-op client profiles.
-- Host-side companion handling for the project's input, audio and display
-  session lifecycle.
-- Recovery and aspect-correct fitting for capture changes encountered during
-  the current co-op path.
+Normal one-host streaming remains the default experience. Co-op extends the same host rather than replacing it.
 
-Normal one-host streaming remains available. Co-op is an additional mode, not a
-replacement for the standard Eclipse-to-Umbra streaming path.
+## Why Umbra and Eclipse are developed together
+
+Two independently encoded streams cannot always be joined safely when their GPUs produce different bitstream structures. This is especially important for cross-vendor pairs. Eclipse coordinates the two sessions and requests a compatible mode; Umbra supplies the host capability reporting, custom co-op encoder behaviour and session contract that request needs.
+
+The work therefore spans a client and a host repository. Anyone may adapt it for Apollo, Aurora, Sunshine, Moonlight or another compatible fork under the relevant licences.
 
 ## Download or build
 
 | Need | Official route |
 |---|---|
-| Reviewed Umbra installer | [Umbra Releases](https://github.com/PreceptorOfMagic/umbra/releases) — no approved installer is published yet |
-| Current source archive | [Download the default branch as ZIP](https://github.com/PreceptorOfMagic/umbra/archive/refs/heads/beta/vega-coop.zip) |
-| Git clone | `git clone --recurse-submodules --branch beta/vega-coop https://github.com/PreceptorOfMagic/umbra.git` |
+| Umbra installer and checksums | [Umbra downloads](https://github.com/PreceptorOfMagic/Umbra/releases) |
+| Source archive | [Default-branch ZIP](https://github.com/PreceptorOfMagic/Umbra/archive/refs/heads/beta/vega-coop.zip) |
+| Git clone | `git clone --recurse-submodules --branch beta/vega-coop https://github.com/PreceptorOfMagic/Umbra.git` |
 | Windows source build | [Build Umbra on Windows](docs/umbra-windows-build.md) |
-| Eclipse client | [Eclipse repository](https://github.com/PreceptorOfMagic/eclipse) |
-| Complete two-host setup | [Eclipse/Umbra setup guide source](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html) |
+| Eclipse client | [Eclipse repository](https://github.com/PreceptorOfMagic/Eclipse) |
+| Full installation path | [Eclipse/Umbra Installation Guide](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/site/setup.html) |
 
-Do not download an installer offered elsewhere under the Umbra name. Until a
-reviewed release exists, source builds are the only project-controlled path.
+Only install packages and supporting components delivered through the Umbra release. Do not assemble or download individual integration pieces from unrelated links.
 
-## Quick start for co-op
+## Quick start
 
-1. Build and install the same reviewed Umbra revision on two Windows gaming PCs.
-2. Open each host's web interface and complete its initial configuration.
-3. Add one application named exactly **Co-op Pane** on each host.
-4. Enable the host virtual display and leave its resolution and refresh rate set
-   to the values requested by the client.
-5. Install or build Eclipse at the shared display, pair it with each host and
-   verify an ordinary one-host stream from both PCs first.
-6. In Eclipse, choose **Co-op**, select two different hosts, choose side-by-side
-   or stacked layout, assign inputs and start the combined session.
+1. Install Umbra on the Windows gaming PC and allow the requested private-network firewall access.
+2. Open its local web interface, complete initial configuration and add the games or desktop entries you want to stream.
+3. Open Eclipse on the television or desktop client, pair using the displayed PIN and launch an ordinary one-host session.
+4. For co-op, repeat the same process on a second PC, verify both normal streams, then choose **Co-op** in Eclipse.
 
-The full [setup guide](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html) includes
-the expected application settings, validation order and troubleshooting route.
+The co-op entry automatically creates the required host session and negotiates working encoder defaults. Users do not need to create a `Co-op Pane` application or copy encoder settings by hand. Eclipse reveals the separate co-op options after co-op has been used.
 
-## Host access and permissions
+## Host access and security
 
-The first paired client receives full permissions under Apollo's inherited
-permission model. Later clients may need **View Streams**, **List Apps**,
-**Launch Apps**, **Mouse Input**, **Keyboard Input** or controller permissions
-enabled explicitly in the Umbra web interface.
+The first paired client receives broad permissions under the inherited Apollo permission model. Review later clients and grant only the permissions they need. Umbra's configuration interface is local to the host at `https://localhost:47990` by default; its locally generated certificate can produce a first-use browser warning. Do not expose the management interface directly to the public internet.
 
-Umbra's configuration interface is local to the host at
-`https://localhost:47990` by default. Its locally generated certificate may
-cause the browser to show a certificate warning on first access. Do not expose
-the management interface directly to the public internet.
+## Diagnostics and issue reports
 
-## Current support shape
+Use [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues/new/choose) for host capture, virtual display, service, pairing, permissions, encoding and installer problems. Include the Umbra and Eclipse versions, Windows version, GPU and driver, whether a normal stream works, exact reproduction steps and Eclipse's reviewed diagnostic bundle.
 
-The project co-op path is being prepared around Windows 11 hosts with supported
-hardware encoders. Apollo and Sunshine include broader platform work, but the
-Eclipse/Umbra release claims deliberately stay narrower until those combinations
-have been verified against this fork.
+Use [Eclipse issues](https://github.com/PreceptorOfMagic/Eclipse/issues/new/choose) for client decoding, presentation, layout, composition, client-side input routing and Share/diagnostics behaviour.
 
-For ordinary Moonlight-compatible host configuration concepts, the upstream
-[Sunshine documentation](https://docs.lizardbyte.dev/projects/sunshine) remains
-useful. Umbra-specific co-op instructions and release status come from the
-[Eclipse/Umbra hub](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io).
+## Lineage, licence and independence
 
-## Project map and support
+Sunshine was originally created by `@loki-47-6F-64` and is maintained by LizardByte and contributors. Apollo was created by `@ClassicOldSong` and supplies Umbra's direct host and virtual-display lineage. The matching client descends from Moonlight, Moonlight TV by Mariotaku and Aurora by GuiDev1994. Read the [full acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/site/credits.html) for the wider dependency and driver contributors.
 
-- Use [Umbra issues](https://github.com/PreceptorOfMagic/umbra/issues) for host
-  capture, encoding, service, pairing, virtual-display and installer problems.
-- Use [Eclipse issues](https://github.com/PreceptorOfMagic/eclipse/issues) for
-  client decoding, layout, composition and client-side input routing.
-- Optional project support is handled through the hub's
-  [support page](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/support.html). It buys no
-  access, features, priority, rewards or influence.
+Umbra is distributed under the GNU General Public License v3.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Components and dependencies retain their own copyright and licence terms.
 
-## Lineage and acknowledgements
-
-Umbra would not exist without the projects it builds on:
-
-- **Sunshine**, originally created by `@loki-47-6F-64` and maintained by
-  LizardByte and its contributors.
-- **Apollo**, created by `@ClassicOldSong`, which supplies Umbra's direct host
-  lineage and virtual-display foundation.
-- **Moonlight**, created at MHacks 2013 by Cameron Gutman, Diego Waxemberg,
-  Aidan Campbell, Aaron Neyer, Michelle Bergeron and Andrew Hennessy.
-- **Moonlight TV** by Mariotaku and **Aurora** by GuiDev1994, the direct client
-  lineage leading to Eclipse.
-
-The [full acknowledgements](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html)
-name the wider dependency and driver contributors. That public credit page does
-not replace the licence, notice and source material required in a release.
-
-Eclipse/Umbra is independent and is not affiliated with or endorsed by
-Moonlight, Sunshine, LG Electronics, NVIDIA, AMD, Amazon, DXC or the Eclipse
-Foundation. Third-party names are used to describe lineage or compatibility.
-
-## Licence
-
-Umbra is distributed under the GNU General Public License v3.0. See
-[LICENSE](LICENSE) and [NOTICE](NOTICE). Components and dependencies retain their
-own copyright and licence terms.
+Eclipse/Umbra is independent and is not affiliated with or endorsed by Moonlight, Sunshine, LG Electronics, NVIDIA, AMD, Intel, Amazon, DXC or the Eclipse Foundation. Third-party names identify lineage or compatibility.
