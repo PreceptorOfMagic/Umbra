@@ -10,9 +10,10 @@
   <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html">Setup guide</a> ·
   <a href="https://github.com/PreceptorOfMagic/eclipse">Eclipse client</a> ·
   <a href="https://github.com/PreceptorOfMagic/umbra/releases">Umbra downloads</a> ·
-  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html">Acknowledgements</a> ·
-  <a href="https://preceptorofmagic.github.io/">Live site after publication</a>
+  <a href="https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/credits.html">Acknowledgements</a>
 </p>
+
+Canonical Pages URL after publication: `https://preceptorofmagic.github.io/`
 
 > [!IMPORTANT]
 > Umbra is the **host**. Install it on each Windows gaming PC. Eclipse is the
