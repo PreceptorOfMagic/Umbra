@@ -46,7 +46,7 @@ pacman -S --needed \
 
 ```bash
 git clone --recurse-submodules --branch beta/vega-coop \
-  https://github.com/PreceptorOfMagic/umbra.git
+  https://github.com/PreceptorOfMagic/Umbra.git
 cd umbra
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
@@ -79,13 +79,10 @@ been reviewed.
 
 ## Configure and test
 
-1. Start the host and open `https://localhost:47990`.
-2. Complete the local account setup and pair one Eclipse client.
-3. Verify an ordinary single-host stream before configuring co-op.
-4. For co-op, create exactly one application named **Co-op Pane**, enable the
-   virtual display, and leave resolution and refresh rate client-driven.
-5. Follow the shared [Eclipse/Umbra setup guide](https://github.com/PreceptorOfMagic/PreceptorOfMagic.github.io/blob/main/site/setup.html)
-   for pairing both hosts and assigning inputs.
+1. Start the host and open its web interface using the installed shortcut or tray action.
+2. Complete local account setup and pair one Eclipse client.
+3. Verify an ordinary single-host stream before testing co-op.
+4. Test the intended release behaviour: co-op defaults are working and separate, and the Co-op Pane appears automatically through first use. A clean install must not require a manually created application or copied encoder settings.
+5. Follow the [combined installation guide](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md) for pairing both hosts and assigning inputs.
 
-Report host build, capture, encoding or virtual-display failures in
-[Umbra issues](https://github.com/PreceptorOfMagic/umbra/issues).
+Report failures in [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues).
