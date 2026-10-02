@@ -162,6 +162,15 @@ namespace aurora_link {
       fprintf(stderr, "aurora-link: default playback device has no id\n");
       return false;
     }
+    // NEVER SAVE A VIRTUAL SINK AS "THE USER'S SPEAKERS". Umbra moves the default to its virtual sink (Steam
+    // Streaming Speakers) when a stream starts without host audio -- since 2026-10-02 also for Eclipse's
+    // this-PC-as-co-op-host -- and this hook can run after that switch. It then "restored" the virtual sink at
+    // session end, leaving the PC silent (measured 2026-10-02 on SKYNET). Keep the previous save instead; Umbra
+    // restores the real default itself.
+    if (name.find(L"Steam Streaming") != std::wstring::npos) {
+      wprintf(L"aurora-link: default is the virtual sink [%ls]; keeping the previously saved device\n", name.c_str());
+      return true;
+    }
 
     FILE *f = open_utf16(path, L"w, ccs=UTF-8");
     if (f == nullptr) {
