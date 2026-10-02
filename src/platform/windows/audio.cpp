@@ -696,6 +696,17 @@ namespace platf::audio {
         device->GetId(&id);
 
         sink.host = to_utf8(id.get());
+
+        // Umbra: remember its friendly name too ("Gigabyte M32Q (NVIDIA High Definition Audio)"). Restoring
+        // by the id alone failed whenever the endpoint had been re-created ("Couldn't find audio sink {id}")
+        // and left the PC on the virtual sink after the stream.
+        audio::prop_t prop;
+        prop_var_t friendly_name;
+        if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &prop)) &&
+            SUCCEEDED(prop->GetValue(PKEY_Device_FriendlyName, &friendly_name.prop)) &&
+            friendly_name.prop.pwszVal != nullptr) {
+          sink.host_name = to_utf8(friendly_name.prop.pwszVal);
+        }
       }
 
       // Prepare to search for the device_id of the virtual audio sink device,
