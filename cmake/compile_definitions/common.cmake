@@ -101,6 +101,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/input.h"
         "${CMAKE_SOURCE_DIR}/src/audio.cpp"
         "${CMAKE_SOURCE_DIR}/src/audio.h"
+        "${CMAKE_SOURCE_DIR}/src/wired_pin.cpp"
+        "${CMAKE_SOURCE_DIR}/src/wired_pin.h"
         "${CMAKE_SOURCE_DIR}/src/platform/common.h"
         "${CMAKE_SOURCE_DIR}/src/process.cpp"
         "${CMAKE_SOURCE_DIR}/src/process.h"
@@ -128,12 +130,12 @@ list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_ASSETS_DIR="${SUNSHINE_ASSETS_DIR_DEF}
 list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_TRAY=${SUNSHINE_TRAY})
 
 # BETA-ONLY, REMOVE FOR RELEASE -- src/beta_profile.h.
-# Lets ONE Apollo answer the live and the beta Aurora client with different settings, because two
-# Apollo instances cannot run on one host (fixed ports, one capture device, one virtual display).
+# Lets ONE Umbra host answer the live and the Eclipse Beta client with different settings, because two
+# Umbra instances cannot run on one host (fixed ports, one capture device, one virtual display).
 # OFF makes the feature vanish at compile time: both hooks are #ifdef'd and the translation unit
 # has no other callers.
 #     cmake -DAPOLLO_BETA_PROFILE=OFF     <- the release build
-option(APOLLO_BETA_PROFILE "BETA-ONLY: per-client config overrides for the beta Aurora client" ON)
+option(APOLLO_BETA_PROFILE "BETA-ONLY: per-client config overrides for the Eclipse Beta client" ON)
 if (APOLLO_BETA_PROFILE)
     list(APPEND SUNSHINE_DEFINITIONS APOLLO_BETA_PROFILE=1)
     message(STATUS "APOLLO_BETA_PROFILE is ON -- this is a BETA build, not a release build")
