@@ -669,44 +669,56 @@ namespace proc {
   }
 
   bool proc_t::prepare_gpu_hevc_resume(const rtsp_stream::launch_session_t& session) {
-    if (!session.aurora_gpu_hevc || !virtual_display) return true;
+    // Umbra: EVERY co-op pane (umbraCoop), not only the GPU HEVC one -- the built-in pane is
+    // resumable, and a co-op resumed in the other orientation, at another size or from another
+    // client must not reuse the old pane geometry.
+    if (!(session.aurora_gpu_hevc || session.umbra_coop) || !virtual_display) return true;
 #ifdef _WIN32
     // Called before capture, only with no active streams. Ordinary hardware
     // sessions retain Apollo's existing resume behavior. The GPU path requires
-    // a native-sized capture, so a previous co-op orientation cannot be reused.
+    // a native-sized capture (32-aligned), so a previous co-op orientation cannot be
+    // reused; a native-encoder co-op pane only needs an even size (e.g. 1920x2160).
+    const int align = session.aurora_gpu_hevc ? 32 : 2;
     if (display_name.empty() || session.width < 64 || session.height < 64 ||
-        session.width > 8192 || session.height > 8192 || session.width % 32 || session.height % 32)
+        session.width > 8192 || session.height > 8192 || session.width % align || session.height % align)
       return false;
+    // The VIRTUAL DISPLAY height: a native co-op pane with coop_pad_rows is created that much shorter
+    // than the encode (see the launch path), so a resume must keep the same inset.
+    int vd_height = session.height;
+    if (!session.aurora_gpu_hevc && session.umbra_coop) {
+      const int pad = config::video.coop_pad_rows;
+      if (pad > 0 && (pad % 16) == 0 && 2 * pad < session.height / 2) vd_height = session.height - 2 * pad;
+    }
     auto name = platf::from_utf8(display_name);
     DEVMODEW mode{}; mode.dmSize = sizeof(mode);
     if (!EnumDisplaySettingsW(name.c_str(), ENUM_CURRENT_SETTINGS, &mode)) return false;
-    if (mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(session.height)) {
+    if (mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(vd_height)) {
       int fps = session.fps < 1000 ? session.fps * 1000 : session.fps;
       if (config::video.double_refreshrate) fps *= 2;
-      auto result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, session.height, fps);
+      auto result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, vd_height, fps);
       if (result != ERROR_SUCCESS && _launch_session) {
         // SudoVDA can retain only the custom mode supplied when its monitor was
         // created. Recreate this paused virtual monitor with its SAME identity;
         // do not resize/crop the captured desktop or change an active stream.
         BOOST_LOG(info) << "[AURORA-GPU-HEVC] rebuilding paused virtual display for "
-          << session.width << "x" << session.height << " after resize rc=" << result;
+          << session.width << "x" << vd_height << " after resize rc=" << result;
         if (!VDISPLAY::removeVirtualDisplay(_launch_session->display_guid)) return false;
         uuid_util::uuid_t identity;
         memcpy(&identity, &_launch_session->display_guid, sizeof(GUID));
         const std::string device_name = _app.use_app_identity ? _app.name : _launch_session->device_name;
         name = VDISPLAY::createVirtualDisplay(identity.string().c_str(), device_name.c_str(),
-          session.width, session.height, fps, _launch_session->display_guid);
+          session.width, vd_height, fps, _launch_session->display_guid);
         if (name.empty()) return false;
         display_name = platf::to_utf8(name);
         config::video.output_name = display_device::map_display_name(display_name);
-        result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, session.height, fps);
+        result = VDISPLAY::changeDisplaySettings(name.c_str(), session.width, vd_height, fps);
         display_device::reset_persistence();
       }
       mode = {}; mode.dmSize = sizeof(mode);
       if (result != ERROR_SUCCESS || !EnumDisplaySettingsW(name.c_str(), ENUM_CURRENT_SETTINGS, &mode) ||
-          mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(session.height)) {
+          mode.dmPelsWidth != unsigned(session.width) || mode.dmPelsHeight != unsigned(vd_height)) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] resumed display resize failed rc=" << result
-          << " requested=" << session.width << "x" << session.height;
+          << " requested=" << session.width << "x" << vd_height;
         return false;
       }
     }
@@ -1630,14 +1642,11 @@ namespace proc {
       ctx.use_app_identity = false;
       ctx.per_client_app_identity = false;
       ctx.allow_client_commands = false;
-      // ENDS WITH THE STREAM, as the apps.json entry it replaces did (terminate-on-pause, the
-      // rig's proven setting). Not resumable ON PURPOSE: a resumed pane keeps its old virtual
-      // display (only prepare_gpu_hevc_resume resizes, and only for GPU HEVC), so a co-op
-      // relaunched in the other orientation or from another client would be letterboxed, and the
-      // co-op secondary does not quit its host on Quit unless quitappafter is set -- with a
-      // resumable pane the second PC's virtual display and game would outlive the session
-      // (diff-sentinel 2026-10-02). So the pane exists, and is listed, only while co-op streams.
-      ctx.terminate_on_pause = true;
+      // RESUMABLE (user, 2026-10-02: Disconnect must leave the co-op session to resume). The two
+      // reasons it briefly ended with the stream are fixed: a resumed co-op pane gets its virtual
+      // display resized to the new request (prepare_gpu_hevc_resume covers umbra_coop sessions),
+      // and Eclipse's Quit now quits BOTH hosts' panes (session_worker.c), not only the primary's.
+      ctx.terminate_on_pause = false;
       ctx.elevated = false;
       ctx.auto_detach = true;
       ctx.wait_all = false;   // no command to wait for; wait_all without terminate is the 07-29 hang
