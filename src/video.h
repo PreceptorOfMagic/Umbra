@@ -49,6 +49,9 @@ namespace video {
     int encodingFramerate; // Requested display framerate
     bool input_only;
     bool aurora_gpu_hevc = false;  // Explicit session opt-in; never a global encoder replacement.
+    // Umbra: a co-op pane (launch arg umbraCoop=1). Scopes the co-op encoder knobs -- gop_length,
+    // automatic NVENC constrained encoding -- to co-op sessions so a plain stream never gets them.
+    bool umbra_coop = false;
   };
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);

@@ -898,7 +898,7 @@ namespace video {
       // 'keyint=-1' in the parameters ourselves.
       {
         {"forced-idr"s, 1},
-        {"x265-params"s, [](const config_t &) {
+        {"x265-params"s, [](const config_t &config) {
            // keyint=-1 is x265's INFINITE GOP and silently overrides ctx->gop_size,
            // so a periodic IDR needs the keyint set here too.
            //
@@ -909,7 +909,8 @@ namespace video {
            // open-gop=0 the same command yields IDR_N_LP at 0/30/60/90, interval [30].
            // Apollo cannot detect the difference: its check keys on AV_PKT_FLAG_KEY,
            // which is set for a CRA just as it is for an IDR.
-           auto g = config::video.gop_length;
+           // Umbra: co-op sessions only, as for ctx->gop_size below.
+           auto g = config.umbra_coop ? config::video.gop_length : 0;
            if (g > 0) {
              auto n = std::to_string(g);
              return "info=0:open-gop=0:keyint="s + n + ":min-keyint="s + n;
@@ -1646,7 +1647,10 @@ namespace video {
       //
       // Setting keyint_min == gop_size asks for a FIXED period rather than a minimum,
       // so the interval is predictable instead of scene-cut driven.
-      if (config::video.gop_length > 0) {
+      //
+      // Umbra: CO-OP SESSIONS ONLY (config.umbra_coop, launch arg umbraCoop=1). It is a seam
+      // tool, and set globally it also put a periodic IDR into every ordinary stream.
+      if (config::video.gop_length > 0 && config.umbra_coop) {
         ctx->gop_size = config::video.gop_length;
         ctx->keyint_min = config::video.gop_length;
       } else {

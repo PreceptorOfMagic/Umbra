@@ -8,6 +8,7 @@
  #define BOOST_PROCESS_VERSION 1
 #endif
 // standard includes
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <thread>
@@ -59,6 +60,27 @@ namespace proc {
   std::string input_only_app_id_str;
   int terminate_app_id = -1;
   std::string terminate_app_id_str;
+
+  bool gpu_hevc_encoder_installed() {
+#ifdef _WIN32
+    // The same files gpu_hevc_device.inc loads: <exe dir>\gpu-hevc\aurora_gpu_hevc{8,10}.dll + kernels.
+    wchar_t path[32768];
+    const DWORD length = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!length || length >= ARRAYSIZE(path)) {
+      return false;
+    }
+    const auto directory = std::filesystem::path(path).parent_path() / "gpu-hevc";
+    std::error_code ec;
+    return std::filesystem::is_regular_file(directory / "aurora_gpu_hevc8.dll", ec) &&
+           std::filesystem::is_directory(directory / "kernels", ec);
+#else
+    return false;
+#endif
+  }
+
+  bool is_coop_pane(const ctx_t &app) {
+    return app.uuid == COOP_PANE_UUID || app.name == COOP_PANE_NAME;
+  }
 
 #ifdef _WIN32
   VDISPLAY::DRIVER_STATUS vDisplayDriverStatus = VDISPLAY::DRIVER_STATUS::UNKNOWN;
@@ -301,7 +323,9 @@ namespace proc {
         {
           // The GPU encoder confines the complete prediction footprint to its
           // pane. AVC seam padding must not change its capture geometry.
-          const int pad = launch_session->aurora_gpu_hevc ? 0 : config::video.coop_pad_rows;
+          // Umbra: a CO-OP knob, so only a co-op launch (umbraCoop=1) gets it. Global, it shrank
+          // the virtual display of plain Desktop streams too (VEGA, 2026-09-29: 1920x1048).
+          const int pad = launch_session->aurora_gpu_hevc || !launch_session->umbra_coop ? 0 : config::video.coop_pad_rows;
           // Refuse a value that would leave nothing to display, or that is not macroblock
           // aligned -- an unaligned inset puts the content on a half-macroblock boundary and
           // every row below it is coded against a shifted grid.
@@ -1582,6 +1606,45 @@ namespace proc {
 
       apps.emplace_back(std::move(ctx));
     }
+
+  #ifdef _WIN32
+    /* Umbra: THE CO-OP PANE IS BUILT IN, so a user never creates it. Eclipse's co-op launches
+       an app named exactly "Co-op Pane" on both hosts. Shipped only in the default apps.json it
+       existed on a FRESH install alone -- an upgrade keeps its old apps.json -- and a user could
+       delete or rename it. Built in code it exists on every install with a working virtual
+       display, and the web UI's Applications page never shows it (that page edits apps.json).
+       nvhttp::applist hides it from clients that do not ask for it (umbraCoop=1) unless it is
+       the running app, so an ordinary Moonlight client sees it only while a co-op session is
+       open to resume. A host whose apps.json already has an entry with this name keeps that
+       entry (the rig's, or a user's own) and gets no second one. */
+    if (vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK &&
+        std::none_of(apps.begin(), apps.end(), [](const proc::ctx_t &app) { return app.name == COOP_PANE_NAME; })) {
+      proc::ctx_t ctx;
+      ctx.idx = std::to_string(i);
+      ctx.uuid = COOP_PANE_UUID;
+      ctx.name = COOP_PANE_NAME;
+      ctx.virtual_display = true;
+      ctx.scale_factor = 100;
+      // The client's identity, as the apps.json entry it replaces had (use-app-identity unset).
+      ctx.use_app_identity = false;
+      ctx.per_client_app_identity = false;
+      ctx.allow_client_commands = false;
+      // RESUMABLE: Disconnect pauses the pane and keeps the game; Quit ends it (upstream's
+      // model, restored for Virtual Display on 09-21). The old apps.json entry terminated on
+      // pause, which left nothing to resume.
+      ctx.terminate_on_pause = false;
+      ctx.elevated = false;
+      ctx.auto_detach = true;
+      ctx.wait_all = false;   // no command to wait for; wait_all without terminate is the 07-29 hang
+      ctx.exit_timeout = 5s;
+      apply_global_cmds(ctx, this_env);
+
+      auto possible_ids = calculate_app_id(ctx.name, ctx.image_path, i++);
+      ctx.id = ids.count(std::get<0>(possible_ids)) == 0 ? std::get<0>(possible_ids) : std::get<1>(possible_ids);
+      ids.insert(ctx.id);
+      apps.emplace_back(std::move(ctx));
+    }
+  #endif
 
     // Virtual Display entry
   #ifdef _WIN32

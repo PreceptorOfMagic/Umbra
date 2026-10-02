@@ -62,6 +62,13 @@ using namespace std::literals;
 namespace nvhttp {
   /** UmbraCaps bit 1: GET /umbralog (see umbralog()). */
   constexpr int CAP_HOST_LOG = 2;
+  /** UmbraCaps bit 2: this build understands Eclipse co-op -- it builds the co-op pane in (proc::parse, whenever
+   *  the virtual display driver works), /applist hides that pane unless it is running or the client sends
+   *  umbraCoop=1, and a /launch or /resume with umbraCoop=1 gets the co-op encoder tuning. */
+  constexpr int CAP_COOP_PANE = 4;
+  /** UmbraCaps bit 3: the GPU HEVC co-op encoder is installed (proc::gpu_hevc_encoder_installed). Only
+   *  meaningful with bit 2: a host reporting bit 2 without bit 3 is a KNOWN "no", not an unknown. */
+  constexpr int CAP_GPU_HEVC = 8;
 }  // namespace nvhttp
 
 namespace nvhttp {
@@ -405,6 +412,8 @@ namespace nvhttp {
 #ifdef APOLLO_BETA_PROFILE
     launch_session->aurora_gpu_hevc = get_arg(args, "auroraGpuHevc", "0") == "1";
 #endif
+    // Umbra: one pane of an Eclipse co-op session -- the co-op encoder tuning applies to THIS session only.
+    launch_session->umbra_coop = get_arg(args, "umbraCoop", "0") == "1";
     // Umbra: the client asks for its wired card to carry the stream (wired_pin.h).
     launch_session->wired_mac = get_arg(args, "auroraWiredMac", "");
     auto split_list = [](const std::string &text) {
@@ -1030,8 +1039,18 @@ namespace nvhttp {
     }
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
     // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
-    // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog).
-    tree.put("root.UmbraCaps", (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG);
+    // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog),
+    // bit 2 built-in co-op pane + per-launch co-op tuning, bit 3 GPU HEVC co-op encoder installed.
+    {
+      int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG | CAP_COOP_PANE;
+#ifdef APOLLO_BETA_PROFILE
+      // The GPU HEVC session request (auroraGpuHevc) is parsed only in this build flavour.
+      if (proc::gpu_hevc_encoder_installed()) {
+        caps |= CAP_GPU_HEVC;
+      }
+#endif
+      tree.put("root.UmbraCaps", caps);
+    }
 
     tree.put("root.PairStatus", pair_status);
 
@@ -1227,6 +1246,10 @@ namespace nvhttp {
       auto should_hide_inactive_apps = config::input.enable_input_only_mode && current_appid > 0 && current_appid != proc::input_only_app_id;
 
       auto app_list = proc::proc.get_apps();
+      // Umbra: the co-op pane is not something to pick from a list -- a co-op session spans two hosts and
+      // Eclipse starts it from its own co-op screen. Eclipse asks for it (umbraCoop=1); every other client
+      // sees it only while it RUNS, i.e. while there is a co-op session to resume or quit.
+      const bool list_coop_pane = get_arg(request->parse_query_string(), "umbraCoop", "0") == "1";
 
       bool enable_legacy_ordering = config::sunshine.legacy_ordering && named_cert_p->enable_legacy_ordering;
       size_t bits;
@@ -1249,6 +1272,9 @@ namespace nvhttp {
           if (appid == proc::terminate_app_id) {
             continue;
           }
+        }
+        if (!list_coop_pane && appid != current_appid && proc::is_coop_pane(app)) {
+          continue;
         }
 
         std::string app_name;

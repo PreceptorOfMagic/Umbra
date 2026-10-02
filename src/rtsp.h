@@ -54,6 +54,9 @@ namespace rtsp_stream {
     std::string surround_params;
     bool enable_hdr;
     bool aurora_gpu_hevc = false;
+    // Umbra: this launch is one pane of an Eclipse co-op session (umbraCoop=1), so the co-op-only
+    // encoder tuning applies to it and to nothing else (video::config_t::umbra_coop).
+    bool umbra_coop = false;
     // Umbra wired pin (wired_pin.h): the launch's source address and the client's own cards.
     std::string client_address;
     std::string wired_mac;

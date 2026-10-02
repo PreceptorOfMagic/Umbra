@@ -278,14 +278,21 @@ namespace nvenc {
       // explicit that this restricts "prediction vectors for inter macroblocks in
       // each slice ... to the slice region", and also disables in-loop filtering
       // across slice boundaries, which removes the deblocking smear at the seam.
+      //
+      // Umbra: AUTOMATIC (-1, the default) ALSO MEANS ON FOR AN ECLIPSE CO-OP PANE. Co-op asks
+      // each host for ONE slice (its own pane), so the slice test alone left a fresh host
+      // unconstrained -- and the composite then shows blocky damage along the seam (register
+      // `nvenc_constrained`, measured 2026-08-18; the rig only worked because it set 1 by hand).
+      // An explicit 0 or 1 in sunshine.conf still wins.
       const bool want_constrained = config.constrained < 0
-                                        ? (client_config.slicesPerFrame > 1 || config.slice_rows)
+                                        ? (client_config.slicesPerFrame > 1 || config.slice_rows || client_config.umbra_coop)
                                         : (config.constrained != 0);
       if (want_constrained) {
         if (get_encoder_cap(NV_ENC_CAPS_SUPPORT_CONSTRAINED_ENCODING)) {
           format_config.enableConstrainedEncoding = 1;
           encoder_params.constrained_slices = true;
-          BOOST_LOG(info) << "NvEnc: constrained encoding enabled for " << client_config.slicesPerFrame << " slices/frame";
+          BOOST_LOG(info) << "NvEnc: constrained encoding enabled for " << client_config.slicesPerFrame << " slices/frame"
+                          << (client_config.umbra_coop ? " (co-op pane)" : "");
         } else {
           BOOST_LOG(warning) << "NvEnc: constrained encoding NOT supported by this gpu; slices will not be independently decodable";
         }

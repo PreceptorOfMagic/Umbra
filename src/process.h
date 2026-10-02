@@ -38,6 +38,10 @@
 #define FALLBACK_DESKTOP_UUID "EAAC6159-089A-46A9-9E24-6436885F6610"
 #define REMOTE_INPUT_UUID "8CB5C136-DA67-4F99-B4A1-F9CD35005CF4"
 #define TERMINATE_APP_UUID "E16CBE1B-295D-4632-9A76-EC4180C857D3"
+// Umbra: the built-in co-op pane (proc::parse). Eclipse resolves it by this exact NAME on both
+// hosts, so the name is the contract; the UUID only keeps it stable across restarts.
+#define COOP_PANE_UUID "4E4F11CD-A1C7-4A7B-A04F-C7581FEB2A56"
+#define COOP_PANE_NAME "Co-op Pane"
 
 namespace proc {
   using file_t = util::safe_ptr_v2<FILE, int, fclose>;
@@ -199,6 +203,13 @@ namespace proc {
   extern std::string input_only_app_id_str;
   extern int terminate_app_id;
   extern std::string terminate_app_id_str;
+
+  /** Umbra: is the GPU HEVC co-op encoder installed beside this executable (gpu-hevc\ with the
+   *  8-bit library and its kernels)? What serverinfo's UmbraCaps bit 3 reports. */
+  bool gpu_hevc_encoder_installed();
+
+  /** Umbra: is this app the co-op pane, built in or a same-named apps.json entry? */
+  bool is_coop_pane(const ctx_t &app);
 }  // namespace proc
 
 #ifdef BOOST_PROCESS_VERSION

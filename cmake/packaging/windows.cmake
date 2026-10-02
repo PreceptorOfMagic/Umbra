@@ -24,6 +24,29 @@ install(FILES ${VIGEMBUS_INSTALLER}
 # of moving it out of the hand-built script tree.
 install(TARGETS aurora-link RUNTIME DESTINATION "." COMPONENT application)
 
+# Umbra: the GPU HEVC co-op encoder, so NVIDIA+AMD and AMD+AMD co-op work from a FRESH install.
+# Until 2026-10-02 it reached a host only through a separate hand-run payload script, so a host
+# installed from this package had none and those pairings could not start. Built from audited
+# source -- Eclipse repo experimental/gpu-hevc (GPL-3.0-only), configured with -DBUILD_HOST_DLLS=ON.
+# UMBRA_GPU_HEVC_DIR must hold aurora_gpu_hevc8.dll, aurora_gpu_hevc10.dll and kernels/; they land
+# in gpu-hevc\ beside sunshine.exe, which is where gpu_hevc_device.inc loads them and what
+# serverinfo UmbraCaps bit 3 (proc::gpu_hevc_encoder_installed) checks.
+set(UMBRA_GPU_HEVC_DIR "" CACHE PATH "Folder with the built GPU HEVC co-op encoder (DLLs + kernels/)")
+if(UMBRA_GPU_HEVC_DIR)
+  foreach(required aurora_gpu_hevc8.dll aurora_gpu_hevc10.dll kernels)
+    if(NOT EXISTS "${UMBRA_GPU_HEVC_DIR}/${required}")
+      message(FATAL_ERROR "UMBRA_GPU_HEVC_DIR=${UMBRA_GPU_HEVC_DIR} has no ${required}")
+    endif()
+  endforeach()
+  install(FILES "${UMBRA_GPU_HEVC_DIR}/aurora_gpu_hevc8.dll" "${UMBRA_GPU_HEVC_DIR}/aurora_gpu_hevc10.dll"
+          DESTINATION "gpu-hevc" COMPONENT application)
+  install(DIRECTORY "${UMBRA_GPU_HEVC_DIR}/kernels" DESTINATION "gpu-hevc" COMPONENT application)
+else()
+  message(WARNING "UMBRA_GPU_HEVC_DIR is not set: this package has NO GPU HEVC co-op encoder, so hosts "
+                  "installed from it report UmbraCaps without bit 3 and Eclipse will not start "
+                  "NVIDIA+AMD or AMD+AMD co-op on them. Set it for any release package.")
+endif()
+
 install(TARGETS dxgi-info RUNTIME DESTINATION "tools" COMPONENT dxgi)
 install(TARGETS audio-info RUNTIME DESTINATION "tools" COMPONENT audio)
 
