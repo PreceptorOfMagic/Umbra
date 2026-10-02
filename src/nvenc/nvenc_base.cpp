@@ -233,7 +233,10 @@ namespace nvenc {
     enc_config.profileGUID = NV_ENC_CODEC_PROFILE_AUTOSELECT_GUID;
     // gop_length 0 keeps the stock infinite GOP; a positive value forces periodic IDRs so a
     // co-op peer can re-anchor without the OTHER host also emitting a keyframe.
-    enc_config.gopLength = config.gop_length > 0 ? (uint32_t) config.gop_length : NVENC_INFINITE_GOPLENGTH;
+    // Umbra: co-op sessions only (umbraCoop), like the avcodec gop_length -- an ordinary stream keeps
+    // the stock infinite GOP whatever sunshine.conf says.
+    const int coop_gop = client_config.umbra_coop ? config.gop_length : 0;
+    enc_config.gopLength = coop_gop > 0 ? (uint32_t) coop_gop : NVENC_INFINITE_GOPLENGTH;
     enc_config.frameIntervalP = 1;
     enc_config.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CBR;
     enc_config.rcParams.zeroReorderDelay = 1;
@@ -256,7 +259,7 @@ namespace nvenc {
     auto set_h264_hevc_common_format_config = [&](auto &format_config) {
       format_config.repeatSPSPPS = 1;
       // idrPeriod must track gopLength or the two disagree and the GOP is not honoured.
-      format_config.idrPeriod = config.gop_length > 0 ? (uint32_t) config.gop_length : NVENC_INFINITE_GOPLENGTH;
+      format_config.idrPeriod = coop_gop > 0 ? (uint32_t) coop_gop : NVENC_INFINITE_GOPLENGTH;
       if (config.slice_rows) {
         // sliceMode 2 = "sliceModeData CTB rows per slice"; 1 row gives an exact one
         // slice per CTB row, which "N slices per picture" cannot guarantee.

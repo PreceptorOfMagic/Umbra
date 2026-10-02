@@ -72,6 +72,7 @@ namespace proc {
     const auto directory = std::filesystem::path(path).parent_path() / "gpu-hevc";
     std::error_code ec;
     return std::filesystem::is_regular_file(directory / "aurora_gpu_hevc8.dll", ec) &&
+           std::filesystem::is_regular_file(directory / "aurora_gpu_hevc10.dll", ec) &&
            std::filesystem::is_directory(directory / "kernels", ec);
 #else
     return false;
@@ -1615,7 +1616,7 @@ namespace proc {
        display, and the web UI's Applications page never shows it (that page edits apps.json).
        nvhttp::applist hides it from clients that do not ask for it (umbraCoop=1) unless it is
        the running app, so an ordinary Moonlight client sees it only while a co-op session is
-       open to resume. A host whose apps.json already has an entry with this name keeps that
+       streaming. A host whose apps.json already has an entry with this name keeps that
        entry (the rig's, or a user's own) and gets no second one. */
     if (vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK &&
         std::none_of(apps.begin(), apps.end(), [](const proc::ctx_t &app) { return app.name == COOP_PANE_NAME; })) {
@@ -1629,10 +1630,14 @@ namespace proc {
       ctx.use_app_identity = false;
       ctx.per_client_app_identity = false;
       ctx.allow_client_commands = false;
-      // RESUMABLE: Disconnect pauses the pane and keeps the game; Quit ends it (upstream's
-      // model, restored for Virtual Display on 09-21). The old apps.json entry terminated on
-      // pause, which left nothing to resume.
-      ctx.terminate_on_pause = false;
+      // ENDS WITH THE STREAM, as the apps.json entry it replaces did (terminate-on-pause, the
+      // rig's proven setting). Not resumable ON PURPOSE: a resumed pane keeps its old virtual
+      // display (only prepare_gpu_hevc_resume resizes, and only for GPU HEVC), so a co-op
+      // relaunched in the other orientation or from another client would be letterboxed, and the
+      // co-op secondary does not quit its host on Quit unless quitappafter is set -- with a
+      // resumable pane the second PC's virtual display and game would outlive the session
+      // (diff-sentinel 2026-10-02). So the pane exists, and is listed, only while co-op streams.
+      ctx.terminate_on_pause = true;
       ctx.elevated = false;
       ctx.auto_detach = true;
       ctx.wait_all = false;   // no command to wait for; wait_all without terminate is the 07-29 hang
@@ -1642,6 +1647,7 @@ namespace proc {
       auto possible_ids = calculate_app_id(ctx.name, ctx.image_path, i++);
       ctx.id = ids.count(std::get<0>(possible_ids)) == 0 ? std::get<0>(possible_ids) : std::get<1>(possible_ids);
       ids.insert(ctx.id);
+      BOOST_LOG(info) << "Co-op Pane: built in (id "sv << ctx.id << "); hidden from app lists unless running or asked for (umbraCoop=1)"sv;
       apps.emplace_back(std::move(ctx));
     }
   #endif

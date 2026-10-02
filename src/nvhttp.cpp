@@ -1223,6 +1223,24 @@ namespace nvhttp {
     response->close_connection_after_response = true;
   }
 
+  /**
+   * Umbra: umbraCoop=1/0 is the client's explicit answer (Eclipse from 2026-10-02, 0 = its "co-op tuning"
+   * setting is off). A client that predates the argument sends nothing; it gets the co-op tuning exactly
+   * when it launches or resumes the co-op pane (built in, or an apps.json entry of that name), so older
+   * Eclipse builds and the TV app keep the co-op knobs the rig set by hand (gop_length, coop_pad_rows).
+   */
+  void resolve_coop_flag(rtsp_stream::launch_session_t &launch_session, const args_t &args, int appid) {
+    if (args.find("umbraCoop") != args.end()) {
+      return;  // make_launch_session already read it
+    }
+    for (const auto &app : proc::proc.get_apps()) {
+      if (util::from_view(app.id) == appid) {
+        launch_session.umbra_coop = proc::is_coop_pane(app);
+        return;
+      }
+    }
+  }
+
   void applist(resp_https_t response, req_https_t request) {
     print_req<SunshineHTTPS>(request);
 
@@ -1273,7 +1291,9 @@ namespace nvhttp {
             continue;
           }
         }
-        if (!list_coop_pane && appid != current_appid && proc::is_coop_pane(app)) {
+        // Only the BUILT-IN pane: a same-named apps.json entry is the host owner's (or the rig's) own
+        // app and stays visible, so clients that predate umbraCoop still find it.
+        if (!list_coop_pane && appid != current_appid && app.uuid == COOP_PANE_UUID) {
           continue;
         }
 
@@ -1403,6 +1423,7 @@ namespace nvhttp {
 
     host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p);
+    resolve_coop_flag(*launch_session, args, appid);
     launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
@@ -1580,6 +1601,7 @@ namespace nvhttp {
       host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     }
     auto launch_session = make_launch_session(host_audio, false, args, named_cert_p);
+    resolve_coop_flag(*launch_session, args, current_appid);
     launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
