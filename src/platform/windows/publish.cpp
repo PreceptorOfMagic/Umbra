@@ -174,21 +174,21 @@ namespace platf::publish {
     mdns_registration_t():
         existing_instance(nullptr) {
       if (service(true, existing_instance)) {
-        BOOST_LOG(error) << "Unable to register Apollo mDNS service"sv;
+        BOOST_LOG(error) << "Unable to register Umbra mDNS service"sv;
         return;
       }
 
-      BOOST_LOG(info) << "Registered Apollo mDNS service"sv;
+      BOOST_LOG(info) << "Registered Umbra mDNS service"sv;
     }
 
     ~mdns_registration_t() override {
       if (existing_instance) {
         if (service(false, existing_instance)) {
-          BOOST_LOG(error) << "Unable to unregister Apollo mDNS service"sv;
+          BOOST_LOG(error) << "Unable to unregister Umbra mDNS service"sv;
           return;
         }
 
-        BOOST_LOG(info) << "Unregistered Apollo mDNS service"sv;
+        BOOST_LOG(info) << "Unregistered Umbra mDNS service"sv;
       }
     }
 

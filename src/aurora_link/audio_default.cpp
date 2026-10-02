@@ -2,7 +2,7 @@
  * @file src/aurora_link/audio_default.cpp
  * @brief Save and restore the Windows default playback device around a session.
  *
- * WHY: Apollo forces its own virtual sink as the default render endpoint for the
+ * WHY: Umbra forces its own virtual sink as the default render endpoint for the
  * duration of a stream and does not reliably put the previous one back afterwards --
  * so a session ends with the machine's sound still pointed at a sink nobody is
  * listening to. The session hook snapshots the default on the way in and restores it

@@ -106,7 +106,7 @@ namespace system_tray {
     .menu =
       (struct tray_menu[]) {
         // todo - use boost/locale to translate menu strings
-        { .text = "Open Apollo", .cb = tray_open_ui_cb },
+        { .text = "Open Umbra", .cb = tray_open_ui_cb },
         { .text = "-" },
         // { .text = "-" },
         // { .text = "Donate",
@@ -224,10 +224,10 @@ namespace system_tray {
     // create tray in separate thread
 
   #ifdef _WIN32
-    std::string tmp_str = "Open Apollo (" + config::nvhttp.sunshine_name + ":" + std::to_string(net::map_port(confighttp::PORT_HTTPS)) + ")";
+    std::string tmp_str = "Open Umbra (" + config::nvhttp.sunshine_name + ":" + std::to_string(net::map_port(confighttp::PORT_HTTPS)) + ")";
     static const std::string title_str = utf8ToAcp(tmp_str);
   #else
-    static const std::string title_str = "Open Apollo (" + config::nvhttp.sunshine_name + ":" + std::to_string(net::map_port(confighttp::PORT_HTTPS)) + ")";
+    static const std::string title_str = "Open Umbra (" + config::nvhttp.sunshine_name + ":" + std::to_string(net::map_port(confighttp::PORT_HTTPS)) + ")";
   #endif
     tray.menu[0].text = title_str.c_str();
 

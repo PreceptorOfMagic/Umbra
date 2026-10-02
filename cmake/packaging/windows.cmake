@@ -20,7 +20,7 @@ install(FILES ${VIGEMBUS_INSTALLER}
 
 # Adding tools
 # Aurora Link ships next to sunshine.exe, in the SAME component as the
-# application, so it is installed and uninstalled with Apollo -- the whole point
+# application, so it is installed and uninstalled with Umbra -- the whole point
 # of moving it out of the hand-built script tree.
 install(TARGETS aurora-link RUNTIME DESTINATION "." COMPONENT application)
 
@@ -91,7 +91,7 @@ set(CPACK_COMPONENT_APPLICATION_DEPENDS assets)
 
 # service auto-start script
 set(CPACK_COMPONENT_AUTOSTART_DISPLAY_NAME "Launch on Startup")
-set(CPACK_COMPONENT_AUTOSTART_DESCRIPTION "If enabled, launches Apollo automatically on system startup.")
+set(CPACK_COMPONENT_AUTOSTART_DESCRIPTION "If enabled, launches Umbra automatically on system startup.")
 set(CPACK_COMPONENT_AUTOSTART_GROUP "Core")
 
 # assets

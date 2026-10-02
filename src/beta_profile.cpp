@@ -1,6 +1,6 @@
 /**
  * @file src/beta_profile.cpp
- * @brief Per-client config overrides for Aurora beta. BETA-ONLY — see beta_profile.h.
+ * @brief Per-client config overrides for Eclipse Beta. BETA-ONLY — see beta_profile.h.
  */
 #include "beta_profile.h"
 

@@ -29,9 +29,9 @@ target_link_libraries(sunshinesvc
         ${PLATFORM_LIBRARIES})
 target_compile_options(sunshinesvc PRIVATE ${SUNSHINE_COMPILE_OPTIONS})
 
-# Aurora Link — host companion (pad bridge, audio-cable visibility, agent gate).
-# Built and installed with Apollo so `uninstall Apollo` removes it too, and a
-# second host gets it by installing Apollo rather than by copying a hand-built
+# Eclipse Link — compatibility-named host companion (pad bridge, audio-cable visibility, agent gate).
+# Built and installed with Umbra so uninstalling Umbra removes it too, and a
+# second host gets it by installing Umbra rather than by copying a hand-built
 # tree of scripts. ViGEmClient is the same vendored copy sunshine itself uses.
 add_executable(aurora-link
         ${CMAKE_SOURCE_DIR}/src/aurora_link/main.cpp

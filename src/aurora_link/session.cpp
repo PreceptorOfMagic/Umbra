@@ -1,11 +1,11 @@
 /**
  * @file src/aurora_link/session.cpp
- * @brief The whole per-stream session, as two verbs Apollo can call directly.
+ * @brief The whole per-stream session, as two verbs Umbra can call directly.
  *
- * WHY THIS EXISTS: Apollo's global_prep_cmd pointed at a hand-built tree in
+ * WHY THIS EXISTS: Umbra's global_prep_cmd pointed at a hand-built tree in
  * C:\Users\camer\xlink-build -- a .cmd that called a .vbs that launched an .exe and
  * two Python scripts, plus a second .cmd for the audio cable. Every one of those is
- * an absolute path with a username in it, none of them are removed when Apollo is
+ * an absolute path with a username in it, none of them are removed when Umbra is
  * uninstalled, and a second host needs the tree copied and its paths rewritten. That
  * is the entire reason aurora-link exists (see aurora_link.h), but the goal was not
  * actually reached while the prep-cmd still named those scripts.
@@ -15,10 +15,10 @@
  *
  * WHAT THE OLD SCRIPT DID THAT A NAIVE SWAP WOULD HAVE SILENTLY DROPPED -- both of
  * these were found by reading it rather than by anything failing loudly:
- *   - it SAVED AND RESTORED the default playback device around the session (Apollo
+ *   - it SAVED AND RESTORED the default playback device around the session (Umbra
  *     parks the machine on its own virtual sink and does not put it back). That is
  *     audio_default.cpp now.
- *   - its stop path, and ONLY its stop path, ran the display sessionend hook. Apollo
+ *   - its stop path, and ONLY its stop path, ran the display sessionend hook. Umbra
  *     does not run the pause command when a session TERMINATES, so this is the sole
  *     thing that relights the physical panel after a quit. Dropping it would have
  *     left the monitor dark with no error anywhere.
@@ -48,7 +48,8 @@ namespace aurora_link {
      *
      * LOCALAPPDATA, not the install directory: the prep-cmd's session entry runs
      * UNELEVATED as the interactive user (the cable entry is the elevated one), so
-     * C:\Program Files\Apollo is not writable from here. Both verbs run as the same
+     * The Program Files installation (including the retained compatibility path
+     * C:\Program Files\Apollo) is not writable from here. Both verbs run as the same
      * user, so both see the same directory.
      */
     std::wstring state_dir() {
@@ -85,9 +86,9 @@ namespace aurora_link {
      * and it hangs it in a way that would have stalled every stream start.
      * bInheritHandles=TRUE does not mean "inherit the handles I named in STARTUPINFO",
      * it means "inherit EVERY inheritable handle I hold". session-start is launched by
-     * Apollo with its stdout on a pipe, so each long-running child ended up holding a
+     * Umbra with its stdout on a pipe, so each long-running child ended up holding a
      * duplicate of that pipe. The pipe then has no EOF until the children exit -- and
-     * they are the pad and mic hosts, which run for the whole session. Apollo WAITS for
+     * they are the pad and mic hosts, which run for the whole session. Umbra WAITS for
      * a prep-cmd to finish, so the stream would sit there until the session it was
      * trying to start had already ended.
      *
@@ -215,7 +216,7 @@ namespace aurora_link {
         wprintf(L"aurora-link: no dispwake.exe next to me - leaving the display alone\n");
         return;
       }
-      // Let Apollo finish its own display revert first, or we race it and get undone.
+      // Let Umbra finish its own display revert first, or we race it and get undone.
       Sleep(3000);
 
       std::wstring cmd = L"\"" + dispwake + L"\" physical-wake";
@@ -286,7 +287,7 @@ namespace aurora_link {
     }
     wprintf(L"aurora-link: session started (pad pid %lu, mic pid %lu)\n",
             static_cast<unsigned long>(pad), static_cast<unsigned long>(mic));
-    // Never fail a session on our account: Apollo aborts the stream on a non-zero
+    // Never fail a session on our account: Umbra aborts the stream on a non-zero
     // prep-cmd, and a missing microphone is not a reason to refuse to play a game.
     return 0;
   }

@@ -1,6 +1,6 @@
 /**
  * @file src/beta_profile.h
- * @brief Per-client encoder/display settings for Aurora beta. BETA-ONLY.
+ * @brief Per-client encoder/display settings for Eclipse Beta. BETA-ONLY.
  *
  * The paired certificate UUID selects beta_profile.conf beside sunshine.conf. The
  * file never changes sunshine.conf. Only settings consumed at display/encoder setup
@@ -32,7 +32,7 @@ namespace beta_profile {
 
   /**
    * Acquire the settings for a paired certificate. UUID matching is preferred:
-   * Aurora's live and beta certificates can share the same generic client name.
+   * Eclipse's live and beta certificates can share the same generic client name.
    * An absent file or unmatched client uses normal settings. Compatible sessions
    * share a lease; an incompatible active profile or invalid matching config throws
    * std::runtime_error without modifying the current settings. Releasing the last
