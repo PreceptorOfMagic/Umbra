@@ -1,123 +1,55 @@
 # Umbra
 
-<p align="center">
-  <strong><a href="https://preceptorofmagic.github.io/eclipse/">Eclipse/Umbra project hub</a></strong> ·
-  <a href="https://preceptorofmagic.github.io/eclipse/setup.html">Quick start</a> ·
-  <a href="https://github.com/PreceptorOfMagic/eclipse">Eclipse client source</a> ·
-  <a href="https://preceptorofmagic.github.io/eclipse/#status">Current status</a> ·
-  <a href="https://github.com/PreceptorOfMagic/eclipse/blob/HEAD/ACKNOWLEDGEMENTS.md">Acknowledgements</a>
-</p>
+**The gaming-PC app: a Windows host for everyday streaming and Eclipse’s two-host couch co-op.**
 
-> [!WARNING]
-> **Engineering preview.** **Eclipse/Umbra** is one project: **Eclipse** is its
-> client application and **Umbra** is its host application. There is no public
-> Umbra installer yet, and the current source and setup material are not a
-> consumer release.
+[Project Hub](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub) · [Installation Guide](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md) · [Eclipse](https://github.com/PreceptorOfMagic/Eclipse) · [Umbra](https://github.com/PreceptorOfMagic/Umbra) · [Development](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
 
-Umbra is the Windows host for a two-PC couch co-op system. Each PC runs and
-streams its own game through an independent session; the companion
-[Eclipse client](https://github.com/PreceptorOfMagic/eclipse) receives both live
-streams, routes each assigned controller to its chosen host, and composes the
-two panes on one display.
+New here? [The Project Hub](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub) explains both applications, requirements and tested hardware. This repository owns Umbra source and host release files. Umbra descends from Sunshine and Apollo.
 
-```text
-Windows host A ── live stream A ──┐
-                                  ├─ Eclipse client ── one split-screen display
-Windows host B ── live stream B ──┘
-                    ▲       ▲
-             controller A   controller B
-```
+## Downloads and installation
 
-Umbra descends from [Apollo](https://github.com/ClassicOldSong/Apollo), which
-descends from [Sunshine](https://github.com/LizardByte/Sunshine). It keeps
-Apollo's Moonlight-compatible host, permission system, virtual-display support,
-and session lifecycle while adding the host-side work needed by the co-op
-client.
+Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choose the compatible release and expand **Assets**. Download the **Windows x64 installer .exe**, not GitHub’s automatically generated source archives. If no installer is attached, there is no published installation package yet.
 
-## What this fork changes
+| Device | Package | Install |
+|---|---|---|
+| Windows x64 gaming PC | Umbra Windows installer, with bundled virtual-display and device components | [Windows steps](#windows-x64) |
+| LG TV / Windows / Linux display device | Eclipse client, from its own repository | [Eclipse downloads](https://github.com/PreceptorOfMagic/Eclipse#downloads-and-installation) |
 
-- Host-side codec, profile, and capability controls used to coordinate a co-op
-  pairing.
-- Per-client session configuration for the live and development clients.
-- Bounded Windows display/capture recovery for disruptions seen during game
-  launch and mode changes.
-- An experimental GPU HEVC path used in development. It is not a supported
-  consumer path while its rapid-motion blockiness remains unresolved.
+### Windows x64
 
-Pane geometry and final composition belong to the client. Umbra produces one
-normal live stream per host; it does not stitch host frames together.
+1. Download the installer and matching checksum if provided. Compare the file’s SHA-256 hash with PowerShell’s `Get-FileHash`.
+2. Stop any existing Sunshine/Apollo host service before starting Umbra. Back up its configuration before migration.
+3. Run the installer with administrator approval and include its bundled virtual-display/controller/device components. Do not download the device bridge separately.
+4. Allow access on your trusted private network. Use the installed shortcut or tray action to open the web interface and create the local administrator login.
+5. Review game/desktop entries, keep client-driven display defaults and pair Eclipse using its PIN.
 
-## Current status
+Windows 11 x64 on RTX 4070, RTX 3070 and Radeon RX Vega is the current physical test base. Linux/macOS host packages are not an Umbra release target here.
 
-| Area | Status |
-| --- | --- |
-| Public packages | None; do not install an Apollo release expecting Umbra changes |
-| Supported Umbra host | Windows engineering builds |
-| Mixed NVIDIA/AMD H.264 | Live synthetic stress passed; real-game user acceptance remains open |
-| Experimental AMD HEVC | Rapid-motion blockiness remains open |
-| Application identity | Visible host surfaces use Umbra; inherited Sunshine names and migration-sensitive internal identifiers remain where required |
+[Full Windows host installation](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#umbra-windows).
 
-No purchase decision should be based on this preview. Compatibility depends on
-the exact host pair, GPUs, games, controllers, network, and client platform.
+## What Umbra provides
 
-## Setup and documentation
+- PIN pairing, application management and local browser configuration.
+- Granular per-device viewing, application launch, input, clipboard and command permissions.
+- On-demand Windows virtual display creation at the client-requested resolution and refresh rate, with per-device display overrides and lifecycle-aware cleanup.
+- Client-requested HDR where Windows, the GPU, driver, display and receiving client support it.
+- Runtime probing of NVIDIA NVENC, AMD AMF, Intel Quick Sync and software encoder paths.
+- Low-delay stereo, 5.1 and 7.1 audio for ordinary sessions; co-op requests compatible stereo streams for client-side mixing or selection.
+- Keyboard, mouse and controller input, optional input-only access, clipboard synchronisation, connection hooks and resumable sessions.
+- Host capabilities, session events and logs that Eclipse can include in its diagnostic bundle.
 
-The co-op setup guide will be published with the public source release:
+Normal one-host streaming remains the default experience. Co-op extends the same host rather than replacing it.
 
-- [Consumer quick start](https://preceptorofmagic.github.io/eclipse/setup.html)
-- [Windows co-op setup](https://github.com/PreceptorOfMagic/eclipse/blob/HEAD/docs/windows-coop-setup.md)
-- [Eclipse client source](https://github.com/PreceptorOfMagic/eclipse)
+## First stream and co-op
 
-For behavior inherited unchanged from Apollo, use the upstream
-[Apollo wiki](https://github.com/ClassicOldSong/Apollo/wiki) and
-[Sunshine documentation](https://docs.lizardbyte.dev/projects/sunshine/).
-Those pages describe their own releases; they are not Umbra download or support
-channels.
+Start with a normal one-PC game or desktop stream to Eclipse. For co-op, install the same compatible Umbra release on a second PC and verify each host individually. Choose **Co-op** in Eclipse, select the hosts/layout and assign player inputs.
 
-## Project family
+Working co-op defaults are separate from ordinary streaming settings. The Co-op Pane appears automatically through first co-op use; users should not create app entries, copy IDs or set encoder parameters manually. The custom host encoder and client composition contract are the reason Eclipse and Umbra are developed together for cross-vendor co-op.
 
-The two development lineages remain explicit:
+## Reporting and contributing
 
-- Moonlight → Moonlight TV → Aurora → Eclipse client
-- Sunshine → Apollo → Umbra host
+Use [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues/new/choose) for installation, capture, virtual display, host service, pairing or encoder problems. Include both app versions, Windows/GPU/driver, reproduction steps and the [reviewed diagnostic bundle](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#diagnostics).
 
-Each repository owns its source and technical instructions. The client
-repository is also the staging point for the unified project site, release
-status, recording plan, and full acknowledgement inventory.
+[Windows build guide](docs/umbra-windows-build.md) · [Development and milestones](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
 
-## Credits
-
-This work exists because of the people who built and maintained the projects it
-inherits from, especially:
-
-- the [Moonlight Game Streaming Project](https://github.com/moonlight-stream),
-  created at MHacks 2013 by Cameron Gutman, Diego Waxemberg, Aidan Campbell,
-  Aaron Neyer, Michelle Bergeron and Andrew Hennessy, and its contributors;
-- the original Sunshine work by
-  [loki-47-6F-64](https://github.com/loki-47-6F-64) and the current
-  [LizardByte Sunshine](https://github.com/LizardByte/Sunshine) maintainers and
-  contributors;
-- [ClassicOldSong](https://github.com/ClassicOldSong) and Apollo contributors;
-- [mariotaku](https://github.com/mariotaku) and Moonlight TV contributors;
-- [GuiDev1994](https://github.com/GuiDev1994) and Aurora contributors; and
-- [SudoVDA](https://github.com/SudoMaker/SudoVDA), which carries inherited
-  Microsoft/VirtualDrivers lineage, and the many libraries, drivers, codecs,
-  and tools used by the host and client.
-
-The public release must ship the exact licence notices, component inventory,
-and corresponding-source information required by the artifacts it distributes.
-The detailed inventory is maintained in the client repository's
-[acknowledgements](https://github.com/PreceptorOfMagic/eclipse/blob/main/ACKNOWLEDGEMENTS.md).
-
-## Funding
-
-Funding is intentionally disabled while the project resolves its legal recipient,
-tax treatment, platform terms, and release-compliance gates.
-Donations will never purchase features, priority, warranties, or support.
-
-## Licence
-
-Umbra is a GPL-3.0-licensed derivative of Apollo and Sunshine. See
-[LICENSE](LICENSE) for the repository licence text. A public binary release is
-blocked until its notices, corresponding source, and build-specific obligations
-have been verified.
+[Eclipse/Umbra licence & notices](LICENSES.md) · [GPL-3.0](LICENSE)
