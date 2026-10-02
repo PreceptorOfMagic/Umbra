@@ -6,6 +6,9 @@
 #define BOOST_BIND_GLOBAL_PLACEHOLDERS
 
 // standard includes
+#include <sstream>
+#include <fstream>
+#include <regex>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -27,6 +30,7 @@
 #include "httpcommon.h"
 #include "logging.h"
 #include "network.h"
+#include "wired_pin.h"
 #include "nvhttp.h"
 #ifdef APOLLO_BETA_PROFILE
 #include "beta_profile.h"  // BETA-ONLY, remove for release
@@ -54,6 +58,11 @@
 #endif
 
 using namespace std::literals;
+
+namespace nvhttp {
+  /** UmbraCaps bit 1: GET /umbralog (see umbralog()). */
+  constexpr int CAP_HOST_LOG = 2;
+}  // namespace nvhttp
 
 namespace nvhttp {
 
@@ -396,6 +405,26 @@ namespace nvhttp {
 #ifdef APOLLO_BETA_PROFILE
     launch_session->aurora_gpu_hevc = get_arg(args, "auroraGpuHevc", "0") == "1";
 #endif
+    // Umbra: the client asks for its wired card to carry the stream (wired_pin.h).
+    launch_session->wired_mac = get_arg(args, "auroraWiredMac", "");
+    auto split_list = [](const std::string &text) {
+      std::vector<std::string> out;
+      std::size_t start = 0;
+      while (start < text.size() && out.size() < 8) {
+        const auto comma = text.find(',', start);
+        const auto item = text.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        if (!item.empty()) {
+          out.push_back(item);
+        }
+        if (comma == std::string::npos) {
+          break;
+        }
+        start = comma + 1;
+      }
+      return out;
+    };
+    launch_session->own_macs = split_list(get_arg(args, "auroraOwnMacs", ""));
+    launch_session->own_ips = split_list(get_arg(args, "auroraOwnIps", ""));
 
     // If launched from client
     if (named_cert_p->uuid != http::unique_id) {
@@ -464,7 +493,7 @@ namespace nvhttp {
       launch_session->fps = 60000; // 60fps * 1000 denominator
     }
 
-    launch_session->device_name = named_cert_p->name.empty() ? "ApolloDisplay"s : named_cert_p->name;
+    launch_session->device_name = named_cert_p->name.empty() ? "UmbraDisplay"s : named_cert_p->name;
     launch_session->unique_id = named_cert_p->uuid;
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));
@@ -1000,6 +1029,9 @@ namespace nvhttp {
       }
     }
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
+    // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
+    // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog).
+    tree.put("root.UmbraCaps", (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG);
 
     tree.put("root.PairStatus", pair_status);
 
@@ -1105,6 +1137,71 @@ namespace nvhttp {
     }
 
     return named_cert_nodes;
+  }
+
+  /**
+   * @brief Umbra: the tail of this host's own log, for a PAIRED client's support bundle (2026-09-30).
+   *
+   * A user sends ONE file. The host side of their problem -- encoder, capture, audio device, display -- is only in
+   * this log, and they will not know to send it. So the client fetches it at the end of every stream while it is
+   * keeping logs. Same gate as /applist (a verified, paired client allowed to act). Lines that could carry a secret
+   * are dropped: anything naming a password/salt/token/secret/credential/cookie, and config-dump lines whose KEY
+   * looks like one (Umbra never logs a PIN or password value, but a user's config could hold anything).
+   * Query: bytes=N, the tail length (default 262144, 4096..1048576); the text starts on a whole line.
+   */
+  void umbralog(resp_https_t response, req_https_t request) {
+    print_req<SunshineHTTPS>(request);
+    auto named_cert_p = get_verified_cert(request);
+    if (!(named_cert_p->perm & PERM::_all_actions)) {
+      response->write(SimpleWeb::StatusCode::client_error_forbidden, "not allowed for this client");
+      response->close_connection_after_response = true;
+      return;
+    }
+    auto args = request->parse_query_string();
+    std::size_t want = 262144;
+    if (auto it = args.find("bytes"); it != args.end()) {
+      try {
+        want = std::clamp<std::size_t>(std::stoul(it->second), 4096, 1048576);
+      } catch (...) {
+      }
+    }
+    std::ifstream in(config::sunshine.log_file, std::ios::binary);
+    if (!in) {
+      response->write(SimpleWeb::StatusCode::client_error_not_found, "no log file at " + config::sunshine.log_file);
+      response->close_connection_after_response = true;
+      return;
+    }
+    in.seekg(0, std::ios::end);
+    const auto size = static_cast<std::size_t>(in.tellg());
+    const auto start = size > want ? size - want : 0;
+    in.seekg(static_cast<std::streamoff>(start));
+    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (start > 0) {
+      const auto first = data.find('\n');
+      data.erase(0, first == std::string::npos ? data.size() : first + 1);
+    }
+    static const std::regex secret_word("(password|passwd|salt|token|secret|credential|cookie)", std::regex::icase);
+    static const std::regex secret_key("config: *[\\[']?[^\\]'= ]*(pass|salt|token|secret|cred|key|pin)[^\\]'= ]*[\\]']?",
+                                       std::regex::icase);
+    std::ostringstream out;
+    out << "# Umbra host log " << config::sunshine.log_file << ": last " << data.size() << " of " << size
+        << " bytes, secrets removed\n";
+    std::istringstream lines(data);
+    std::string line;
+    std::size_t removed = 0;
+    while (std::getline(lines, line)) {
+      if (std::regex_search(line, secret_word) || std::regex_search(line, secret_key)) {
+        out << "[line removed: may contain a secret]\n";
+        removed++;
+      } else {
+        out << line << '\n';
+      }
+    }
+    BOOST_LOG(info) << "Umbra host log: sent the last "sv << data.size() << " bytes ("sv << removed << " lines removed)"sv;
+    SimpleWeb::CaseInsensitiveMultimap headers;
+    headers.emplace("Content-Type", "text/plain; charset=utf-8");
+    response->write(SimpleWeb::StatusCode::success_ok, out.str(), headers);
+    response->close_connection_after_response = true;
   }
 
   void applist(resp_https_t response, req_https_t request) {
@@ -1280,6 +1377,7 @@ namespace nvhttp {
 
     host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p);
+    launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
     // Before display setup, app launch or encoder probing. A retained proc launch
@@ -1456,6 +1554,7 @@ namespace nvhttp {
       host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     }
     auto launch_session = make_launch_session(host_audio, false, args, named_cert_p);
+    launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
     // Before display setup, app launch or encoder probing. A retained proc launch
@@ -1795,6 +1894,7 @@ namespace nvhttp {
     https_server.resource["^/serverinfo$"]["GET"] = serverinfo<SunshineHTTPS>;
     https_server.resource["^/pair$"]["GET"] = pair<SunshineHTTPS>;
     https_server.resource["^/applist$"]["GET"] = applist;
+    https_server.resource["^/umbralog$"]["GET"] = umbralog;
     https_server.resource["^/appasset$"]["GET"] = appasset;
     https_server.resource["^/launch$"]["GET"] = [&host_audio](auto resp, auto req) {
       launch(host_audio, resp, req);

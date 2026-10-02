@@ -6,10 +6,10 @@
  * --------------------------------
  * The mic chain was `mic_receiver.py` + ffmpeg + sounddevice + numpy. That chain is the
  * ONLY reason the host stack is not a single executable: everything else already ships
- * inside Apollo. It also drags a per-machine Python install and a borrowed ffmpeg.exe
+ * inside Umbra. It also drags a per-machine Python install and a borrowed ffmpeg.exe
  * into a fork that is supposed to install with no machine-specific setup.
  *
- * Apollo already links Opus and already talks WASAPI, so the whole chain collapses to
+ * Umbra already links Opus and already talks WASAPI, so the whole chain collapses to
  * one verb in this binary: UDP -> RTP depacketise -> opus_decode -> WASAPI render.
  *
  * WIRE FORMAT, fixed by the Pi's sender (xlink_mic_send.sh):
@@ -105,9 +105,9 @@ namespace aurora_link {
           if (name.find(wants[r]) == std::wstring::npos) {
             continue;
           }
-          // Prefer the earlier candidate, then the SHORTEST name: "Aurora Mic Bridge"
-          // is a prefix of "Aurora Mic Bridge 16ch", and the 16-channel endpoint
-          // accepts audio and is simply never heard.
+          // Prefer the earlier candidate, then the SHORTEST name: each stereo bridge
+          // label is a prefix of its 16-channel counterpart, and the 16-channel
+          // endpoint accepts audio and is simply never heard.
           if (r < best_rank || (r == best_rank && name.size() < best_len)) {
             if (best != nullptr) best->Release();
             best = dev;
@@ -165,7 +165,10 @@ namespace aurora_link {
     // silently -- the failure looks identical to "no one spoke".
     IMMDevice *dev = nullptr;
     for (int waited = 0; waited < 20 && dev == nullptr; ++waited) {
-      dev = find_render_device(en, {L"Aurora Mic Bridge", L"CABLE Input"});
+      // Eclipse is the current visible identity. Aurora remains a migration fallback
+      // until an Eclipse-aware rollback build has been preserved and the elevated
+      // cable path can safely rename the persistent Windows endpoint property.
+      dev = find_render_device(en, {L"Eclipse Mic Bridge", L"Aurora Mic Bridge", L"CABLE Input"});
       if (dev == nullptr) {
         if (waited == 0) {
           printf("aurora-link: waiting for the virtual cable endpoint...\n");
@@ -294,7 +297,7 @@ namespace aurora_link {
       }
     }
 
-    // Not reached: the host runs until the session ends and Apollo stops it.
+    // Not reached: the host runs until the session ends and Umbra stops it.
     opus_decoder_destroy(dec);
     closesocket(s);
     if (com_here) CoUninitialize();

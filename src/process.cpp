@@ -35,6 +35,7 @@
 #include "system_tray.h"
 #include "utility.h"
 #include "video.h"
+#include "wired_pin.h"
 #include "uuid.h"
 
 #ifdef _WIN32
@@ -498,6 +499,12 @@ namespace proc {
       }
     }
 
+    // Umbra: a client that asked for its wired card gets it pinned for the session (reverted in terminate).
+    if (launch_session) {
+      wired_pin::apply(launch_session->client_address, launch_session->wired_mac,
+                       launch_session->own_macs, launch_session->own_ips);
+    }
+
     _env["APOLLO_APP_STATUS"] = "RUNNING";
 
     for (auto &cmd : _app.detached) {
@@ -832,6 +839,8 @@ namespace proc {
     }
 
     _pipe.reset();
+
+    wired_pin::revert();   // Umbra: the session's wired pin, if any
 
     bool has_run = _app_id > 0;
 

@@ -24,7 +24,7 @@ BEGIN
             VALUE "InternalName",     TOSTRING(PROJECT_NAME)
             VALUE "ProductName",      TOSTRING(PROJECT_NAME)
             VALUE "ProductVersion",   TOSTRING(PROJECT_VERSION)
-            VALUE "LegalCopyright",   "https://raw.githubusercontent.com/ClassicOldSong/Apollo/master/LICENSE"
+            VALUE "LegalCopyright",   "Umbra contributors; see LICENSE and NOTICE"
         END
     END
 

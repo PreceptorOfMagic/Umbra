@@ -19,6 +19,14 @@
         "steam://open/bigpicture"
       ],
       "image-path": "steam.png"
+    },
+    {
+      "name": "Co-op Pane",
+      "virtual-display": true,
+      "auto-detach": true,
+      "terminate-on-pause": true,
+      "wait-all": false,
+      "exit-timeout": 5
     }
   ]
 }

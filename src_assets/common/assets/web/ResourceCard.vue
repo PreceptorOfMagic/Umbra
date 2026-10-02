@@ -7,9 +7,9 @@
             <div class="card-group p-4 align-items-center">
                 <!-- <a class="btn btn-success m-1" href="https://app.lizardbyte.dev" target="_blank">
                     {{ $t('resource_card.lizardbyte_website') }}</a> -->
-                <a class="btn btn-secondary m-1" href="https://github.com/ClassicOldSong/Apollo/discussions" target="_blank">
+                <a class="btn btn-secondary m-1" href="https://github.com/PreceptorOfMagic/umbra/discussions" target="_blank">
                     <i class="fab fa-fw fa-github"></i> {{ $t('resource_card.github_discussions') }}</a>
-                <a class="btn btn-secondary m-1" href="https://github.com/ClassicOldSong/Apollo/wiki" target="_blank">
+                <a class="btn btn-secondary m-1" href="https://github.com/PreceptorOfMagic/umbra/wiki" target="_blank">
                     <i class="fab fa-fw fa-github"></i> {{ $t('resource_card.github_wiki') }}</a>
             </div>
         </div>
@@ -21,10 +21,10 @@
             <br>
             <p>{{ $t('resource_card.legal_desc') }}</p>
             <div class="card-group p-4 align-items-center">
-                <a class="btn btn-danger m-1" href="https://github.com/ClassicOldSong/Apollo/blob/master/LICENSE"
+                <a class="btn btn-danger m-1" href="https://github.com/PreceptorOfMagic/umbra/blob/HEAD/LICENSE"
                     target="_blank">
                     <i class="fas fa-fw fa-file-alt"></i> {{ $t('resource_card.license') }}</a>
-                <a class="btn btn-danger m-1" href="https://github.com/ClassicOldSong/Apollo/blob/master/NOTICE"
+                <a class="btn btn-danger m-1" href="https://github.com/PreceptorOfMagic/umbra/blob/HEAD/NOTICE"
                     target="_blank">
                     <i class="fas fa-fw fa-exclamation"></i> {{ $t('resource_card.third_party_notice') }}</a>
             </div>

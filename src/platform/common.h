@@ -388,6 +388,11 @@ namespace platf {
     // Play on host PC
     std::string host;
 
+    // Umbra: a readable name for `host` (Windows: the endpoint's friendly name), so the original sink
+    // can still be restored after it comes back under a NEW id -- a monitor's HDMI/DP audio endpoint is
+    // re-created when displays change. Empty where `host` is already a stable name.
+    std::string host_name;
+
     // On macOS and Windows, it is not possible to create a virtual sink
     // Therefore, it is optional
     struct null_t {
@@ -835,7 +840,7 @@ namespace platf {
    */
   platform_caps::caps_t get_capabilities();
 
-#define SERVICE_NAME "Apollo"
+#define SERVICE_NAME "Umbra"
 #define SERVICE_TYPE "_nvstream._tcp"
 
   namespace publish {

@@ -61,7 +61,7 @@ namespace {
 
   int usage() {
     fprintf(stderr,
-            "aurora-link — Apollo host companion\n"
+            "Eclipse Link — Umbra host companion\n"
             "\n"
             "  aurora-link cable on|off      show/hide the virtual audio cable (admin)\n"
             "  aurora-link session on|off    open/close the CTM bridge gate\n"
@@ -141,8 +141,8 @@ int main(int argc, char *argv[]) {
     return usage();
   }
 
-  // session-start / session-end are what Apollo's global_prep_cmd names. They must
-  // never return non-zero: Apollo aborts the stream on a failed prep-cmd, and none
+  // session-start / session-end are what Umbra's global_prep_cmd names. They must
+  // never return non-zero: Umbra aborts the stream on a failed prep-cmd, and none
   // of this is worth refusing to play a game over.
   if (_stricmp(verb, "session-start") == 0) {
     return aurora_link::session_start();

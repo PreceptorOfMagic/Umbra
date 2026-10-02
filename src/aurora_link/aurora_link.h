@@ -1,26 +1,26 @@
 /**
  * @file src/aurora_link/aurora_link.h
- * @brief Aurora Link — the host-side companion stack, built and installed with Apollo.
+ * @brief Aurora Link — the compatibility-named host companion stack, built and installed with Umbra.
  *
- * WHY THIS LIVES INSIDE APOLLO
+ * WHY THIS LIVES INSIDE UMBRA
  * ----------------------------
  * The pieces this replaces grew up as loose scripts in C:\Users\camer\xlink-build:
  * a pad host exe, three Python scripts, a .vbs launcher and two .cmd wrappers, all
- * referenced by absolute path from Apollo's prep-cmd. That works on the one machine
- * it was hand-built on and nowhere else, and nothing ties their lifetime to Apollo's:
- * uninstalling Apollo would leave every one of them behind, and a second PC needs the
+ * referenced by absolute path from Umbra's prep-cmd. That works on the one machine
+ * it was hand-built on and nowhere else, and nothing ties their lifetime to Umbra's:
+ * uninstalling Umbra would leave every one of them behind, and a second PC needs the
  * whole tree copied and its paths rewritten.
  *
- * Building it as an Apollo target instead means:
- *   - one executable, installed next to sunshine.exe by Apollo's own CMake install
- *     rules, so `uninstall Apollo` removes it too;
- *   - Apollo's prep-cmd starts and stops it, so ending a session ends everything;
- *   - a second host gets it by installing Apollo, with no hand-copied tree.
+ * Building it as an Umbra target instead means:
+ *   - one executable, installed next to sunshine.exe by Umbra's CMake install
+ *     rules, so uninstalling Umbra removes it too;
+ *   - Umbra's prep-cmd starts and stops it, so ending a session ends everything;
+ *   - a second host gets it by installing Umbra, with no hand-copied tree.
  *
- * Third-party DRIVERS cannot live inside the exe, so they follow the pattern Apollo
+ * Third-party DRIVERS cannot live inside the exe, so they follow the pattern Umbra
  * already uses for ViGEmBus (cmake/packaging/windows.cmake downloads the signed
  * installer and ships it under scripts/ as its own install component). VB-CABLE is
- * added the same way, which keeps the "uninstalling Apollo removes it" property.
+ * added the same way, which keeps the "uninstalling Umbra removes it" property.
  *
  * SUBCOMMANDS
  * -----------
@@ -111,7 +111,7 @@ namespace aurora_link {
   /**
    * Save / restore the Windows default PLAYBACK endpoint around a session.
    *
-   * Apollo parks the machine on its own virtual sink for the duration of a stream
+   * Umbra parks the machine on its own virtual sink for the duration of a stream
    * and does not reliably put the previous device back. Replaces audio_default.py,
    * the last Python dependency in the host stack.
    *
@@ -132,13 +132,13 @@ namespace aurora_link {
   std::wstring widen(const char *s);
 
   /**
-   * One whole stream session, as the two verbs Apollo's global_prep_cmd names.
+   * One whole stream session, as the two verbs Umbra's global_prep_cmd names.
    *
    * start: name the cable's endpoints, open the CTM bridge gate, snapshot the default
    * sink, then launch the pad and mic hosts hidden.
    * end: stop those, close the gate, put the default sink back, and relight the
    * physical panel via dispwake -- which is the ONLY hook covering a full quit,
-   * because Apollo does not run its pause command when a session terminates.
+   * because Umbra does not run its pause command when a session terminates.
    *
    * @return always 0. A non-zero prep-cmd aborts the stream, and nothing here is
    *         worth refusing to play a game over.

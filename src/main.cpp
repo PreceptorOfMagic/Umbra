@@ -9,6 +9,7 @@
 #include <iostream>
 
 // local includes
+#include "wired_pin.h"
 #include "confighttp.h"
 #include "display_device.h"
 #include "entry_handler.h"
@@ -314,6 +315,8 @@ int main(int argc, char *argv[]) {
     BOOST_LOG(error) << "Proc failed to initialize"sv;
   }
 
+  wired_pin::revert_leftovers();   // Umbra: pins a crash left behind (wired_pin.h)
+
   reed_solomon_init();
   auto input_deinit_guard = input::init();
 
@@ -370,7 +373,7 @@ int main(int argc, char *argv[]) {
     BOOST_LOG(fatal) << "HTTP interface failed to initialize"sv;
 
 #ifdef _WIN32
-    BOOST_LOG(fatal) << "To relaunch Apollo successfully, use the shortcut in the Start Menu. Do not run sunshine.exe manually."sv;
+    BOOST_LOG(fatal) << "To relaunch Umbra successfully, use the shortcut in the Start Menu. Do not run sunshine.exe manually."sv;
     std::this_thread::sleep_for(10s);
 #endif
 
@@ -401,8 +404,8 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
   // If we're using the default port and GameStream is enabled, warn the user
   if (config::sunshine.port == 47989 && is_gamestream_enabled()) {
-    BOOST_LOG(fatal) << "GameStream is still enabled in GeForce Experience! This *will* cause streaming problems with Apollo!"sv;
-    BOOST_LOG(fatal) << "Disable GameStream on the SHIELD tab in GeForce Experience or change the Port setting on the Advanced tab in the Apollo Web UI."sv;
+    BOOST_LOG(fatal) << "GameStream is still enabled in GeForce Experience! This *will* cause streaming problems with Umbra!"sv;
+    BOOST_LOG(fatal) << "Disable GameStream on the SHIELD tab in GeForce Experience or change the Port setting on the Advanced tab in the Umbra Web UI."sv;
   }
 #endif
 

@@ -4,14 +4,14 @@ setlocal EnableDelayedExpansion
 rem Check if parameter is provided
 if "%~1"=="" (
     echo Usage: %0 [add^|remove]
-    echo   add    - Adds Apollo directories to system PATH
-    echo   remove - Removes Apollo directories from system PATH
+    echo   add    - Adds Umbra directories to system PATH
+    echo   remove - Removes Umbra directories from system PATH
     exit /b 1
 )
 
-rem Get Apollo root directory
+rem Get Umbra root directory
 for %%I in ("%~dp0\..") do set "ROOT_DIR=%%~fI"
-echo Apollo root directory: !ROOT_DIR!
+echo Umbra root directory: !ROOT_DIR!
 
 rem Define directories to add to path
 set "PATHS_TO_MANAGE[0]=!ROOT_DIR!"
@@ -48,9 +48,9 @@ if /i "%~1"=="add" (
         rem Set the new path in the registry
         reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!NEW_PATH!" /f
         if !ERRORLEVEL!==0 (
-            echo Successfully added Apollo directories to PATH
+            echo Successfully added Umbra directories to PATH
         ) else (
-            echo Failed to add Apollo directories to PATH
+            echo Failed to add Umbra directories to PATH
         )
     ) else (
         echo No changes needed to PATH
@@ -96,9 +96,9 @@ if /i "%~1"=="remove" (
         rem Set the new path in the registry
         reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!CURRENT_PATH!" /f
         if !ERRORLEVEL!==0 (
-            echo Successfully removed Apollo directories from PATH
+            echo Successfully removed Umbra directories from PATH
         ) else (
-            echo Failed to remove Apollo directories from PATH
+            echo Failed to remove Umbra directories from PATH
         )
     ) else (
         echo No changes needed to PATH

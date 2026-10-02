@@ -54,6 +54,11 @@ namespace rtsp_stream {
     std::string surround_params;
     bool enable_hdr;
     bool aurora_gpu_hevc = false;
+    // Umbra wired pin (wired_pin.h): the launch's source address and the client's own cards.
+    std::string client_address;
+    std::string wired_mac;
+    std::vector<std::string> own_macs;
+    std::vector<std::string> own_ips;
     bool enable_sops;
     bool virtual_display;
     uint32_t scale_factor;

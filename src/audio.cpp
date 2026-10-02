@@ -3,6 +3,8 @@
  * @brief Definitions for audio capture and encoding.
  */
 // standard includes
+#include <atomic>
+#include <fstream>
 #include <thread>
 
 // lib includes
@@ -24,6 +26,7 @@ namespace audio {
 
   static int start_audio_control(audio_ctx_t &ctx);
   static void stop_audio_control(audio_ctx_t &);
+  static void restore_sink_later(std::string id, std::string name);
   static void apply_surround_params(opus_stream_config_t &stream, const stream_params_t &params);
 
   int map_stream(int channels, bool quality);
@@ -265,7 +268,9 @@ namespace audio {
       return false;
     }
 
-    return ctx.control->is_sink_available(sink);
+    // Umbra: or the same device, back under a new id.
+    return ctx.control->is_sink_available(sink) ||
+           (!ctx.sink.host_name.empty() && ctx.control->is_sink_available(ctx.sink.host_name));
   }
 
   int map_stream(int channels, bool quality) {
@@ -281,10 +286,57 @@ namespace audio {
     return STEREO;
   }
 
+  /*
+   * Umbra: putting the host's own default playback device back after streaming.
+   *
+   * Stock behaviour snapshots the default device's ID when audio starts and sets it back when the
+   * audio context ends, "best effort". On a real PC that failed routinely: the default is often a
+   * monitor's HDMI/DP audio, which is ABSENT while the panel is off for the stream and is re-created
+   * under a NEW id when displays change, so the restore logged "Couldn't find audio sink {id}" and the
+   * PC stayed on the virtual sink (Steam Streaming Speakers) -- silent. The next session then
+   * snapshotted the virtual sink as "the host's device", so it never recovered by itself.
+   * Hence: remember the device's name too, retry for a while in the background until it reappears,
+   * and persist the last real default so a PC found on the virtual sink is set back as well.
+   */
+  static std::atomic<unsigned> sink_generation {0};  // bumped when a new audio context (session) starts
+
+  static std::string saved_host_sink_path() {
+    return platf::appdata().string() + "/audio_restore_sink.txt";
+  }
+
+  static void save_host_sink(const platf::sink_t &sink) {
+    std::ofstream out(saved_host_sink_path(), std::ios::trunc);
+    out << sink.host << '\n' << sink.host_name << '\n';
+  }
+
+  static bool load_host_sink(std::string &host, std::string &host_name) {
+    std::ifstream in(saved_host_sink_path());
+    if (!in || !std::getline(in, host) || host.empty()) {
+      return false;
+    }
+    std::getline(in, host_name);
+    return true;
+  }
+
+  // True if `id` is one of the virtual sinks (their names end with the device id: "virtual-Stereo{id}").
+  static bool is_virtual_sink(const platf::sink_t &sink, const std::string &id) {
+    if (!sink.null || id.empty()) {
+      return false;
+    }
+    for (const std::string *v : {&sink.null->stereo, &sink.null->surround51, &sink.null->surround71}) {
+      if (v->size() >= id.size() && v->compare(v->size() - id.size(), id.size(), id) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   int start_audio_control(audio_ctx_t &ctx) {
     auto fg = util::fail_guard([]() {
       BOOST_LOG(warning) << "There will be no audio"sv;
     });
+
+    ++sink_generation;  // abandons any restore still waiting from the previous session
 
     ctx.sink_flag = std::make_unique<std::atomic_bool>(false);
 
@@ -304,6 +356,20 @@ namespace audio {
 
     ctx.sink = std::move(*sink);
 
+    // Umbra: a PC found on the virtual sink was never set back (failed restore, crash): restore the last
+    // real default when this session ends. Otherwise remember this one for next time.
+    if (is_virtual_sink(ctx.sink, ctx.sink.host)) {
+      std::string host, host_name;
+      if (load_host_sink(host, host_name)) {
+        BOOST_LOG(warning) << "Default audio device is the virtual sink, left over from an earlier session; "sv
+                           << "will restore ["sv << (host_name.empty() ? host : host_name) << "] after streaming"sv;
+        ctx.sink.host = std::move(host);
+        ctx.sink.host_name = std::move(host_name);
+      }
+    } else if (!ctx.sink.host.empty()) {
+      save_host_sink(ctx.sink);
+    }
+
     fg.disable();
     return 0;
   }
@@ -316,10 +382,46 @@ namespace audio {
 
     // Change back to the host sink, unless there was none
     const std::string &sink = ctx.sink.host.empty() ? config::audio.sink : ctx.sink.host;
-    if (!sink.empty()) {
-      // Best effort, it's allowed to fail
-      ctx.control->set_sink(sink);
+    if (sink.empty()) {
+      return;
     }
+    if (ctx.control->is_sink_available(sink) && ctx.control->set_sink(sink) == 0) {
+      return;
+    }
+    // Umbra: the same device under a new id (display change) is found by its name.
+    const std::string &name = ctx.sink.host_name;
+    if (!name.empty() && ctx.control->is_sink_available(name) && ctx.control->set_sink(name) == 0) {
+      BOOST_LOG(info) << "Restored default audio device by name ["sv << name << ']';
+      return;
+    }
+    // Absent for now -- e.g. its monitor is only switched back on after the session: keep trying in the
+    // background rather than leave the PC on the virtual sink.
+    BOOST_LOG(info) << "Default audio device ["sv << (name.empty() ? sink : name) << "] is not present yet; will restore it when it appears"sv;
+    restore_sink_later(sink, name);
+  }
+
+  void restore_sink_later(std::string id, std::string name) {
+    const unsigned generation = sink_generation.load();
+    std::thread([id = std::move(id), name = std::move(name), generation]() {
+      auto control = platf::audio_control();
+      if (!control) {
+        return;
+      }
+      auto shutdown_event = mail::man->event<bool>(mail::shutdown);
+      const std::string &label = name.empty() ? id : name;
+      for (int second = 1; second <= 60; ++second) {
+        std::this_thread::sleep_for(1s);
+        if (shutdown_event->peek() || sink_generation.load() != generation) {
+          return;  // shutting down, or a new session owns the audio device now
+        }
+        if ((control->is_sink_available(id) && control->set_sink(id) == 0) ||
+            (!name.empty() && control->is_sink_available(name) && control->set_sink(name) == 0)) {
+          BOOST_LOG(info) << "Restored default audio device ["sv << label << "] after "sv << second << " s"sv;
+          return;
+        }
+      }
+      BOOST_LOG(warning) << "Gave up restoring the default audio device ["sv << label << "] after 60 s"sv;
+    }).detach();
   }
 
   void apply_surround_params(opus_stream_config_t &stream, const stream_params_t &params) {
