@@ -110,7 +110,9 @@ onMounted(async () => {
   try {
     const config = await fetch('./api/config').then((r) => r.json())
     installed.value = { raw: config.version, ...parse(config.version) }
-    pre = config.notify_pre_releases === true || config.notify_pre_releases === 'true'
+    // The web UI saves this checkbox as "enabled"/"disabled" (Checkbox.vue); accept what Apollo's own
+    // to_bool (config.cpp) accepts.
+    pre = ['true', 'yes', 'enable', 'enabled', 'on', '1'].includes(String(config.notify_pre_releases ?? '').trim().toLowerCase())
   } catch (e) {
     console.error(e)
   }
