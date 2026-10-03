@@ -2,7 +2,11 @@
  *
  * It only overrides Bootstrap's own CSS variables and Apollo's two hard-coded colours (the yellow
  * navbar in Navbar.vue and the drag marker in apps.html), so Apollo's pages and their markup stay
- * exactly as Apollo ships them -- see docs/umbra-upstream-sync.md. Success, warning and danger keep
+ * exactly as Apollo ships them -- see docs/umbra-upstream-sync.md.
+ *
+ * EVERY selector carries an extra `html`: the build bundles Bootstrap into a stylesheet that loads
+ * AFTER this file, so an override of equal specificity loses (measured 2026-10-03: page background
+ * and primary buttons stayed Bootstrap's until the prefix was added). Success, warning and danger keep
  * Bootstrap's meanings; only the primary colour, links, focus rings, checked controls and the
  * navigation take the Umbra violet.
  *
@@ -11,8 +15,8 @@
  * After an Apollo merge, LOOK at the pages: a restyle upstream merges cleanly and can still leave
  * these overrides pointing at nothing. */
 
-:root,
-[data-bs-theme=light] {
+html:root,
+html[data-bs-theme=light] {
   --umbra-accent: #6d28d9;
   --umbra-accent-rgb: 109, 40, 217;
   --umbra-btn: #6d28d9;
@@ -33,7 +37,7 @@
   --bs-focus-ring-color: rgba(109, 40, 217, 0.25);
 }
 
-[data-bs-theme=dark] {
+html[data-bs-theme=dark] {
   --umbra-accent: #a78bfa;
   --umbra-accent-rgb: 167, 139, 250;
   --umbra-btn: #7c3aed;
@@ -64,12 +68,12 @@
 }
 
 /* Cards sit on a raised surface so they read against the page in both modes. */
-.card { --bs-card-bg: #ffffff; }
-[data-bs-theme=dark] .card { --bs-card-bg: #100e16; --bs-card-border-color: #2c2438; }
-[data-bs-theme=dark] .list-group { --bs-list-group-bg: #100e16; }
+html .card { --bs-card-bg: #ffffff; }
+html[data-bs-theme=dark] .card { --bs-card-bg: #100e16; --bs-card-border-color: #2c2438; }
+html[data-bs-theme=dark] .list-group { --bs-list-group-bg: #100e16; }
 
 /* Primary buttons and active states: Bootstrap compiles these to literal blue (#0d6efd). */
-.btn-primary {
+html .btn-primary {
   --bs-btn-color: #fff;
   --bs-btn-bg: var(--umbra-btn);
   --bs-btn-border-color: var(--umbra-btn);
@@ -84,27 +88,27 @@
   --bs-btn-disabled-border-color: var(--umbra-btn);
   --bs-btn-focus-shadow-rgb: var(--umbra-accent-rgb);
 }
-.nav-pills { --bs-nav-pills-link-active-bg: var(--umbra-btn); }
-.dropdown-menu { --bs-dropdown-link-active-bg: var(--umbra-btn); }
-.list-group { --bs-list-group-active-bg: var(--umbra-btn); --bs-list-group-active-border-color: var(--umbra-btn); }
-.accordion {
+html .nav-pills { --bs-nav-pills-link-active-bg: var(--umbra-btn); }
+html .dropdown-menu { --bs-dropdown-link-active-bg: var(--umbra-btn); }
+html .list-group { --bs-list-group-active-bg: var(--umbra-btn); --bs-list-group-active-border-color: var(--umbra-btn); }
+html .accordion {
   --bs-accordion-active-color: var(--bs-primary-text-emphasis);
   --bs-accordion-active-bg: var(--bs-primary-bg-subtle);
   --bs-accordion-btn-focus-box-shadow: 0 0 0 0.25rem rgba(var(--umbra-accent-rgb), 0.25);
 }
 
 /* Form focus rings and checked controls. */
-.form-control:focus,
-.form-select:focus,
-.form-check-input:focus {
+html .form-control:focus,
+html .form-select:focus,
+html .form-check-input:focus {
   border-color: rgba(var(--umbra-accent-rgb), 0.6);
   box-shadow: 0 0 0 0.25rem rgba(var(--umbra-accent-rgb), 0.25);
 }
-.form-check-input:checked {
+html .form-check-input:checked {
   background-color: var(--umbra-btn);
   border-color: var(--umbra-btn);
 }
-.form-switch .form-check-input:focus:not(:checked) {
+html .form-switch .form-check-input:focus:not(:checked) {
   --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23c4b5fd'/%3e%3c/svg%3e");
 }
 
@@ -133,4 +137,4 @@ nav.header .navbar-brand::after {
 .dragover { border-top-color: var(--umbra-accent) !important; }
 
 /* Umbra's own card on the home page. */
-.umbra-card { border-color: rgba(var(--umbra-accent-rgb), 0.45); }
+html .umbra-card { border-color: rgba(var(--umbra-accent-rgb), 0.45); }

@@ -88,7 +88,7 @@ onMounted(() => {
     <!-- Apollo Name -->
     <div class="mb-3">
       <label for="sunshine_name" class="form-label">{{ $t('config.sunshine_name') }}</label>
-      <input type="text" class="form-control" id="sunshine_name" placeholder="Apollo"
+      <input type="text" class="form-control" id="sunshine_name" placeholder="Umbra"
              v-model="config.sunshine_name" />
       <div class="form-text">{{ $t('config.sunshine_name_desc') }}</div>
     </div>

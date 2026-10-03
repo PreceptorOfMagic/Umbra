@@ -63,8 +63,8 @@ import { ref, onMounted } from 'vue'
 const REPO = 'https://github.com/PreceptorOfMagic/Umbra'
 const HUB = 'https://preceptorofmagic.github.io/Eclipse-Umbra-Project-Hub/'
 const ECLIPSE = 'https://github.com/PreceptorOfMagic/Eclipse'
-const APOLLO_LATEST = 'https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest'
-const UMBRA_LATEST = 'https://api.github.com/repos/PreceptorOfMagic/Umbra/releases/latest'
+const APOLLO_RELEASES = 'https://api.github.com/repos/ClassicOldSong/Apollo/releases'
+const UMBRA_RELEASES = 'https://api.github.com/repos/PreceptorOfMagic/Umbra/releases'
 
 const installed = ref(null)  // { raw, base: '0.4.6' | null, umbra: 1 | null }
 const apollo = ref(null)     // { tag: 'v0.4.8', base: '0.4.8', url }
@@ -83,12 +83,15 @@ function cmp(a, b) {
   return 0
 }
 
-async function latest(url) {
+// Newest published release; pre-releases count only when the host's "PreRelease Notifications"
+// setting (notify_pre_releases) is on, as for Apollo's own version card.
+async function latest(releases, pre) {
   try {
-    const r = await fetch(url)
+    const r = await fetch(pre ? releases + '?per_page=10' : releases + '/latest')
     if (!r.ok) return null
-    const j = await r.json()
-    return j && j.tag_name && !j.prerelease ? { tag: j.tag_name, url: j.html_url, ...parse(j.tag_name) } : null
+    const body = await r.json()
+    const j = pre ? (Array.isArray(body) ? body.find((x) => !x.draft) : null) : body
+    return j && j.tag_name && (pre || !j.prerelease) ? { tag: j.tag_name, url: j.html_url, ...parse(j.tag_name) } : null
   } catch (e) {
     console.error(e)
     return null
@@ -96,13 +99,15 @@ async function latest(url) {
 }
 
 onMounted(async () => {
+  let pre = false
   try {
     const config = await fetch('./api/config').then((r) => r.json())
     installed.value = { raw: config.version, ...parse(config.version) }
+    pre = config.notify_pre_releases === true || config.notify_pre_releases === 'true'
   } catch (e) {
     console.error(e)
   }
-  const [a, u] = await Promise.all([latest(APOLLO_LATEST), latest(UMBRA_LATEST)])
+  const [a, u] = await Promise.all([latest(APOLLO_RELEASES, pre), latest(UMBRA_RELEASES, pre)])
   apollo.value = a && a.base ? a : null
   umbra.value = u && u.base ? u : null
   const base = installed.value && installed.value.base

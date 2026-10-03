@@ -50,6 +50,8 @@ src_assets/common/assets/web/template_header.html
 src_assets/common/assets/web/Navbar.vue
 src_assets/common/assets/web/locale.js
 src_assets/common/assets/web/index.html
+# one word: the Server Name placeholder is hard-coded "Apollo" in the page, out of the text layer's reach
+src_assets/common/assets/web/configs/tabs/General.vue
 
 # --- features: co-op, GPU HEVC, wired pin, host log, audio restore, capture recovery, hooks
 src/audio.cpp
