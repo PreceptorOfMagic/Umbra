@@ -100,7 +100,13 @@ execute_process(COMMAND cmd.exe /c mklink /J "${shaders_in_build_dest_native}" "
 set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}\\\\apollo.ico")
 
 # The name of the directory that will be created in C:/Program files/
-set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_NAME}")
+# Umbra: upgrade an existing Apollo install IN PLACE. The folder and the registry key stay
+# "Apollo" -- the service, config\ (pairings, credentials, apps) and the installer's
+# uninstall-before-install lookup all live under them. Derived from the project name (Umbra),
+# a new install would land in Program Files\Umbra beside the old one and repoint ApolloService
+# at an empty config. Only the name people see is Umbra.
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "Apollo")
+set(CPACK_NSIS_DISPLAY_NAME "Umbra")
 
 # Setting components groups and dependencies
 set(CPACK_COMPONENT_GROUP_CORE_EXPANDED true)

@@ -2,6 +2,7 @@ import {createI18n} from "vue-i18n";
 
 // Import only the fallback language files
 import en from './public/assets/locale/en.json'
+import { applyUmbraIdentity } from './umbra_identity.js'  // Umbra: name + own wording, see that file
 
 export default async function() {
     let r = await (await fetch("./api/configLocale", { credentials: 'include' })).json();
@@ -18,6 +19,7 @@ export default async function() {
     } catch (e) {
         console.error("Failed to download translations", e);
     }
+    applyUmbraIdentity(messages)  // Umbra
     const i18n = createI18n({
         locale: locale, // set locale
         fallbackLocale: 'en', // set fallback locale

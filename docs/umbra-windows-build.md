@@ -48,9 +48,16 @@ pacman -S --needed \
 git clone --recurse-submodules --branch beta/vega-coop \
   https://github.com/PreceptorOfMagic/Umbra.git
 cd umbra
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+BRANCH=release BUILD_VERSION=v0.4.6-umbra.1 COMMIT=$(git rev-parse --short HEAD) \
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DSUNSHINE_PUBLISHER_NAME=PreceptorOfMagic
 cmake --build build --parallel
 ```
+
+`BUILD_VERSION` is `<Apollo release>-umbra.<n>`; the Umbra home page reads it to say which Apollo
+release this build is based on (see [keeping Umbra in step with Apollo](umbra-upstream-sync.md)).
+Without it the version reads `0.0.0.<commit>`. Pass the publisher with `-D` when reusing a build
+directory: a value already in `CMakeCache.txt` wins over the default in `cmake/prep/options.cmake`.
 
 The source still contains inherited `Apollo` and `Sunshine` identifiers where
 packaging, protocol or compatibility work has not yet been migrated. The
@@ -71,6 +78,10 @@ or:
 ```bash
 cpack -G ZIP --config build/CPackConfig.cmake
 ```
+
+The installer upgrades an existing Apollo or Umbra install in place: it keeps
+`C:\Program Files\Apollo`, its `config` folder (settings, pairings, apps) and the `ApolloService`
+service key, and shows the name Umbra.
 
 Treat the output as a local, unsigned engineering build. Do not redistribute it
 as an official Umbra release until its exact licence/NOTICE bundle, dependency

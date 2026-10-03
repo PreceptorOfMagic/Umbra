@@ -4,7 +4,6 @@
   "scripts": {
     "build": "vite build --debug",
     "build-clean": "vite build --debug --emptyOutDir",
-    "check-identity": "node scripts/check_public_identity.mjs",
     "dev": "vite build --watch",
     "serve": "serve ./tests/fixtures/http --no-port-switching"
   },

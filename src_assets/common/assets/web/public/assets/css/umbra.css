@@ -1,0 +1,136 @@
+/* Umbra colour scheme, loaded after Apollo's styles by template_header.html (every page).
+ *
+ * It only overrides Bootstrap's own CSS variables and Apollo's two hard-coded colours (the yellow
+ * navbar in Navbar.vue and the drag marker in apps.html), so Apollo's pages and their markup stay
+ * exactly as Apollo ships them -- see docs/umbra-upstream-sync.md. Success, warning and danger keep
+ * Bootstrap's meanings; only the primary colour, links, focus rings, checked controls and the
+ * navigation take the Umbra violet.
+ *
+ * Palette: the Eclipse/Umbra Project Hub (site/assets/styles.css): page #08070b, surface #100e16,
+ * raised #17131f, soft #21182e, ink #fbf9ff, muted #c0b8ca, accent #a78bfa / #d8b4fe / #6d28d9.
+ * After an Apollo merge, LOOK at the pages: a restyle upstream merges cleanly and can still leave
+ * these overrides pointing at nothing. */
+
+:root,
+[data-bs-theme=light] {
+  --umbra-accent: #6d28d9;
+  --umbra-accent-rgb: 109, 40, 217;
+  --umbra-btn: #6d28d9;
+  --umbra-btn-hover: #5b21b6;
+  --umbra-btn-active: #4c1d95;
+
+  --bs-body-bg: #f8f6fc;
+  --bs-body-bg-rgb: 248, 246, 252;
+  --bs-primary: #6d28d9;
+  --bs-primary-rgb: 109, 40, 217;
+  --bs-primary-text-emphasis: #4c1d95;
+  --bs-primary-bg-subtle: #ede9fe;
+  --bs-primary-border-subtle: #c4b5fd;
+  --bs-link-color: #6d28d9;
+  --bs-link-color-rgb: 109, 40, 217;
+  --bs-link-hover-color: #4c1d95;
+  --bs-link-hover-color-rgb: 76, 29, 149;
+  --bs-focus-ring-color: rgba(109, 40, 217, 0.25);
+}
+
+[data-bs-theme=dark] {
+  --umbra-accent: #a78bfa;
+  --umbra-accent-rgb: 167, 139, 250;
+  --umbra-btn: #7c3aed;
+  --umbra-btn-hover: #6d28d9;
+  --umbra-btn-active: #5b21b6;
+
+  --bs-body-bg: #08070b;
+  --bs-body-bg-rgb: 8, 7, 11;
+  --bs-body-color: #fbf9ff;
+  --bs-body-color-rgb: 251, 249, 255;
+  --bs-emphasis-color: #ffffff;
+  --bs-secondary-color: rgba(192, 184, 202, 0.85);
+  --bs-secondary-bg: #17131f;
+  --bs-secondary-bg-rgb: 23, 19, 31;
+  --bs-tertiary-bg: #100e16;
+  --bs-tertiary-bg-rgb: 16, 14, 22;
+  --bs-border-color: #2c2438;
+  --bs-primary: #a78bfa;
+  --bs-primary-rgb: 167, 139, 250;
+  --bs-primary-text-emphasis: #d8b4fe;
+  --bs-primary-bg-subtle: #21182e;
+  --bs-primary-border-subtle: #4c1d95;
+  --bs-link-color: #c4b5fd;
+  --bs-link-color-rgb: 196, 181, 253;
+  --bs-link-hover-color: #d8b4fe;
+  --bs-link-hover-color-rgb: 216, 180, 254;
+  --bs-focus-ring-color: rgba(167, 139, 250, 0.35);
+}
+
+/* Cards sit on a raised surface so they read against the page in both modes. */
+.card { --bs-card-bg: #ffffff; }
+[data-bs-theme=dark] .card { --bs-card-bg: #100e16; --bs-card-border-color: #2c2438; }
+[data-bs-theme=dark] .list-group { --bs-list-group-bg: #100e16; }
+
+/* Primary buttons and active states: Bootstrap compiles these to literal blue (#0d6efd). */
+.btn-primary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--umbra-btn);
+  --bs-btn-border-color: var(--umbra-btn);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--umbra-btn-hover);
+  --bs-btn-hover-border-color: var(--umbra-btn-hover);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--umbra-btn-active);
+  --bs-btn-active-border-color: var(--umbra-btn-active);
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: var(--umbra-btn);
+  --bs-btn-disabled-border-color: var(--umbra-btn);
+  --bs-btn-focus-shadow-rgb: var(--umbra-accent-rgb);
+}
+.nav-pills { --bs-nav-pills-link-active-bg: var(--umbra-btn); }
+.dropdown-menu { --bs-dropdown-link-active-bg: var(--umbra-btn); }
+.list-group { --bs-list-group-active-bg: var(--umbra-btn); --bs-list-group-active-border-color: var(--umbra-btn); }
+.accordion {
+  --bs-accordion-active-color: var(--bs-primary-text-emphasis);
+  --bs-accordion-active-bg: var(--bs-primary-bg-subtle);
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 0.25rem rgba(var(--umbra-accent-rgb), 0.25);
+}
+
+/* Form focus rings and checked controls. */
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+  border-color: rgba(var(--umbra-accent-rgb), 0.6);
+  box-shadow: 0 0 0 0.25rem rgba(var(--umbra-accent-rgb), 0.25);
+}
+.form-check-input:checked {
+  background-color: var(--umbra-btn);
+  border-color: var(--umbra-btn);
+}
+.form-switch .form-check-input:focus:not(:checked) {
+  --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23c4b5fd'/%3e%3c/svg%3e");
+}
+
+/* Navigation: the same dark violet bar in both modes. Navbar.vue sets a yellow background and
+ * black links with !important; these selectors are one element more specific, so they win
+ * whatever order the bundles load in. */
+nav.navbar-background.header {
+  background: linear-gradient(90deg, #120d1c 0%, #1c1230 100%);
+  border-bottom: 1px solid rgba(167, 139, 250, 0.35);
+}
+nav.header .nav-link { color: #c0b8ca !important; }
+nav.header .nav-link:hover,
+nav.header .nav-link.active { color: #fbf9ff !important; }
+nav.header .navbar-toggler { border-color: rgba(251, 249, 255, 0.25); }
+nav.header .navbar-toggler-icon { filter: invert(1); }
+nav.header .navbar-brand { display: inline-flex; align-items: center; }
+nav.header .navbar-brand::after {
+  content: "Umbra";
+  margin-left: 0.6rem;
+  color: #fbf9ff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* apps.html: the row you drag an app onto. */
+.dragover { border-top-color: var(--umbra-accent) !important; }
+
+/* Umbra's own card on the home page. */
+.umbra-card { border-color: rgba(var(--umbra-accent-rgb), 0.45); }

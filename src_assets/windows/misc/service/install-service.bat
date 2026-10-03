@@ -58,10 +58,15 @@ if exist "%SERVICE_CONFIG_FILE%" (
 echo Setting service start type set to: [!SERVICE_START_TYPE!]
 
 rem Run the sc command to create/reconfigure the service
-sc %SC_CMD% %SERVICE_NAME% binPath= "%SERVICE_BIN%" start= %SERVICE_START_TYPE% DisplayName= "Umbra Host Service"
+sc %SC_CMD% %SERVICE_NAME% binPath= "%SERVICE_BIN%" start= %SERVICE_START_TYPE% DisplayName= "Apollo Service"
 
 rem Set the description of the service
-sc description %SERVICE_NAME% "Umbra is the host application in Eclipse/Umbra, compatible with Moonlight clients."
+sc description %SERVICE_NAME% "Apollo is a self-hosted game stream host for Moonlight."
 
 rem Start the new service
 net start %SERVICE_NAME%
+
+rem Umbra: the name shown in Services. Set after Apollo's own lines, not in them, so Apollo's
+rem edits to its sc command keep merging cleanly. The service key stays ApolloService.
+sc config %SERVICE_NAME% DisplayName= "Umbra Host Service"
+sc description %SERVICE_NAME% "Umbra is a self-hosted game stream host for Moonlight and Eclipse, based on Apollo."

@@ -1,0 +1,79 @@
+# Apollo files Umbra is ALLOWED to change (one path per line; # starts a comment).
+# Checked by scripts/umbra_check.mjs: a change to any other Apollo file fails the check, so a new
+# touch point is a deliberate decision, recorded here with its reason. Keep this list SHORT --
+# every line is a place an Apollo update can conflict (docs/umbra-upstream-sync.md).
+# Umbra's own files (new files Apollo does not have) are not listed; they never conflict.
+
+# --- identity: artwork swapped under Apollo's filenames (exe, installer, tray, favicon, navbar)
+apollo.icns
+apollo.ico
+apollo.png
+apollo.svg
+src_assets/common/assets/web/public/images/apollo-locked-16.png
+src_assets/common/assets/web/public/images/apollo-locked-45.png
+src_assets/common/assets/web/public/images/apollo-locked.ico
+src_assets/common/assets/web/public/images/apollo-locked.png
+src_assets/common/assets/web/public/images/apollo-locked.svg
+src_assets/common/assets/web/public/images/apollo-pausing-16.png
+src_assets/common/assets/web/public/images/apollo-pausing-45.png
+src_assets/common/assets/web/public/images/apollo-pausing.ico
+src_assets/common/assets/web/public/images/apollo-pausing.png
+src_assets/common/assets/web/public/images/apollo-pausing.svg
+src_assets/common/assets/web/public/images/apollo-playing-16.png
+src_assets/common/assets/web/public/images/apollo-playing-45.png
+src_assets/common/assets/web/public/images/apollo-playing.ico
+src_assets/common/assets/web/public/images/apollo-playing.png
+src_assets/common/assets/web/public/images/apollo-playing.svg
+src_assets/common/assets/web/public/images/apollo.ico
+src_assets/common/assets/web/public/images/logo-apollo-16.png
+src_assets/common/assets/web/public/images/logo-apollo-45.png
+src_assets/common/assets/web/public/images/logo-apollo.svg
+
+# --- identity: names Windows and clients show
+CMakeLists.txt
+cmake/prep/options.cmake
+cmake/packaging/windows.cmake
+src/platform/windows/windows.rc
+src/platform/common.h
+src/network.cpp
+src/platform/windows/publish.cpp
+src/system_tray.cpp
+src/main.cpp
+src/config.cpp
+src_assets/windows/misc/firewall/add-firewall-rule.bat
+src_assets/windows/misc/firewall/delete-firewall-rule.bat
+src_assets/windows/misc/path/update-path.bat
+src_assets/windows/misc/service/install-service.bat
+
+# --- identity: web UI hooks (the rest lives in umbra_identity.js, UmbraCard.vue, umbra.css)
+src_assets/common/assets/web/template_header.html
+src_assets/common/assets/web/Navbar.vue
+src_assets/common/assets/web/locale.js
+src_assets/common/assets/web/index.html
+
+# --- features: co-op, GPU HEVC, wired pin, host log, audio restore, capture recovery, hooks
+src/audio.cpp
+src/config.h
+src/nvenc/nvenc_base.cpp
+src/nvenc/nvenc_base.h
+src/nvenc/nvenc_config.h
+src/nvhttp.cpp
+src/platform/windows/audio.cpp
+src/platform/windows/display.h
+src/platform/windows/display_base.cpp
+src/platform/windows/display_vram.cpp
+src/process.cpp
+src/process.h
+src/rtsp.cpp
+src/rtsp.h
+src/stream.cpp
+src/video.cpp
+src/video.h
+
+# --- build and packaging
+.gitignore
+cmake/compile_definitions/common.cmake
+cmake/packaging/common.cmake
+tools/CMakeLists.txt
+# MinGW build fix; Apollo fixed the same problem after v0.4.6 -- take theirs at the next merge
+src/platform/windows/input.cpp

@@ -490,7 +490,7 @@ namespace confighttp {
   }
 
   /**
-   * @brief Get the Umbra logo image.
+   * @brief Get the Apollo logo image.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
    *
@@ -1317,7 +1317,7 @@ namespace confighttp {
   }
 
   /**
-   * @brief Restart Umbra.
+   * @brief Restart Apollo.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
    *
@@ -1337,7 +1337,7 @@ namespace confighttp {
   }
 
   /**
-   * @brief Quit Umbra.
+   * @brief Quit Apollo.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
    *

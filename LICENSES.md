@@ -10,6 +10,6 @@ The [third-party sources](third-party), their own copyright/licence files, drive
 
 ## Project identity
 
-Eclipse/Umbra is an independent project: Eclipse is its client application and Umbra its host application. It is not affiliated with or endorsed by Moonlight, Sunshine, LG Electronics, NVIDIA, AMD, Intel, Amazon, DXC or the Eclipse Foundation. Third-party names identify lineage or compatibility; their names and marks remain the property of their respective owners.
+Eclipse/Umbra is an independent project: Eclipse is its client application and Umbra its host application. It is not affiliated with or endorsed by Moonlight, ClassicOldSong (Apollo), SudoMaker, Sunshine, LG Electronics, NVIDIA, AMD, Intel, Amazon, DXC or the Eclipse Foundation. Third-party names identify lineage or compatibility; their names and marks remain the property of their respective owners.
 
 This index is not a new licence or an additional restriction on the GPL. Original copyright, licence texts, third-party terms and distribution obligations remain in force. A release’s notices and corresponding source identify the components actually distributed.
