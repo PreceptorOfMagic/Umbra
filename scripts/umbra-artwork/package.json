@@ -1,0 +1,7 @@
+{
+  "name": "umbra-artwork",
+  "private": true,
+  "description": "Renders Umbra's icons from brand-mark.svg (see render.cjs). Umbra's own; not part of Apollo's package.json.",
+  "scripts": { "render": "node render.cjs" },
+  "devDependencies": { "sharp": "0.35.4" }
+}

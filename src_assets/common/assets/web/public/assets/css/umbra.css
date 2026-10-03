@@ -122,7 +122,7 @@ nav.navbar-background.header {
 nav.header .nav-link { color: #c0b8ca !important; }
 nav.header .nav-link:hover,
 nav.header .nav-link.active { color: #fbf9ff !important; }
-nav.header .navbar-toggler { border-color: rgba(251, 249, 255, 0.25); }
+nav.header .navbar-toggler { border-color: rgba(251, 249, 255, 0.25) !important; }
 nav.header .navbar-toggler-icon { filter: invert(1); }
 nav.header .navbar-brand { display: inline-flex; align-items: center; }
 nav.header .navbar-brand::after {

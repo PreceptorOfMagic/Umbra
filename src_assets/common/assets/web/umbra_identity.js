@@ -61,7 +61,8 @@ const UMBRA_EN = {
   },
 }
 
-const APOLLO_WORD = /\bApollo\b/g
+// Also the genitive "Apollos" (Swedish) -> "Umbras".
+const APOLLO_WORD = /\bApollo(?=s?\b)/g
 
 function rename(value) {
   if (typeof value === 'string') return value.replace(APOLLO_WORD, 'Umbra')

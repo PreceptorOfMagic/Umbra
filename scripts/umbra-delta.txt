@@ -4,7 +4,8 @@
 # every line is a place an Apollo update can conflict (docs/umbra-upstream-sync.md).
 # Umbra's own files (new files Apollo does not have) are not listed; they never conflict.
 
-# --- identity: artwork swapped under Apollo's filenames (exe, installer, tray, favicon, navbar)
+# --- identity: artwork swapped under Apollo's filenames (exe, installer, tray, favicon, navbar).
+# All rendered by scripts/umbra-artwork/render.cjs from the Project Hub's brand-mark.svg; never hand-edit.
 apollo.icns
 apollo.ico
 apollo.png

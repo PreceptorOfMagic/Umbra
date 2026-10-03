@@ -72,8 +72,15 @@ const umbra = ref(null)      // { tag: 'v0.4.8-umbra.1', base, n, url }
 const state = ref('loading')
 
 // Umbra versions are '<Apollo release>-umbra.<n>', e.g. 0.4.6-umbra.1 (BUILD_VERSION at build time).
+// Anything else installed -- a dev build reads 0.0.0.<commit>[.dirty] -- has NO known Apollo base.
 function parse(version) {
-  const m = /^v?(\d+\.\d+\.\d+)(?:-umbra\.(\d+))?/.exec(version || '')
+  const m = /^v?(\d+\.\d+\.\d+)(?:-umbra\.(\d+))?$/.exec(version || '')
+  return m && m[1] !== '0.0.0' ? { base: m[1], umbra: m[2] !== undefined ? Number(m[2]) : null } : { base: null, umbra: null }
+}
+
+// A release tag: its leading x.y.z (Apollo pre-releases look like v0.4.7-alpha.1).
+function parseTag(tag) {
+  const m = /^v?(\d+\.\d+\.\d+)(?:-umbra\.(\d+))?/.exec(tag || '')
   return m ? { base: m[1], umbra: m[2] !== undefined ? Number(m[2]) : null } : { base: null, umbra: null }
 }
 
@@ -91,7 +98,7 @@ async function latest(releases, pre) {
     if (!r.ok) return null
     const body = await r.json()
     const j = pre ? (Array.isArray(body) ? body.find((x) => !x.draft) : null) : body
-    return j && j.tag_name && (pre || !j.prerelease) ? { tag: j.tag_name, url: j.html_url, ...parse(j.tag_name) } : null
+    return j && j.tag_name && (pre || !j.prerelease) ? { tag: j.tag_name, url: j.html_url, ...parseTag(j.tag_name) } : null
   } catch (e) {
     console.error(e)
     return null

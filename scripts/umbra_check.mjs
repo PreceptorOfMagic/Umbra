@@ -35,7 +35,7 @@ const allowed = new Set(
 );
 
 // Apollo files = files present at the merge base. Compare the WORKING TREE, so uncommitted edits count.
-const changed = git("diff", "--numstat", "--diff-filter=MD", base, "--").split("\n").filter(Boolean)
+const changed = git("diff", "--numstat", "--no-renames", "--diff-filter=MD", base, "--").split("\n").filter(Boolean)
   .map((l) => { const [a, d, f] = l.split("\t"); return { f, a, d }; });
 
 for (const { f } of changed) {
@@ -55,6 +55,7 @@ require("src_assets/common/assets/web/template_header.html", /assets\/css\/umbra
 require("src_assets/common/assets/web/index.html", /<Umbra-Card>/, "Umbra card missing from the home page");
 require("cmake/packaging/windows.cmake", /CPACK_PACKAGE_INSTALL_DIRECTORY "Apollo"/, "install folder must stay Apollo (in-place upgrade)");
 require("src_assets/windows/misc/service/install-service.bat", /DisplayName= "Umbra Host Service"/, "service display name missing");
+require("src_assets/windows/misc/service/install-service.bat", /set SERVICE_NAME=ApolloService/, "service key must stay ApolloService (in-place upgrade)");
 require("src/system_tray.cpp", /Open Umbra/, "tray menu does not name Umbra");
 require("CMakeLists.txt", /project\(Umbra\b/, "project name is not Umbra");
 

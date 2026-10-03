@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 68 68" role="img" aria-labelledby="title desc">
+  <title id="title">Eclipse/Umbra split-screen mark</title>
+  <desc id="desc">A purple-outlined rounded square containing two violet panels separated by a white seam.</desc>
+  <g>
+    <rect width="64" height="64" rx="18" fill="#09090d" stroke="#8b5cf6" stroke-width="2"/>
+    <path d="M13 15h15v34H13c-2 0-4-2-4-4V19c0-2 2-4 4-4Z" fill="#7c3aed"/>
+    <path d="M36 15h15c2 0 4 2 4 4v26c0 2-2 4-4 4H36V15Z" fill="#c084fc"/>
+    <path d="M32 16v32" stroke="#fff" stroke-linecap="round" stroke-width="2.5"/>
+  </g>
+</svg>

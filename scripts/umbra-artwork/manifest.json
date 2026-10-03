@@ -1,0 +1,102 @@
+{
+  "renderer": "sharp 0.35.4",
+  "master": {
+    "path": "scripts/umbra-artwork/brand-mark.svg",
+    "sha256": "1a3c483516bd04acc7b984ef239dc048a1a0e60c013323c320f056f979922c27",
+    "from": "Eclipse-Umbra-Project-Hub site/assets/brand-mark.svg"
+  },
+  "outputs": [
+    {
+      "path": "apollo.svg",
+      "sha256": "1a3c483516bd04acc7b984ef239dc048a1a0e60c013323c320f056f979922c27"
+    },
+    {
+      "path": "apollo.png",
+      "sha256": "c5d3e2a6a3eaf4d282959ba7bffba6d1e5231e50d6b79ac6e1d0d068487a5379"
+    },
+    {
+      "path": "apollo.ico",
+      "sha256": "c5f054bc4fea70b3ba6d8b12b6e227ee58be01df949f19b3f2516db173dead14"
+    },
+    {
+      "path": "apollo.icns",
+      "sha256": "02a55a49571adfe61d7c14cad741fabcabf76046fe90a05497d03b6a99810d61"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/logo-apollo.svg",
+      "sha256": "1a3c483516bd04acc7b984ef239dc048a1a0e60c013323c320f056f979922c27"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/logo-apollo-16.png",
+      "sha256": "2db75c9d3029e2e85e39499f59645edf68c317e568dd26f3ea176b568e1091f8"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/logo-apollo-45.png",
+      "sha256": "a670bbad7ba0c03f411eedca176c34b7c1a99fc3033c528066a6c8a2f986fce2"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo.ico",
+      "sha256": "c5f054bc4fea70b3ba6d8b12b6e227ee58be01df949f19b3f2516db173dead14"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-playing.svg",
+      "sha256": "e1dabcaa044f2a9c59d7036f72aef7c7f26ab96529ce94ff769364979befad1f"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-playing.png",
+      "sha256": "25917a15d0582a0193075f4f7bb67e27154e78cf4513bfb33079048cf3587600"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-playing-16.png",
+      "sha256": "ab33b80c35926e84ea36c19d3cb2422cbc825fb1a2c17ab1f89ac9ad4d2aadf3"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-playing-45.png",
+      "sha256": "4e9c531072114fd87c2d0d52d47adbd86ff9f07f7e38ea245e0887f25c71fbe0"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-playing.ico",
+      "sha256": "42c6239cf299de4cb9ca069bef1efec1e5e051a1eb537182edb5ee2186035d39"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-pausing.svg",
+      "sha256": "168a5375b579650834a8a1f799b5282ee57a9d62ffd03c2bcff1a1bffed36784"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-pausing.png",
+      "sha256": "afa3482ffea2a61d23b62af0b6e79d733ad4dcd3677c7094e2ba7300317eaedc"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-pausing-16.png",
+      "sha256": "0b1634acca21ce651bd4a6b99e1f7a86e80b8298a3c895445c801fca71526730"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-pausing-45.png",
+      "sha256": "10b33a47baca3b2776c3a62cdd37cef1252536a58f6a4ccc9f4a9d3b5e06f125"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-pausing.ico",
+      "sha256": "d58d7978ec6bbff9a82eb0ecef31a89596e61272daf9388c41b7a6b885af39e9"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-locked.svg",
+      "sha256": "6747b69e1eea69485b801c7606e2eeadc623c709168463d6fc9a623d557cedd6"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-locked.png",
+      "sha256": "2a350dab3fc7486a0b2d57943e797983aee42d7b8d6583a780d0d54b8ef774ca"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-locked-16.png",
+      "sha256": "234fa4a771d950ee1f86960d84f046a1ea53982305bbe9e51fa7263c502ec84b"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-locked-45.png",
+      "sha256": "1d87376cb243516a2e205f89ea621eddb35bcfe70fce3b6d1f41245ff09ce27c"
+    },
+    {
+      "path": "src_assets/common/assets/web/public/images/apollo-locked.ico",
+      "sha256": "3c7807bf8c40b6cfe4c01339cb8dbfd4e5964330b9cdeb116d998f66c18c34c3"
+    }
+  ]
+}

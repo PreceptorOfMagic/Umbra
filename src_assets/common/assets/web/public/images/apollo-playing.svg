@@ -1,12 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
-  <title id="title">Eclipse/Umbra playing</title>
-  <desc id="desc">The split-screen mark with a green play symbol.</desc>
-  <defs>
-    <linearGradient id="left" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#5b21b6"/></linearGradient>
-    <linearGradient id="right" x1="0" x2="1" y1="1" y2="0"><stop offset="0" stop-color="#d8b4fe"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
-  </defs>
-  <rect width="96" height="96" rx="26" fill="#09090d"/>
-  <path d="M18 22c0-4 3-7 7-7h18v66H25c-4 0-7-3-7-7V22Z" fill="url(#left)"/><path d="M53 15h18c4 0 7 3 7 7v52c0 4-3 7-7 7H53V15Z" fill="url(#right)"/>
-  <path d="M48 17v62" stroke="#fff" stroke-linecap="round" stroke-width="3"/><circle cx="48" cy="48" r="5" fill="#fff"/>
-  <circle cx="76" cy="76" r="16" fill="#09090d" stroke="#fff" stroke-width="3"/><path d="m71 67 14 9-14 9Z" fill="#2eca33"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 68 68" role="img" aria-labelledby="title desc">
+  <title id="title">Umbra playing</title>
+  <desc id="desc">The Eclipse/Umbra split-screen mark with a green play symbol.</desc>
+  <g>
+    <rect width="64" height="64" rx="18" fill="#09090d" stroke="#8b5cf6" stroke-width="2"/>
+    <path d="M13 15h15v34H13c-2 0-4-2-4-4V19c0-2 2-4 4-4Z" fill="#7c3aed"/>
+    <path d="M36 15h15c2 0 4 2 4 4v26c0 2-2 4-4 4H36V15Z" fill="#c084fc"/>
+    <path d="M32 16v32" stroke="#fff" stroke-linecap="round" stroke-width="2.5"/>
+  </g>
+  <circle cx="52" cy="52" r="11.3" fill="#09090d" stroke="#fff" stroke-width="2.1"/><path d="M48.5 45.6 58.4 52 48.5 58.4Z" fill="#2eca33"/>
 </svg>
