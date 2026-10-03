@@ -20,6 +20,7 @@ extern "C" {
 
 // local includes
 #include "process.h"
+#include "rtsp.h"
 #include "cbs.h"
 #include "config.h"
 #include "display_device.h"
@@ -2183,6 +2184,23 @@ namespace video {
       offsetY,
       1.0f / scalar,
     };
+  }
+
+  void gpu_hevc_runtime_lost(const std::string &detail) {
+    static std::atomic_bool scheduled {false};
+    if (scheduled.exchange(true)) {
+      return;
+    }
+    BOOST_LOG(error) << "[AURORA-GPU-HEVC] the GPU runtime in this process is unusable (" << detail
+                     << "); seen after the PC slept and the GPU was reset. Only a new process recovers: Umbra restarts"
+                        " itself as soon as nothing is streaming, and the next co-op start works.";
+    std::thread([] {
+      while (rtsp_stream::session_count() > 0) {
+        std::this_thread::sleep_for(1s);
+      }
+      BOOST_LOG(warning) << "[AURORA-GPU-HEVC] restarting Umbra to recover the GPU runtime";
+      platf::restart();
+    }).detach();
   }
 
   std::unique_ptr<platf::encode_device_t> make_encode_device(platf::display_t &disp, const encoder_t &encoder, const config_t &config) {

@@ -67,7 +67,15 @@ class d3d_gpu_hevc_encode_device_t final: public gpu_hevc_encode_device_t {
       colorspace.bit_depth, ::video::colorspace_is_hdr(colorspace) ? 1u : 0u, device.get(), kernels.c_str(), uint32_t(config.bitrate), uint32_t(config.framerate)};
     char detail[1024] = {};
     session = open_fn(&args, detail, sizeof(detail));
-    if (!session) { BOOST_LOG(error) << "[AURORA-GPU-HEVC] open failed: " << detail; return false; }
+    if (!session) {
+      BOOST_LOG(error) << "[AURORA-GPU-HEVC] open failed: " << detail;
+      // Context/queue creation is the GPU runtime itself, not this session's settings (see video.h).
+      const std::string_view text {detail};
+      if (text.starts_with("context OpenCL error") || text.starts_with("queue OpenCL error")) {
+        ::video::gpu_hevc_runtime_lost(detail);
+      }
+      return false;
+    }
     BOOST_LOG(info) << "[AURORA-GPU-HEVC] opened " << config.width << "x" << config.height << " depth=" << colorspace.bit_depth
       << " HDR=" << args.hdr << " bitrate_kbps=" << args.bitrate_kbps << " rate_control=bitrate experimental=1";
     return true;

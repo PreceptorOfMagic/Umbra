@@ -368,4 +368,14 @@ namespace video {
    * @warning This is only safe to call when there is no client actively streaming.
    */
   int probe_encoders();
+
+  /**
+   * @brief The GPU HEVC library could not create its OpenCL context or queue, so the GPU runtime inside THIS process
+   * is unusable. Logs why and restarts Umbra once no session is streaming (the service relaunches it).
+   * MEASURED 2026-10-03 on PC2 (RTX 3070): after the PC slept and the driver reset the GPU (nvlddmkm 153), every
+   * GPU HEVC open in the old process failed with "context OpenCL error -6" until the process was restarted; a new
+   * process opened at once. Without this, co-op with an AMD partner stays broken until the user restarts the host.
+   * @param detail The library's failure text.
+   */
+  void gpu_hevc_runtime_lost(const std::string &detail);
 }  // namespace video
