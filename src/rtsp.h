@@ -57,6 +57,9 @@ namespace rtsp_stream {
     // Umbra: this launch is one pane of an Eclipse co-op session (umbraCoop=1), so the co-op-only
     // encoder tuning applies to it and to nothing else (video::config_t::umbra_coop).
     bool umbra_coop = false;
+    // Umbra: the client asked for the host's physical monitor(s) off while it streams (umbraMonitorOff=1,
+    // host_monitor.h). Implies the virtual display.
+    bool host_monitor_off = false;
     // Umbra wired pin (wired_pin.h): the launch's source address and the client's own cards.
     std::string client_address;
     std::string wired_mac;

@@ -28,6 +28,7 @@
 #include "file_handler.h"
 #include "globals.h"
 #include "httpcommon.h"
+#include "host_monitor.h"
 #include "logging.h"
 #include "network.h"
 #include "wired_pin.h"
@@ -69,6 +70,7 @@ namespace nvhttp {
   /** UmbraCaps bit 3: the GPU HEVC co-op encoder is installed (proc::gpu_hevc_encoder_installed). Only
    *  meaningful with bit 2: a host reporting bit 2 without bit 3 is a KNOWN "no", not an unknown. */
   constexpr int CAP_GPU_HEVC = 8;
+  // UmbraCaps bit 4: host_monitor::CAP_MONITOR_OFF (umbraMonitorOff on /launch and /resume).
 }  // namespace nvhttp
 
 namespace nvhttp {
@@ -414,6 +416,8 @@ namespace nvhttp {
 #endif
     // Umbra: one pane of an Eclipse co-op session -- the co-op encoder tuning applies to THIS session only.
     launch_session->umbra_coop = get_arg(args, "umbraCoop", "0") == "1";
+    // Umbra: the client asks for the host's physical monitor(s) off for this stream (host_monitor.h).
+    launch_session->host_monitor_off = get_arg(args, "umbraMonitorOff", "0") == "1" && host_monitor::supported();
     // Umbra: the client asks for its wired card to carry the stream (wired_pin.h).
     launch_session->wired_mac = get_arg(args, "auroraWiredMac", "");
     auto split_list = [](const std::string &text) {
@@ -510,7 +514,8 @@ namespace nvhttp {
     launch_session->surround_params = (get_arg(args, "surroundParams", ""));
     launch_session->gcmap = util::from_view(get_arg(args, "gcmap", "0"));
     launch_session->enable_hdr = util::from_view(get_arg(args, "hdrMode", "0"));
-    launch_session->virtual_display = util::from_view(get_arg(args, "virtualDisplay", "0")) || named_cert_p->always_use_virtual_display;
+    launch_session->virtual_display = util::from_view(get_arg(args, "virtualDisplay", "0")) || named_cert_p->always_use_virtual_display
+                                      || launch_session->host_monitor_off;  // a switched-off monitor cannot be what is streamed
     launch_session->scale_factor = util::from_view(get_arg(args, "scaleFactor", "100"));
 
     launch_session->client_do_cmds = named_cert_p->do_cmds;
@@ -1040,9 +1045,11 @@ namespace nvhttp {
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
     // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
     // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog),
-    // bit 2 built-in co-op pane + per-launch co-op tuning, bit 3 GPU HEVC co-op encoder installed.
+    // bit 2 built-in co-op pane + per-launch co-op tuning, bit 3 GPU HEVC co-op encoder installed,
+    // bit 4 physical monitor off on request (umbraMonitorOff, host_monitor.h).
     {
-      int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG | CAP_COOP_PANE;
+      int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG | CAP_COOP_PANE |
+                 (host_monitor::supported() ? host_monitor::CAP_MONITOR_OFF : 0);
 #ifdef APOLLO_BETA_PROFILE
       // The GPU HEVC session request (auroraGpuHevc) is parsed only in this build flavour.
       if (proc::gpu_hevc_encoder_installed()) {

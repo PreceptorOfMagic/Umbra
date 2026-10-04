@@ -103,6 +103,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/audio.h"
         "${CMAKE_SOURCE_DIR}/src/wired_pin.cpp"
         "${CMAKE_SOURCE_DIR}/src/wired_pin.h"
+        "${CMAKE_SOURCE_DIR}/src/host_monitor.cpp"
+        "${CMAKE_SOURCE_DIR}/src/host_monitor.h"
         "${CMAKE_SOURCE_DIR}/src/platform/common.h"
         "${CMAKE_SOURCE_DIR}/src/process.cpp"
         "${CMAKE_SOURCE_DIR}/src/process.h"

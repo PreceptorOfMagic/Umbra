@@ -24,6 +24,7 @@ extern "C" {
 #include "crypto.h"
 #include "display_device.h"
 #include "globals.h"
+#include "host_monitor.h"
 #include "input.h"
 #include "logging.h"
 #include "network.h"
@@ -418,6 +419,7 @@ namespace stream {
     std::string device_name;
     std::string device_uuid;
     crypto::PERM permission;
+    bool host_monitor_off = false;  // Umbra: umbraMonitorOff (host_monitor.h)
 
     std::list<crypto::command_entry_t> do_cmds;
     std::list<crypto::command_entry_t> undo_cmds;
@@ -2071,6 +2073,7 @@ namespace stream {
 
       // If this is the last session, invoke the platform callbacks
       if (--running_sessions == 0) {
+        host_monitor::sessions_stopped();  // Umbra: the physical monitor back for local use
         bool revert_display_config {config::video.dd.config_revert_on_disconnect};
         if (proc::proc.running()) {
           proc::proc.pause();
@@ -2126,6 +2129,7 @@ namespace stream {
       // If this is the first session, invoke the platform callbacks
       if (++running_sessions == 1) {
         platf::streaming_will_start();
+        host_monitor::session_started(session.host_monitor_off);  // Umbra: before the state commands
         proc::proc.resume();
       }
 
@@ -2170,6 +2174,7 @@ namespace stream {
       session->device_name = launch_session.device_name;
       session->device_uuid = launch_session.unique_id;
       session->permission = launch_session.perm;
+      session->host_monitor_off = launch_session.host_monitor_off;
 
       session->do_cmds = std::move(launch_session.client_do_cmds);
       session->undo_cmds = std::move(launch_session.client_undo_cmds);
