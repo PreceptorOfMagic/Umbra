@@ -5,8 +5,8 @@
 > manifest to the matching binary release. A package containing only this
 > template has not satisfied the release gate.
 
-**Current gate: BLOCKED.** SudoVDA is unresolved as described below. Do not
-publish a release while that section is incomplete.
+This reusable template is not the candidate manifest. See `SOURCE-MANIFEST.md`
+for the current build inputs and `docs/release-installer-audit.md` for test limits.
 
 ## Release identity
 
@@ -83,53 +83,18 @@ Paste the complete command actually used; do not merely assert that the option
 was off. Record the generated cache value and a release-binary verification
 that demonstrates the beta profile was not compiled in or activated.
 
-## SudoVDA / nefconc mandatory closure
+## Signed driver and source provenance
 
-**Status: BLOCKED — all boxes must be completed before public packaging or
-publication. Do not identify SudoVDA as MIT without a component-by-component
-licence mapping.**
-
-Current inspected files:
-
-| File | SHA-256 / state |
-| --- | --- |
-| `SudoVDA.inf` (`DriverVer = 07/14/2025,1.10.9.289`) | `ad69ac682756f0cf339b081fac7e6e8159fdf2ca01ca69df8945c7246c286925` |
-| `sudovda.cat` | `2f9189de5604bec9d86f51640cc540639e394d9ad0f8e689129375e95f2d22f8` |
-| `sudovda.cer` | `6accdcd519f6179d967db4eaa20ecf25a732ba30e87f4cffebc768b2c13c9007` |
-| `install.bat` | `4e8ceda6094b185ff826aa13d51d6d54f7d399396b21608d169b8328c0e4ed0e` |
-| `uninstall.bat` | `c9458b8ad77eeae107057eb76a759e90abdb64184b75910c7ca2ec7dc4728044` |
-| Required `SudoVDA.dll` | **MISSING — no hash/source mapping** |
-| Required `nefconc.exe` | **MISSING — no hash/source mapping** |
-| Compiled `third-party/sudovda/sudovda-ioctl.h` | `dd924c9bd3918f75bdc1c1153ed16f23ae1658fde890d76f5f4f35397062dd73` |
-| Compiled `third-party/sudovda/sudovda.h` | `8ebbab2002a00ca410b18d33e4202dd5f39dd9c3810f8c3fcce7c180e99c5efa` |
-
-Required closure evidence:
-
-- [ ] Exact source repository and immutable revision for the INF, CAT, DLL,
-      headers, and `nefconc.exe`.
-- [ ] SHA-256 for every shipped driver/tool file, including the DLL and
-      `nefconc.exe`.
-- [ ] Reproducible build instructions and build-material archive for each
-      self-built binary.
-- [ ] Verbatim standalone and inherited licence texts, with a file-by-file
-      mapping covering the SudoMaker changes, Microsoft-derived material,
-      parent VirtualDrivers material, and nefconc.
-- [ ] Signature issuer, timestamp, verification command, and result for every
-      signed binary/catalog.
-- [ ] Clean-machine install, device creation, streaming, uninstall, and
-      rollback evidence using the exact release package.
-
-The public SudoMaker/SudoVDA repository HEAD inspected during preparation was
-`a4b09fa2aa731a964d0cb5d139cb1e6240e4da12`; it is not accepted as the source
-mapping for the newer local driver artifacts until provenance is demonstrated.
+Copy the exact `drivers/sudovda/PROVENANCE.json` for this build. Preserve its
+explicit distinction between authenticated upstream driver distribution and
+reproducible source correspondence. Record the locally built nefconc source pin,
+overlay, binary hash and build log. Include every licence notice.
 
 ## Final release gate
 
-- [ ] Completed `SOURCE-MANIFEST.md` contains no placeholders.
-- [ ] Package inventory matches the binary artifact byte-for-byte.
-- [ ] All notice/licence files are present in NSIS and ZIP staging.
-- [ ] Exact release source and build material are publicly reachable.
-- [ ] SudoVDA/nefconc closure above is complete.
-- [ ] Artifact and source hashes were independently rechecked.
+- Completed candidate manifest and matching source archives are present.
+- Package inventories and all binary/source hashes are independently checked.
+- Clean-machine install, upgrade, stop, uninstall and rollback evidence is recorded.
+- Source and required build material are available alongside the distribution.
 
 Release approval: `[fill: reviewer, date, and evidence link]`

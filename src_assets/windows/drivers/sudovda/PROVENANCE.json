@@ -1,0 +1,22 @@
+{
+  "component": "SudoVDA",
+  "distribution_source": "https://github.com/ClassicOldSong/Apollo/releases/download/v0.4.6/Apollo-0.4.6.exe",
+  "distribution_sha256": "42b2aefaacb3474511517a56b96ee9f0517f30ac38b5dd2fda9fd5b478f5021a",
+  "public_source": "https://github.com/SudoMaker/SudoVDA/tree/a4b09fa2aa731a964d0cb5d139cb1e6240e4da12",
+  "source_correspondence": "Audited public upstream source; upstream does not publish a reproducible binary-to-source attestation. Signed driver exception: official Apollo payload retained.",
+  "signature_subject": "CN=sudovda@su.mk",
+  "signature_thumbprint": "3C918FC73525AD8B1521B6DB26B71F694277CC49",
+  "signature_verification": "Windows Get-AuthenticodeSignature returned Valid for DLL and CAT on 2026-10-08; certificate was already trusted, none imported during build.",
+  "files": {
+    "SudoVDA.dll": "47ee263cb5de9382c6630a2d7f3dafec4a49419f953beec869ca5dd0c460ff63",
+    "SudoVDA.inf": "ad69ac682756f0cf339b081fac7e6e8159fdf2ca01ca69df8945c7246c286925",
+    "sudovda.cat": "2f9189de5604bec9d86f51640cc540639e394d9ad0f8e689129375e95f2d22f8",
+    "sudovda.cer": "6accdcd519f6179d967db4eaa20ecf25a732ba30e87f4cffebc768b2c13c9007"
+  },
+  "nefconc": {
+    "source": "https://github.com/nefarius/nefcon/tree/f5dd078b3d3045be3127d962c62b1c4b2710bb9a",
+    "build": "Visual Studio 2022 BuildTools, Release (Console), x64; vcpkg manifest pins; local neflib overlay removes empty PLATFORM argument, retaining default x64 inference. PKG_CONFIG points to installed native pkgconf; VCPKG_KEEP_ENV_VARS=PKG_CONFIG.",
+    "sha256": "c0c9481afb07db5a1f4210e9dbad2bb47c5caee787d635c3421f6b4bab3b62dd",
+    "signature": "Unsigned, compiled locally from audited open source; not the signed downloaded helper."
+  }
+}

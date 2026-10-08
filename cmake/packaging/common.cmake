@@ -23,6 +23,7 @@ install(FILES
         "${PROJECT_SOURCE_DIR}/NOTICE"
         "${PROJECT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md"
         "${PROJECT_SOURCE_DIR}/SOURCE-MANIFEST.template.md"
+        "${PROJECT_SOURCE_DIR}/SOURCE-MANIFEST.md"
         DESTINATION "."
         COMPONENT application)
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/packaging/licenses/"

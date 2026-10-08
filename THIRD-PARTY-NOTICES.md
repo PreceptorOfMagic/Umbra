@@ -81,22 +81,34 @@ above identify inputs; they are not by themselves a completed source delivery.
 The pre-existing Valve Corporation Steam trademark notice is preserved verbatim
 in the installed root `NOTICE` file.
 
-## SudoVDA — unresolved public-release blocker
+## SudoVDA signed driver and self-built nefconc
 
-**SudoVDA is not classified as MIT here and is not cleared for public release.**
-The current package input is incomplete and cannot be mapped to a complete,
-licensed source set:
+The complete driver payload is taken from the official Apollo v0.4.6 release.
+`drivers/sudovda/PROVENANCE.json` records its release URL, archive and individual
+file hashes, and Windows Authenticode verification. The DLL and catalog verified
+Valid, signed by `CN=sudovda@su.mk`. INF, CAT and certificate exactly match the
+previous tracked inputs. No driver or certificate was installed during preparation.
 
-- `SudoVDA.inf` declares `DriverVer = 07/14/2025,1.10.9.289` and requires
-  `SudoVDA.dll`, but that DLL is absent from the repository/package input.
-- `install.bat` invokes `nefconc.exe`, but that executable is also absent, so
-  neither its binary hash nor its exact source and licence can be recorded.
-- The public SudoMaker/SudoVDA repository currently resolves to commit
-  `a4b09fa2aa731a964d0cb5d139cb1e6240e4da12`, has no standalone licence file,
-  and contains Microsoft-derived and inherited material whose applicable terms
-  have not been mapped to the newer packaged driver artifacts.
+The audited public SudoVDA source is commit
+`a4b09fa2aa731a964d0cb5d139cb1e6240e4da12`. Its README grants MIT/CC0/Public
+Domain for the author's modifications; Microsoft-derived source retains MIT
+terms. These texts are included as `licenses/SudoVDA-upstream-README.md` and
+`licenses/Microsoft-Windows-driver-samples-LICENSE.txt`. Upstream provides no
+reproducible source-to-signed-binary attestation for this newer driver. The signed
+driver is therefore retained under the project's signed-driver exception; the
+public source must not be represented as demonstrated exact binary correspondence.
 
-Do not publish a package containing or depending on this component until the
-missing DLL and `nefconc.exe` are present and hashed, every artifact is tied to
-an exact source revision/build recipe, the inherited licence chain is recorded
-with its verbatim texts, and a clean install has been verified.
+The bundled `nefconc.exe` is compiled locally from nefcon v1.12.0, commit
+`f5dd078b3d3045be3127d962c62b1c4b2710bb9a`. The build recipe and minimal neflib
+port correction are in `packaging/nefcon/`. The MIT licence and all seven linked
+vcpkg dependency notices are installed under `licenses/nefcon-*`.
+
+## GPU HEVC
+
+The optional encoder's two Windows DLLs are built from the audited v12b source,
+with pinned x265 `b81f650e21e8aacbe6a9ad04ce14aefc05b932c0` and OpenCL-Headers
+`386ca390b2f52efeb3e1a55a500690eb8013f60e`. `gpu-hevc/BUILD-PROVENANCE.json`
+records source and binary hashes. GPL texts are installed beside these DLLs.
+OpenCL is dynamically loaded from the target's GPU driver; no developer-machine
+OpenCL DLL is bundled. The corresponding source archive includes the kernels,
+DLL source, pinned x265 source and OpenCL headers.

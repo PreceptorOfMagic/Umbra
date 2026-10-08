@@ -41,7 +41,11 @@ if(UMBRA_GPU_HEVC_DIR)
   install(FILES "${UMBRA_GPU_HEVC_DIR}/aurora_gpu_hevc8.dll" "${UMBRA_GPU_HEVC_DIR}/aurora_gpu_hevc10.dll"
           DESTINATION "gpu-hevc" COMPONENT application)
   install(DIRECTORY "${UMBRA_GPU_HEVC_DIR}/kernels" DESTINATION "gpu-hevc" COMPONENT application)
+  install(FILES "${UMBRA_GPU_HEVC_DIR}/COPYING" "${UMBRA_GPU_HEVC_DIR}/COPYING-GPL-3"
+                "${UMBRA_GPU_HEVC_DIR}/BUILD-PROVENANCE.json"
+          DESTINATION "gpu-hevc" COMPONENT application)
 else()
+  install(CODE "message(FATAL_ERROR \"Cannot package Umbra without the GPU HEVC DLLs, kernels and provenance; set UMBRA_GPU_HEVC_DIR.\")" COMPONENT application)
   message(WARNING "UMBRA_GPU_HEVC_DIR is not set: this package has NO GPU HEVC co-op encoder, so hosts "
                   "installed from it report UmbraCaps without bit 3 and Eclipse will not start "
                   "NVIDIA+AMD or AMD+AMD co-op on them. Set it for any release package.")
@@ -52,6 +56,14 @@ install(TARGETS audio-info RUNTIME DESTINATION "tools" COMPONENT audio)
 
 # Mandatory tools
 install(TARGETS sunshinesvc RUNTIME DESTINATION "tools" COMPONENT application)
+
+# Validate prerequisite payload at install/package time, allowing source-only
+# development builds while refusing a silently broken installer.
+foreach(required SudoVDA.dll SudoVDA.inf sudovda.cat sudovda.cer nefconc.exe)
+  install(CODE "if(NOT EXISTS \"${SUNSHINE_SOURCE_ASSETS_DIR}/windows/drivers/sudovda/${required}\")
+    message(FATAL_ERROR \"Missing required SudoVDA installer file: ${required}\")
+  endif()" COMPONENT application)
+endforeach()
 
 # Drivers
 install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/drivers/sudovda"

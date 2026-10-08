@@ -85,3 +85,5 @@ cmake/packaging/windows_nsis.cmake
 src_assets/windows/misc/gamepad/install-gamepad.ps1
 # Release Linux removal must stop user services/owned hosts before removing executable.
 cmake/packaging/linux.cmake
+# Remove connector/resolution-specific sample commands from fresh Linux installs.
+src_assets/linux/assets/apps.json

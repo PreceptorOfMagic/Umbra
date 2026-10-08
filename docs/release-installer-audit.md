@@ -40,32 +40,56 @@ installed Apollo directory failed for missing `drivers/sudovda/SudoVDA.dll`,
 expected evidence of an incomplete reusable installer payload, not an assertion
 that the already installed driver is missing from Windows' Driver Store.
 
-## Remaining release gates
+## Additional corrections and isolated tests
 
-1. Supply the complete SudoVDA and nefconc installer payload with exact immutable
-   source correspondence, licence notices, hashes and signature verification.
-   Both binaries are missing from the tracked packaging directory. SudoVDA's
-   current upstream README grants MIT/CC0 for its author's changes; that alone
-   does not establish the source correspondence of the newer packaged driver.
-2. Build and stage the intended GPU HEVC DLLs and kernels from their exact source.
-   The existing Windows CMake configuration leaves `UMBRA_GPU_HEVC_DIR` empty;
-   source packaging currently warns and permits omission.
-3. Complete the release-matched source archive, manifest and dependency inventory;
-   the current template explicitly remains incomplete.
-4. Build the actual NSIS installer and verify clean install, upgrade, tray Quit,
-   service stop, uninstall, restart requirement and rollback in an isolated
-   Windows test environment, including an installation path containing spaces.
-5. Linux DEB/RPM source packaging currently supplies a postinstall script but no
-   removal hook to stop an active user service or standalone host. Implement and
-   exercise that lifecycle on the supported distro versions before release.
-6. Audit the optional legacy `aurora-link session-start` children: they launch
-   detached and rely on `session-end` PID-file cleanup. Source currently checks
-   only the executable leaf name, does not await termination, and its optional
-   `dispwake` call can outlive its 15-second wait. A clean default config does not
-   invoke those legacy session hooks automatically; upgraded rigs can still do so.
+- Windows packaging now fails if required driver files or the GPU payload are
+  absent. Both GPU DLLs were rebuilt from the audited v12b source, with pinned
+  x265/OpenCL sources and installed GPL/provenance files.
+- Complete SudoVDA payload obtained from official Apollo0.4.6; DLL/catalog
+  Authenticode Valid. INF/catalog/certificate hashes match original tracked
+  inputs. nefconc was compiled from its pinned source with the exact minimal
+  x64 vcpkg overlay retained in `packaging/nefcon/`.
+- Linux removal stops only a matching installed user service, then uses pidfds
+  to terminate exact-path standalone processes without PID-reuse races. A
+  relative service ExecStart is accepted only when its running MainPID image
+  matches. Ambiguous active services abort removal; unrelated units survive.
+- One combined DEB keeps host, helper, notices and removal hook together;
+  Debian control scripts use strict executable permissions.
+- Optional legacy aurora-link children hold a verified unique same-session host
+  handle. Host death or a named stop event requests normal pad/mic cleanup;
+  a bounded hard stop is a fallback. Session cleanup checks full executable
+  path, awaits termination and retains failed PID records instead of silently
+  forgetting them. New helpers cannot overwrite an incompletely cleaned set.
+- Removed the Linux Low Res Desktop sample that assumed HDMI-1 and particular
+  resolutions. Desktop and Steam entries remain.
 
-Normal service/tray shutdown source already contains job-object cleanup for the
-host and a special Quit exit status preventing respawn. This is source evidence;
-it does not replace a packaged runtime lifecycle test. User-configured detached
-games and other products' shared drivers must not be indiscriminately killed or
-removed as part of cleanup.
+Measured isolated tests (no driver/device installation or live streaming):
+
+- Native Windows helper fixture built actual main.cpp with stub pad/mic loops:
+  wrong installation refused, ambiguous same-session owners refused, run/mic
+  exit cooperatively after owner death, named stop event exits helper with0
+  while host remains. This does not demonstrate real ViGEm/audio resource release.
+- Native Linux pidfd helper: normal process stopped0.01s; deleted executable
+  stopped0.01s; stubborn process killed after30.07s. Same-name process from a
+  different installation remained alive. All fixture processes removed.
+- Fresh Linux JSON parses and no longer contains connector-specific commands.
+
+## Remaining runtime release gates
+
+The build candidates require isolated clean-machine install, upgrade, tray Quit,
+service stop, uninstall and rollback tests using their exact hashes. Windows
+must cover paths containing spaces, actual prerequisite failure/reboot handling,
+new SudoVDA device creation and ViGEm/audio cleanup. Linux runtime support is
+currently targeted at Ubuntu24.04 x86_64; the CUDA-enabled build alone cannot
+prove capture/encoding across GPUs or other distributions.
+
+The signed SudoVDA distribution is authenticated, but upstream does not provide
+an exact reproducible source-to-signed-driver attestation. Keep that limitation
+in the manifest. External dependency source delivery must be inventoried with
+any remaining gaps before public distribution. No public release is approved
+by the isolated fixtures or by package presence checks.
+
+Normal service/tray shutdown preserves Apollo job-object cleanup and its
+special Quit exit status preventing respawn. Closing a settings browser leaves
+the host running intentionally. User-configured detached games and shared
+system drivers must not be indiscriminately killed or removed.
