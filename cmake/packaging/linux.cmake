@@ -30,8 +30,16 @@ else()
     endif()
 endif()
 
+# Stop active hosts before upgrade/removal (same hook for DEB and RPM).
+add_executable(umbra-stop-host "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/stop-host.cpp")
+set_target_properties(umbra-stop-host PROPERTIES CXX_STANDARD 17)
+install(TARGETS umbra-stop-host RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+configure_file("${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/prerm.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/prerm" @ONLY)
+set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/prerm")
+
 # Post install
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/postinst")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/postinst;${CMAKE_CURRENT_BINARY_DIR}/prerm")
 set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/postinst")
 
 # Apply setcap for RPM
@@ -39,7 +47,8 @@ set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc
 set(CPACK_RPM_USER_FILELIST "%caps(cap_sys_admin+p) ${SUNSHINE_EXECUTABLE_PATH}")
 
 # Dependencies
-set(CPACK_DEB_COMPONENT_INSTALL ON)
+set(CPACK_DEB_COMPONENT_INSTALL OFF)
+set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "\
             ${CPACK_DEB_PLATFORM_PACKAGE_DEPENDS} \
             libcap2, \

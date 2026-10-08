@@ -83,3 +83,5 @@ src/platform/windows/input.cpp
 # Release installer correctness: await/check the prerequisite and remove PATH before deleting scripts.
 cmake/packaging/windows_nsis.cmake
 src_assets/windows/misc/gamepad/install-gamepad.ps1
+# Release Linux removal must stop user services/owned hosts before removing executable.
+cmake/packaging/linux.cmake

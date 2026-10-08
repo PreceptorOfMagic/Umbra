@@ -1,0 +1,45 @@
+#!/bin/sh
+# Stop the host before its executable is replaced/removed. Keep Apollo's user
+# service model and user settings; never match an unrelated process by its name.
+set -eu
+case "${1:-remove}" in
+  remove|upgrade|deconfigure|0|1) ;;
+  *) exit 0 ;;
+esac
+binary='@CMAKE_INSTALL_FULL_BINDIR@/sunshine'
+
+# Stop each active user manager first, so Restart=on-failure cannot respawn a
+# host killed below. Inactive users cannot have a running user service.
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  for runtime in /run/user/[0-9]*; do
+    [ -S "$runtime/bus" ] || continue
+    uid=${runtime##*/}
+    case "$uid" in *[!0-9]*|'') continue ;; esac
+    # A missing unit is harmless. A failed stop of a loaded unit is not.
+    start=$(systemctl --user --machine="$uid@.host" show sunshine.service --property=ExecStart --value 2>/dev/null) || {
+      echo "Umbra: cannot inspect user $uid service; refusing removal" >&2
+      exit 1
+    }
+    # systemd's parsed executable field excludes arguments. A user override that
+    # launches another installation belongs to that installation, not this one.
+    case "$start" in
+      "{ path=$binary ;"*) systemctl --user --machine="$uid@.host" stop sunshine.service || exit 1 ;;
+      "{ path=sunshine ;"*)
+        pid=$(systemctl --user --machine="$uid@.host" show sunshine.service --property=MainPID --value)
+        case "$pid" in *[!0-9]*|'') exit 1 ;; esac
+        actual=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+        case "$actual" in
+          "$binary"|"$binary (deleted)") systemctl --user --machine="$uid@.host" stop sunshine.service || exit 1 ;;
+          *)
+            active=$(systemctl --user --machine="$uid@.host" show sunshine.service --property=ActiveState --value)
+            case "$active" in inactive|failed) ;; *)
+              echo "Umbra: ambiguous relative user service; stop it before removing this package" >&2
+              exit 1 ;;
+            esac ;;
+        esac ;;
+    esac
+  done
+fi
+
+# Native pidfd signaling avoids the check-then-kill PID reuse race.
+'@CMAKE_INSTALL_FULL_LIBEXECDIR@/umbra-stop-host' "$binary"

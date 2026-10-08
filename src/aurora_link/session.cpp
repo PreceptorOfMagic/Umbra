@@ -34,6 +34,7 @@
 #include <shlwapi.h>
 
 #include <cstdio>
+#include <cerrno>
 #include <string>
 #include <vector>
 
@@ -164,17 +165,17 @@ namespace aurora_link {
     /**
      * Kill the children recorded by the last session-start.
      *
-     * PIDS ARE VERIFIED BY IMAGE NAME BEFORE ANYTHING IS TERMINATED. A pid file can
+     * PIDS ARE VERIFIED BY FULL IMAGE PATH BEFORE ANYTHING IS TERMINATED. A pid file can
      * outlive its processes (a crash, a reboot, a session that never ended cleanly)
      * and Windows reuses pids freely, so terminating a recorded pid blind is a real
      * risk of killing an unrelated process. Checking the image path costs one call
      * and removes that failure mode entirely.
      */
-    void kill_recorded_children() {
+    bool kill_recorded_children() {
       const std::wstring pidfile = state_file(L"session.pids");
       FILE *f = _wfopen(pidfile.c_str(), L"r");
       if (f == nullptr) {
-        return;
+        return errno == ENOENT;
       }
       unsigned long pid = 0;
       std::vector<unsigned long> pids;
@@ -182,25 +183,43 @@ namespace aurora_link {
         pids.push_back(pid);
       }
       fclose(f);
-      _wremove(pidfile.c_str());
+      std::vector<unsigned long> remaining;
 
       for (const unsigned long p : pids) {
         if (p == 0 || p == GetCurrentProcessId()) {
           continue;
         }
-        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, static_cast<DWORD>(p));
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, static_cast<DWORD>(p));
         if (h == nullptr) {
-          continue;  // already gone
+          if (GetLastError() != ERROR_INVALID_PARAMETER) remaining.push_back(p);
+          continue;  // gone, or retain the record if access was denied
         }
         wchar_t img[MAX_PATH] = {0};
         DWORD len = MAX_PATH;
         const bool named = QueryFullProcessImageNameW(h, 0, img, &len) != 0;
-        const wchar_t *leaf = named ? PathFindFileNameW(img) : nullptr;
-        if (leaf != nullptr && _wcsicmp(leaf, L"aurora-link.exe") == 0) {
-          TerminateProcess(h, 0);
+        if (!named) remaining.push_back(p);
+        if (named && _wcsicmp(img, self_path().c_str()) == 0) {
+          const auto event_name = L"Local\\EclipseLinkStop-" + std::to_wstring(p);
+          HANDLE stop = OpenEventW(EVENT_MODIFY_STATE, FALSE, event_name.c_str());
+          if (stop) { SetEvent(stop); CloseHandle(stop); }
+          if (WaitForSingleObject(h, 5000) != WAIT_OBJECT_0 &&
+              (!TerminateProcess(h, 1) || WaitForSingleObject(h, 5000) != WAIT_OBJECT_0)) {
+            remaining.push_back(p);
+            fwprintf(stderr, L"aurora-link: child %lu did not confirm termination\n", p);
+          }
         }
         CloseHandle(h);
       }
+      if (remaining.empty()) {
+        _wremove(pidfile.c_str());
+      } else {
+        FILE *pending = _wfopen(pidfile.c_str(), L"w");
+        if (pending) {
+          for (auto p : remaining) fwprintf(pending, L"%lu\n", p);
+          fclose(pending);
+        }
+      }
+      return remaining.empty();
     }
 
     /**
@@ -227,7 +246,9 @@ namespace aurora_link {
       PROCESS_INFORMATION pi = {};
       if (CreateProcessW(nullptr, mutable_cmd.data(), nullptr, nullptr, FALSE,
                          CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, 15000);
+        if (WaitForSingleObject(pi.hProcess, 15000) != WAIT_OBJECT_0) {
+          if (TerminateProcess(pi.hProcess, 1)) WaitForSingleObject(pi.hProcess, 5000);
+        }
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
       }
@@ -266,7 +287,10 @@ namespace aurora_link {
     // Clear anything a previous session left behind before starting new children --
     // the old script did the same, because an interrupted session leaves a pad host
     // holding the UDP port and the next one then silently receives nothing.
-    kill_recorded_children();
+    if (!kill_recorded_children()) {
+      fprintf(stderr, "aurora-link: previous children did not stop; refusing duplicate session helpers\n");
+      return 0;
+    }
 
     rename_endpoints(cable_names());
 
@@ -288,12 +312,13 @@ namespace aurora_link {
   }
 
   int session_end() {
-    kill_recorded_children();
+    const bool children_stopped = kill_recorded_children();
 
     restore_default_endpoint(state_file(L"audio-prev.txt"));
     display_sessionend();
 
-    wprintf(L"aurora-link: session ended\n");
+    wprintf(children_stopped ? L"aurora-link: session ended\n" :
+                              L"aurora-link: session cleanup incomplete; child records retained\n");
     return 0;
   }
 

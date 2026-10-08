@@ -39,6 +39,10 @@
 
 namespace aurora_link {
 
+  // Cooperative helper shutdown for host exit, session-end and console stop.
+  bool helper_stopping();
+  void request_helper_stop();
+
   /** Ports are fixed by the Pi-side sender; see xlink protocol.h. */
   constexpr unsigned short pad_port = 48200;
   constexpr unsigned short mic_port = 48210;

@@ -4,6 +4,9 @@
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <tlhelp32.h>
+#include <thread>
+#include <atomic>
 
 #include <cstdio>
 #include <cstring>
@@ -11,7 +14,75 @@
 
 #include "aurora_link.h"
 
+namespace aurora_link {
+  static std::atomic<bool> stop_requested{false};
+  bool helper_stopping() { return stop_requested.load(); }
+  void request_helper_stop() { stop_requested.store(true); }
+}
+
 namespace {
+
+  // The compatibility pad/mic helpers belong to this installation's host. Hold
+  // its process handle, not just a PID, so a crash/forced service stop cannot
+  // leave them bound to their UDP ports (and PID reuse cannot adopt another app).
+  bool monitor_host_lifetime() {
+    wchar_t self[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameW(nullptr, self, MAX_PATH);
+    if (!length || length == MAX_PATH) return false;
+    std::wstring host(self);
+    auto slash = host.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return false;
+    host.resize(slash + 1);
+    host += L"sunshine.exe";
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32W entry = {};
+    entry.dwSize = sizeof(entry);
+    HANDLE owner = nullptr;
+    DWORD session = 0;
+    if (!ProcessIdToSessionId(GetCurrentProcessId(), &session)) {
+      CloseHandle(snapshot);
+      return false;
+    }
+    for (BOOL more = Process32FirstW(snapshot, &entry); more; more = Process32NextW(snapshot, &entry)) {
+      if (_wcsicmp(entry.szExeFile, L"sunshine.exe") != 0) continue;
+      DWORD candidate_session = 0;
+      if (!ProcessIdToSessionId(entry.th32ProcessID, &candidate_session) || candidate_session != session) continue;
+      HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID);
+      if (!process) continue;
+      wchar_t path[MAX_PATH] = {};
+      DWORD size = MAX_PATH;
+      if (QueryFullProcessImageNameW(process, 0, path, &size) && _wcsicmp(path, host.c_str()) == 0 &&
+          WaitForSingleObject(process, 0) == WAIT_TIMEOUT) {
+        if (owner) {
+          CloseHandle(process);
+          CloseHandle(owner);
+          CloseHandle(snapshot);
+          return false; // Two owners in this session is ambiguous; never adopt one arbitrarily.
+        }
+        owner = process;
+        continue;
+      }
+      CloseHandle(process);
+    }
+    CloseHandle(snapshot);
+    if (!owner) return false;
+    auto event_name = L"Local\\EclipseLinkStop-" + std::to_wstring(GetCurrentProcessId());
+    HANDLE stop = CreateEventW(nullptr, TRUE, FALSE, event_name.c_str());
+    if (!stop) { CloseHandle(owner); return false; }
+    std::thread([owner, stop]() {
+      HANDLE handles[] = {owner, stop};
+      WaitForMultipleObjects(2, handles, FALSE, INFINITE);
+      CloseHandle(owner);
+      CloseHandle(stop);
+      aurora_link::request_helper_stop();
+      // Normal loops leave within one receive timeout and release ViGEm/audio.
+      // Only a stuck helper needs the bounded last resort.
+      Sleep(5000);
+      ExitProcess(1);
+    }).detach();
+    return true;
+  }
 
   int usage() {
     fprintf(stderr,
@@ -57,6 +128,11 @@ int main(int argc, char *argv[]) {
            }) ?
              0 :
              1;
+  }
+
+  if ((_stricmp(verb, "run") == 0 || _stricmp(verb, "mic") == 0) && !monitor_host_lifetime()) {
+    fprintf(stderr, "Eclipse Link: no running Umbra host from this installation; refusing an orphan helper\n");
+    return 1;
   }
 
   if (_stricmp(verb, "run") == 0) {

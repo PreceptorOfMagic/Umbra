@@ -60,6 +60,7 @@ static void CALLBACK rumble_cb(PVIGEM_CLIENT, PVIGEM_TARGET,
 static BOOL WINAPI ctrl_handler(DWORD)
 {
     InterlockedExchange(&g_running, 0);
+    request_helper_stop();
     return TRUE; /* main loop notices within one recv timeout */
 }
 
@@ -126,7 +127,7 @@ int run_pad_host() {
         fflush(stdout);
     };
 
-    while (g_running) {
+    while (g_running && !helper_stopping()) {
         uint8_t buf[128];
         sockaddr_in from{};
         int fromlen = sizeof(from);

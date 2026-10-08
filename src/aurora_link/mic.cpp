@@ -164,7 +164,7 @@ namespace aurora_link {
     // instantly. Exiting on the first miss would lose the mic for the whole session,
     // silently -- the failure looks identical to "no one spoke".
     IMMDevice *dev = nullptr;
-    for (int waited = 0; waited < 20 && dev == nullptr; ++waited) {
+    for (int waited = 0; waited < 20 && dev == nullptr && !helper_stopping(); ++waited) {
       // Eclipse is the current visible identity. Aurora remains a migration fallback
       // until an Eclipse-aware rollback build has been preserved and the elevated
       // cable path can safely rename the persistent Windows endpoint property.
@@ -224,6 +224,8 @@ namespace aurora_link {
       fprintf(stderr, "aurora-link: cannot bind UDP :%u (already running?)\n", mic_port);
       return 1;
     }
+    DWORD receive_timeout = 1000;
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&receive_timeout), sizeof(receive_timeout));
     printf("aurora-link: mic host listening on UDP :%u (opus %d Hz mono)\n", mic_port, kRate);
     fflush(stdout);
 
@@ -232,7 +234,7 @@ namespace aurora_link {
     unsigned long long rendered = 0, lost = 0;
     int last_seq = -1;
 
-    for (;;) {
+    while (!helper_stopping()) {
       int n = recv(s, reinterpret_cast<char *>(pkt), sizeof(pkt), 0);
       if (n < 12) {
         continue;  // shorter than an RTP header: not ours
@@ -297,9 +299,15 @@ namespace aurora_link {
       }
     }
 
-    // Not reached: the host runs until the session ends and Umbra stops it.
+    client->Stop();
+    render->Release();
+    CoTaskMemFree(fmt);
+    client->Release();
+    dev->Release();
+    en->Release();
     opus_decoder_destroy(dec);
     closesocket(s);
+    WSACleanup();
     if (com_here) CoUninitialize();
     return 0;
   }
