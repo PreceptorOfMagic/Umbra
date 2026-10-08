@@ -80,3 +80,6 @@ cmake/packaging/common.cmake
 tools/CMakeLists.txt
 # MinGW build fix; Apollo fixed the same problem after v0.4.6 -- take theirs at the next merge
 src/platform/windows/input.cpp
+# Release installer correctness: await/check the prerequisite and remove PATH before deleting scripts.
+cmake/packaging/windows_nsis.cmake
+src_assets/windows/misc/gamepad/install-gamepad.ps1

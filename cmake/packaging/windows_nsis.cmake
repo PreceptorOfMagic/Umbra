@@ -17,7 +17,15 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\migrate-config.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\add-firewall-rule.bat\\\"'
         nsExec::ExecToLog \
-          'powershell.exe -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\install-gamepad.ps1\\\"'
+          'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\install-gamepad.ps1\\\"'
+        Pop $0
+        StrCmp $0 0 GamepadReady
+        StrCmp $0 3010 GamepadReboot
+        MessageBox MB_OK|MB_ICONSTOP 'Virtual gamepad installation failed (code $0). Umbra setup cannot continue.' /SD IDOK
+        Abort
+        GamepadReboot:
+        SetRebootFlag true
+        GamepadReady:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\install-service.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\autostart-service.bat\\\"'
         NoController:
@@ -34,7 +42,7 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
             'Do you want to remove Virtual Gamepad?' \
             /SD IDNO IDNO NoGamepad
             nsExec::ExecToLog \
-              'powershell.exe -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\uninstall-gamepad.ps1\\\"'; \
+              'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\uninstall-gamepad.ps1\\\"'; \
               skipped if no
         NoGamepad:
         MessageBox MB_YESNO|MB_ICONQUESTION \
@@ -42,11 +50,11 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
             /SD IDNO IDNO NoSudoVDA
             nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\uninstall.bat\\\"'; skipped if no
         NoSudoVDA:
+        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove $INSTDIR (this includes the configuration, cover images, and settings)?' \
             /SD IDNO IDNO NoDelete
             RMDir /r \\\"$INSTDIR\\\"; skipped if no
-        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         NoDelete:
         ")
 
