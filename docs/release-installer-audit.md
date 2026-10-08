@@ -74,6 +74,21 @@ Measured isolated tests (no driver/device installation or live streaming):
   different installation remained alive. All fixture processes removed.
 - Fresh Linux JSON parses and no longer contains connector-specific commands.
 
+## Package verification
+
+The Ubuntu24.04 DEB was built with CUDA12 support. Extraction verifies prerm0755
+and `/usr/libexec/umbra-stop-host` present in the same package. The packaged
+helper passed normal/deleted/stubborn-process tests (0.00s/0.00s/30.04s), retaining
+unrelated same-name processes. The package has no missing shared objects on its
+build baseline. dpkg-shlibdeps adds the measured ICU74, GLIBC2.38, libstdc++13.1
+and Ubuntu t64 dependencies, preventing unsupported older installations.
+
+Windows host/tools and GPU DLL imports were inspected: no non-system imported
+DLL remains unbundled. Explicitly packaged zlib supports its dynamic load path.
+Source-built MinHook replaces an old developer archive of unidentified origin.
+SudoVDA prerequisite failure propagation now stops setup; this is checked with
+harmless stand-in programs, never real certutil or device installation.
+
 ## Remaining runtime release gates
 
 The build candidates require isolated clean-machine install, upgrade, tray Quit,

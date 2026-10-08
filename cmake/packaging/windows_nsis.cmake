@@ -14,6 +14,14 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         nsExec::ExecToLog 'icacls \\\"$INSTDIR\\\" /reset'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" add'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\"'
+        Pop $0
+        StrCmp $0 0 DisplayReady
+        StrCmp $0 3010 DisplayReboot
+        MessageBox MB_OK|MB_ICONSTOP 'Virtual display installation failed (code $0). Umbra setup cannot continue.' /SD IDOK
+        Abort
+        DisplayReboot:
+        SetRebootFlag true
+        DisplayReady:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\migrate-config.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\add-firewall-rule.bat\\\"'
         nsExec::ExecToLog \

@@ -87,3 +87,5 @@ src_assets/windows/misc/gamepad/install-gamepad.ps1
 cmake/packaging/linux.cmake
 # Remove connector/resolution-specific sample commands from fresh Linux installs.
 src_assets/linux/assets/apps.json
+# Propagate prerequisite failure instead of reporting a broken driver install as success.
+src_assets/windows/drivers/sudovda/install.bat

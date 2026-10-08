@@ -96,8 +96,9 @@ if(NOT BOOST_USE_STATIC)
                 boost-program-options >= ${Boost_VERSION}")
 endif()
 
-# This should automatically figure out dependencies, doesn't work with the current config
-set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+# Generate versioned dependencies from the actual ELF payload (including ICU
+# and distribution-specific t64 names), in addition to upstream runtime needs.
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 
 # application icon
 if(NOT ${SUNSHINE_BUILD_FLATPAK})
