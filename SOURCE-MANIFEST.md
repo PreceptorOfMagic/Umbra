@@ -1,4 +1,4 @@
-# Umbra 0.4.6-umbra.5-rc1 candidate source manifest
+# Umbra 0.5.0 source manifest
 
 Prepared 2026-10-08. This is a local test candidate; no public release tag or
 public distribution has been created. Runtime release qualification is tracked
@@ -22,15 +22,18 @@ correspondence gaps; possession of the main Git repository alone is insufficient
 ## Build inputs
 
 - Umbra branch: codex/release-installers, based on Apollo-derived 8973cdc9.
-  Exact packaging snapshot commit is in the source inventory. The compiled host
-  version retains96023b43; subsequent commits change installer scripts, notices
-  and package metadata without changing those compiled C++ inputs.
+  Runtime source is the audited 26f4973c release-preparation snapshot. Exact
+  packaging commit is in the source inventory and compiled COMMIT value. Version
+  0.5.0 is set through BUILD_VERSION with BRANCH=release; no upstream-base claim
+  or application defaults change follows from this product version.
 - Windows: MSYS2 UCRT64 GCC16.1, Ninja, CMake Release;
   `-DAPOLLO_BETA_PROFILE=OFF -DUMBRA_GPU_HEVC_DIR=<built GPU payload>`.
 - Linux: isolated Ubuntu24.04 x86_64, GCC13 main compiler and GCC12 CUDA host,
   CUDA12.0; Release, `/usr` prefix, assets `share/sunshine`, executable
   `/usr/bin/sunshine`, `-DSUNSHINE_ENABLE_CUDA=ON -DAPOLLO_BETA_PROFILE=OFF`.
-  This is not evidence of compatibility with older or every Linux distribution.
+- Ubuntu22.04 x86_64: GCC12.3 main compiler, GCC11.4 CUDA host, CUDA11.5;
+  same Release/install paths and feature selection. Separate package dependencies
+  reflect each supported baseline; this is not a generic every-distribution claim.
 - Main FFmpeg/x264/x265/SVT-AV1 static inputs: build-deps distribution commit
   cf5dffaf4c62a5e5e2949c37b642cfc5ad962b98, source recipe commit
   6ad5cf841f592f95be47fb401cde02ae621acd0f and its pinned submodules.
