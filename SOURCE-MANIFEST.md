@@ -22,7 +22,9 @@ correspondence gaps; possession of the main Git repository alone is insufficient
 ## Build inputs
 
 - Umbra branch: codex/release-installers, based on Apollo-derived 8973cdc9.
-  Exact snapshot commit is in the source inventory and generated package version.
+  Exact packaging snapshot commit is in the source inventory. The compiled host
+  version retains96023b43; subsequent commits change installer scripts, notices
+  and package metadata without changing those compiled C++ inputs.
 - Windows: MSYS2 UCRT64 GCC16.1, Ninja, CMake Release;
   `-DAPOLLO_BETA_PROFILE=OFF -DUMBRA_GPU_HEVC_DIR=<built GPU payload>`.
 - Linux: isolated Ubuntu24.04 x86_64, GCC13 main compiler and GCC12 CUDA host,
@@ -59,3 +61,19 @@ The external source archive includes official MinHook
 CMake/Ninja Release and `-DBUILD_SHARED_LIBS=OFF`; set host MINHOOK_LIBRARY
 to the resulting `minhook.x64.a` and MINHOOK_INCLUDE_DIR to its `include/`.
 The installed developer library is neither overwritten nor used.
+
+## Dependency source delivery
+
+The external archive includes15 official MSYS2 source packages matched to the
+binary package build-recipe hashes and verified with the installed MSYS2 signing
+keyring, plus189 NPM package tarballs verified against the exact package-lock SRI.
+Verification manifests and the lockfile are included. Boost1.88, Linux JSON3.11.3,
+pinned static codec sources, MinHook, GPU/x265/OpenCL and nefcon build inputs are
+also included. System libraries resolved through Linux package dependencies are
+provided by the target distribution and are not copied into the DEB.
+
+Recorded build scripts contain original build-machine paths as provenance;
+substitute unpacked source paths when rebuilding elsewhere. These are not runtime
+application defaults. Third-party static codec binaries came from the pinned
+Apollo dependency distribution; matching public source recipes are included,
+but a new reproducibility comparison is not claimed.

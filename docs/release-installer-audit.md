@@ -108,3 +108,38 @@ Normal service/tray shutdown preserves Apollo job-object cleanup and its
 special Quit exit status preventing respawn. Closing a settings browser leaves
 the host running intentionally. User-configured detached games and shared
 system drivers must not be indiscriminately killed or removed.
+
+## Final installer failure and ownership checks
+
+Windows service scripts now verify the service executable belongs to this install
+before stopping/removing it. A foreign legacy Sunshine service is preserved; a
+foreign ApolloService fails closed. SCM handles are disposed before deletion,
+stop completion is awaited, and setup/removal errors reach NSIS. Nine mocked
+SCM scenarios passed, including foreign service, stop/wait/delete failure.
+
+The uninstaller invokes the held-handle process helper after service removal and
+before deleting files. Its benign unique-name fixture stopped seven exact-path
+owned executables, preserved six unrelated same-name copies, observed cooperative
+helper cleanup/exit0 in342ms and bounded legacy fallback in5118ms; a repeated
+cleanup passed. The production-name fixture encountered access denied on the
+existing SYSTEM host and failed closed without stopping it. The alias fixture
+changes executable leaf names only, verified by a reverse-transform assertion.
+Elevated real installer acceptance remains unmeasured.
+
+Optional gamepad/autostart components are checked for presence before execution.
+Gamepad removal propagates MSI status/reboot/failure; seven mocked CIM cases passed.
+SudoVDA install/uninstall fixtures passed nine success/failure/reboot cases with
+harmless native stand-ins in a path containing spaces, never actual driver tools.
+
+Linux postinstall targets its absolute installed executable, requires libcap2-bin
+and udev, and propagates capability/udev failures. Its fixture proves an earlier
+foreign sunshine on PATH is untouched and a failed capability update cannot claim
+success. Avahi is a recommended dependency for default mDNS discovery; package
+metadata alone does not demonstrate network discovery.
+
+Windows retains Apollo's explicit keep/remove-settings choice. Choosing removal
+also removes the saved start-type file and empty app-specific containers. Linux
+preserves inherited per-user Sunshine profiles: shared naming does not prove
+Umbra ownership and a root hook must not sweep unrelated user data. Shared drivers
+remain by default. Therefore these candidates do not claim literally zero
+remaining user data after every uninstall choice.

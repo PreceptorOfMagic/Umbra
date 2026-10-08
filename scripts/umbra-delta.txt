@@ -89,3 +89,11 @@ cmake/packaging/linux.cmake
 src_assets/linux/assets/apps.json
 # Propagate prerequisite failure instead of reporting a broken driver install as success.
 src_assets/windows/drivers/sudovda/install.bat
+# Scope service removal to this installation and propagate uninstall failures.
+src_assets/windows/misc/service/uninstall-service.bat
+src_assets/windows/drivers/sudovda/uninstall.bat
+# Postinstall applies capabilities only to the installed binary and reports failures.
+src_assets/linux/misc/postinst
+
+# Optional shared-driver removal must propagate failure to the uninstaller.
+src_assets/windows/misc/gamepad/uninstall-gamepad.ps1

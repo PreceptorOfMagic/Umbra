@@ -1,5 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
+for %%I in ("%~dp0\..") do set "ROOT_DIR=%%~fI"
+set "SERVICE_BIN=%ROOT_DIR%\tools\sunshinesvc.exe"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0service-control.ps1" -Name ApolloService -Action Inspect -ExpectedPath "%SERVICE_BIN%"
+if errorlevel 1 exit /b 1
 
 set "SERVICE_CONFIG_DIR=%LOCALAPPDATA%\SudoMaker\Apollo"
 set "SERVICE_CONFIG_FILE=%SERVICE_CONFIG_DIR%\service_start_type.txt"
@@ -32,10 +36,8 @@ if %ERRORLEVEL%==0 (
     echo !CONTENT!> "%SERVICE_CONFIG_FILE%"
 )
 
-rem Stop and delete the legacy SunshineSvc service
-net stop sunshinesvc
-sc delete sunshinesvc
-
-rem Stop and delete the new ApolloService service
-net stop ApolloService
-sc delete ApolloService
+rem Stop only services whose executable belongs to this installation.
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0service-control.ps1" -Name SunshineSvc -Action Remove -ExpectedPath "%SERVICE_BIN%"
+if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0service-control.ps1" -Name ApolloService -Action Remove -ExpectedPath "%SERVICE_BIN%"
+exit /b %ERRORLEVEL%

@@ -24,6 +24,7 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         DisplayReady:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\migrate-config.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\add-firewall-rule.bat\\\"'
+        IfFileExists \\\"$INSTDIR\\\\scripts\\\\install-gamepad.ps1\\\" 0 GamepadReady
         nsExec::ExecToLog \
           'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\install-gamepad.ps1\\\"'
         Pop $0
@@ -35,7 +36,18 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         SetRebootFlag true
         GamepadReady:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\install-service.bat\\\"'
+        Pop $0
+        StrCmp $0 0 HostServiceReady
+        MessageBox MB_OK|MB_ICONSTOP 'Host service setup failed (code $0). Files have been retained; resolve the error and retry.' /SD IDOK
+        Abort
+        HostServiceReady:
+        IfFileExists \\\"$INSTDIR\\\\scripts\\\\autostart-service.bat\\\" 0 HostAutostartReady
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\autostart-service.bat\\\"'
+        Pop $0
+        StrCmp $0 0 HostAutostartReady
+        MessageBox MB_OK|MB_ICONSTOP 'Host automatic startup could not be configured (code $0).' /SD IDOK
+        Abort
+        HostAutostartReady:
         NoController:
         ")
 
@@ -43,26 +55,54 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
 # Uninstall service
 set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         "${CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS}
-        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\delete-firewall-rule.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\uninstall-service.bat\\\"'
+        Pop $0
+        StrCmp $0 0 HostServiceRemoved
+        MessageBox MB_OK|MB_ICONSTOP 'Host service could not be stopped and removed (code $0). Files have been retained; resolve the error and retry.' /SD IDOK
+        Abort
+        HostServiceRemoved:
+        nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\stop-owned-processes.ps1\\\"'
+        Pop $0
+        StrCmp $0 0 HostProcessesStopped
+        MessageBox MB_OK|MB_ICONSTOP 'Umbra processes could not be stopped safely (code $0). Files have been retained; resolve the error and retry.' /SD IDOK
+        Abort
+        HostProcessesStopped:
+        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\delete-firewall-rule.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\sunshine.exe\\\" --restore-nvprefs-undo'
+        IfFileExists \\\"$INSTDIR\\\\scripts\\\\uninstall-gamepad.ps1\\\" 0 NoGamepad
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove Virtual Gamepad?' \
             /SD IDNO IDNO NoGamepad
             nsExec::ExecToLog \
-              'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\uninstall-gamepad.ps1\\\"'; \
-              skipped if no
+              'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\uninstall-gamepad.ps1\\\"'
+            Pop $0
+            StrCmp $0 0 NoGamepad
+            StrCmp $0 3010 GamepadRemovedReboot
+            MessageBox MB_OK|MB_ICONSTOP 'Virtual gamepad removal failed (code $0). Files have been retained; resolve the error and retry.' /SD IDOK
+            Abort
+            GamepadRemovedReboot:
+            SetRebootFlag true
         NoGamepad:
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove SudoVDA Virtual Display Driver?' \
             /SD IDNO IDNO NoSudoVDA
             nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\uninstall.bat\\\"'; skipped if no
+            Pop $0
+            StrCmp $0 0 NoSudoVDA
+            StrCmp $0 3010 DisplayRemovedReboot
+            MessageBox MB_OK|MB_ICONSTOP 'Virtual display removal failed (code $0). Files have been retained; resolve the error and retry.' /SD IDOK
+            Abort
+            DisplayRemovedReboot:
+            SetRebootFlag true
         NoSudoVDA:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove $INSTDIR (this includes the configuration, cover images, and settings)?' \
             /SD IDNO IDNO NoDelete
             RMDir /r \\\"$INSTDIR\\\"; skipped if no
+            Delete \\\"$LOCALAPPDATA\\\\SudoMaker\\\\Apollo\\\\service_start_type.txt\\\"
+            RMDir \\\"$LOCALAPPDATA\\\\SudoMaker\\\\Apollo\\\"
+            RMDir \\\"$LOCALAPPDATA\\\\SudoMaker\\\"
         NoDelete:
         ")
 

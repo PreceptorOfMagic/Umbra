@@ -31,6 +31,13 @@ public class DisplayFixture {
         if ($case[1] -ne 0 -and $calls[-1] -notlike ('*' + $case[0] + '*')) { throw 'Continued after prerequisite failed' }
         Write-Host "PASS display prerequisite $($case[0]) -> $($case[1])"
     }
+    Copy-Item (Join-Path $repo 'src_assets\windows\drivers\sudovda\uninstall.bat') $stage
+    foreach ($code in @(0,5,3010)) {
+        [IO.File]::WriteAllText((Join-Path $stage 'fail.txt'),("--remove-device-node|" + $code))
+        & $env:ComSpec /d /c (Join-Path $stage 'uninstall.bat') | Out-Null
+        if ($LASTEXITCODE -ne $code) { throw "Removal expected $code, got $LASTEXITCODE" }
+        Write-Host "PASS display removal forwards $code without pausing"
+    }
 } finally {
     $env:PATH = $oldPath
     Remove-Item $stage -Recurse -Force
