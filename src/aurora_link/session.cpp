@@ -270,11 +270,6 @@ namespace aurora_link {
 
     rename_endpoints(cable_names());
 
-    const std::string reply = agent_session(true);
-    if (!reply.empty()) {
-      printf("aurora-link: agent %s", reply.c_str());
-    }
-
     save_default_endpoint(state_file(L"audio-prev.txt"));
 
     const DWORD pad = spawn_child(L"run", state_file(L"pad.log"));
@@ -294,11 +289,6 @@ namespace aurora_link {
 
   int session_end() {
     kill_recorded_children();
-
-    const std::string reply = agent_session(false);
-    if (!reply.empty()) {
-      printf("aurora-link: agent %s", reply.c_str());
-    }
 
     restore_default_endpoint(state_file(L"audio-prev.txt"));
     display_sessionend();

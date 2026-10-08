@@ -25,7 +25,6 @@
  * SUBCOMMANDS
  * -----------
  *   aurora-link cable on|off     show/hide the virtual audio cable (needs admin)
- *   aurora-link session on|off   open/close the CTM bridge gate
  *   aurora-link run              pad host: UDP pad state -> ViGEm, rumble back
  *   aurora-link mic              mic host: Opus/RTP -> the virtual cable
  *   aurora-link audio-default save|restore   the default sink, around a session
@@ -42,7 +41,6 @@ namespace aurora_link {
 
   /** Ports are fixed by the Pi-side sender; see xlink protocol.h. */
   constexpr unsigned short pad_port = 48200;
-  constexpr unsigned short agent_port = 48054;
   constexpr unsigned short mic_port = 48210;
 
   /**
@@ -58,17 +56,6 @@ namespace aurora_link {
    * @return true on success.
    */
   bool set_cable_enabled(bool on);
-
-  /**
-   * Tell the local CTM-USBIP agent to open or close the bridge gate.
-   *
-   * Closing unplugs every Pi/TV-bridged controller and refuses new ones until the
-   * next session, so pads do not stay attached to a host that is not streaming.
-   *
-   * @param on true for SESSION ON, false for SESSION OFF.
-   * @return the agent's reply, or an empty string if it could not be reached.
-   */
-  std::string agent_session(bool on);
 
   /**
    * Rename audio endpoints whose current name CONTAINS `first`, to `second`.
@@ -134,9 +121,9 @@ namespace aurora_link {
   /**
    * One whole stream session, as the two verbs Umbra's global_prep_cmd names.
    *
-   * start: name the cable's endpoints, open the CTM bridge gate, snapshot the default
-   * sink, then launch the pad and mic hosts hidden.
-   * end: stop those, close the gate, put the default sink back, and relight the
+   * start: name the cable's endpoints, snapshot the default sink, then launch the pad
+   * and mic hosts hidden.
+   * end: stop those, put the default sink back, and relight the
    * physical panel via dispwake -- which is the ONLY hook covering a full quit,
    * because Umbra does not run its pause command when a session terminates.
    *

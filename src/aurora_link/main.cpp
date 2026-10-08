@@ -3,8 +3,6 @@
  * @brief Aurora Link entry point — subcommand dispatch.
  */
 #define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include <windows.h>
 
 #include <cstdio>
@@ -13,50 +11,6 @@
 
 #include "aurora_link.h"
 
-#pragma comment(lib, "ws2_32.lib")
-
-namespace aurora_link {
-
-  std::string agent_session(bool on) {
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-      return {};
-    }
-    std::string reply;
-
-    SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (s != INVALID_SOCKET) {
-      // The agent is always local: it bridges devices into THIS machine's USB stack.
-      sockaddr_in addr {};
-      addr.sin_family = AF_INET;
-      addr.sin_port = htons(agent_port);
-      InetPtonW(AF_INET, L"127.0.0.1", &addr.sin_addr);
-
-      DWORD timeout = 3000;
-      setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&timeout), sizeof(timeout));
-
-      if (connect(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
-        const std::string cmd = on ? "SESSION ON\n" : "SESSION OFF\n";
-        send(s, cmd.c_str(), static_cast<int>(cmd.size()), 0);
-        char buf[256] = {};
-        int n = recv(s, buf, sizeof(buf) - 1, 0);
-        if (n > 0) {
-          reply.assign(buf, static_cast<size_t>(n));
-        }
-      } else {
-        // Not fatal: a host with no CTM agent (PC2 today) still streams, it just
-        // has no bridged controllers. Saying so beats failing the session.
-        fprintf(stderr, "aurora-link: no CTM agent on 127.0.0.1:%u\n", agent_port);
-      }
-      closesocket(s);
-    }
-
-    WSACleanup();
-    return reply;
-  }
-
-}  // namespace aurora_link
-
 namespace {
 
   int usage() {
@@ -64,7 +18,6 @@ namespace {
             "Eclipse Link — Umbra host companion\n"
             "\n"
             "  aurora-link cable on|off      show/hide the virtual audio cable (admin)\n"
-            "  aurora-link session on|off    open/close the CTM bridge gate\n"
             "  aurora-link rename-audio      give the virtual cable meaningful names\n"
             "  aurora-link run               run the pad host (UDP -> ViGEm)\n"
             "  aurora-link mic               run the mic host (Opus/RTP -> virtual cable)\n"
@@ -92,17 +45,6 @@ int main(int argc, char *argv[]) {
       return usage();
     }
     return aurora_link::set_cable_enabled(is_on(argv[2])) ? 0 : 1;
-  }
-
-  if (_stricmp(verb, "session") == 0) {
-    if (argc < 3) {
-      return usage();
-    }
-    const std::string reply = aurora_link::agent_session(is_on(argv[2]));
-    if (!reply.empty()) {
-      printf("%s", reply.c_str());
-    }
-    return 0;
   }
 
   if (_stricmp(verb, "rename-audio") == 0) {
