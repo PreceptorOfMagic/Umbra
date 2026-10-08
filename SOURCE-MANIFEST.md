@@ -51,3 +51,11 @@ correspondence. See installed SudoVDA and inherited Microsoft notices.
 The ViGEmBus installer is the hash-pinned official v1.21.442.0 release, used as a
 shared system prerequisite. Uninstall must preserve shared drivers used by other
 applications. No driver was installed during candidate compilation.
+
+## MinHook build material
+
+The external source archive includes official MinHook
+`c3fcafdc10146beb5919319d0683e44e3c30d537` (tag v1.3.4). Build with UCRT64
+CMake/Ninja Release and `-DBUILD_SHARED_LIBS=OFF`; set host MINHOOK_LIBRARY
+to the resulting `minhook.x64.a` and MINHOOK_INCLUDE_DIR to its `include/`.
+The installed developer library is neither overwritten nor used.

@@ -112,3 +112,13 @@ records source and binary hashes. GPL texts are installed beside these DLLs.
 OpenCL is dynamically loaded from the target's GPU driver; no developer-machine
 OpenCL DLL is bundled. The corresponding source archive includes the kernels,
 DLL source, pinned x265 source and OpenCL headers.
+
+## MinHook
+
+MinHook is compiled from official tag v1.3.4, immutable commit
+`c3fcafdc10146beb5919319d0683e44e3c30d537`, with its default static target.
+Its upstream CMake version label still says1.3.3; the commit identifies the
+actual source. The BSD2-Clause licence is installed in
+`licenses/MinHook-BSD-2-Clause.txt`. The old unowned developer-library input
+is replaced by this isolated source-built archive through MINHOOK_LIBRARY and
+its matching MINHOOK_INCLUDE_DIR.
