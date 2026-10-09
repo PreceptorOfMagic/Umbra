@@ -411,9 +411,8 @@ namespace nvhttp {
     auto launch_session = std::make_shared<rtsp_stream::launch_session_t>();
 
     launch_session->id = ++session_id_counter;
-#ifdef APOLLO_BETA_PROFILE
+    // Umbra: the GPU HEVC co-op encoder is a release feature (the installer ships it), not part of the beta profile.
     launch_session->aurora_gpu_hevc = get_arg(args, "auroraGpuHevc", "0") == "1";
-#endif
     // Umbra: one pane of an Eclipse co-op session -- the co-op encoder tuning applies to THIS session only.
     launch_session->umbra_coop = get_arg(args, "umbraCoop", "0") == "1";
     // Umbra: the client asks for the host's physical monitor(s) off for this stream (host_monitor.h).
@@ -1050,12 +1049,9 @@ namespace nvhttp {
     {
       int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG | CAP_COOP_PANE |
                  (host_monitor::supported() ? host_monitor::CAP_MONITOR_OFF : 0);
-#ifdef APOLLO_BETA_PROFILE
-      // The GPU HEVC session request (auroraGpuHevc) is parsed only in this build flavour.
       if (proc::gpu_hevc_encoder_installed()) {
         caps |= CAP_GPU_HEVC;
       }
-#endif
       tree.put("root.UmbraCaps", caps);
     }
 
