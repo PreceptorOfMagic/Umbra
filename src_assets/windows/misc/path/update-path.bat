@@ -46,7 +46,11 @@ if /i "%~1"=="add" (
     rem Only update if path was changed
     if "!NEW_PATH!" neq "!CURRENT_PATH!" (
         rem Set the new path in the registry
-        reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!NEW_PATH!" /f
+        rem A trailing backslash would escape the closing quote, reg.exe would swallow /f and wait
+        rem forever for an overwrite answer; double it, and never let reg.exe read the console.
+        set "REG_DATA=!NEW_PATH!"
+        if "!REG_DATA:~-1!"=="\" set "REG_DATA=!REG_DATA!\"
+        reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!REG_DATA!" /f < nul
         if !ERRORLEVEL!==0 (
             echo Successfully added Umbra directories to PATH
         ) else (
@@ -93,8 +97,10 @@ if /i "%~1"=="remove" (
 
     rem Only update if path was changed
     if "!CHANGES_MADE!"=="1" (
-        rem Set the new path in the registry
-        reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!CURRENT_PATH!" /f
+        rem Set the new path in the registry (trailing backslash doubled, as in "add" above)
+        set "REG_DATA=!CURRENT_PATH!"
+        if "!REG_DATA:~-1!"=="\" set "REG_DATA=!REG_DATA!\"
+        reg add "%KEY_NAME%" /v "%VALUE_NAME%" /t REG_EXPAND_SZ /d "!REG_DATA!" /f < nul
         if !ERRORLEVEL!==0 (
             echo Successfully removed Umbra directories from PATH
         ) else (
