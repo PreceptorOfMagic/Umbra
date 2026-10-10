@@ -4,7 +4,7 @@
  *
  * WHY THIS LIVES INSIDE UMBRA
  * ----------------------------
- * The pieces this replaces grew up as loose scripts in C:\Users\camer\xlink-build:
+ * The pieces this replaces grew up as loose scripts in a local xlink-build folder:
  * a pad host exe, three Python scripts, a .vbs launcher and two .cmd wrappers, all
  * referenced by absolute path from Umbra's prep-cmd. That works on the one machine
  * it was hand-built on and nowhere else, and nothing ties their lifetime to Umbra's:
