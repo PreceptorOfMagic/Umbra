@@ -23,7 +23,7 @@ Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choos
 
 ### Windows x64
 
-1. Download the installer and matching checksum if provided. Compare the file’s SHA-256 hash with PowerShell’s `Get-FileHash`.
+1. Download the installer and matching checksum if provided. Compare the file’s SHA-256 hash with PowerShell’s `Get-FileHash`. The installer is unsigned for now; signing through SignPath Foundation is being set up (see the [Code signing policy](../CODE_SIGNING_POLICY.md)).
 2. Stop any existing Sunshine/Apollo host service before starting Umbra. Back up its configuration before migration.
 3. Run the installer with administrator approval and include its bundled virtual-display/controller/device components. Do not download the device bridge separately.
 4. Allow access on your trusted private network. Use the installed shortcut or tray action to open the web interface and create the local administrator login.
