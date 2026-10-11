@@ -1047,9 +1047,10 @@ namespace nvhttp {
     // bit 2 built-in co-op pane + per-launch co-op tuning, bit 3 GPU HEVC co-op encoder installed,
     // bit 4 physical monitor off on request (umbraMonitorOff, host_monitor.h).
     {
-      int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG | CAP_COOP_PANE |
+      int caps = (wired_pin::supported() ? wired_pin::CAP_WIRED_PIN : 0) | CAP_HOST_LOG |
+                 (proc::coop_pane_supported() ? CAP_COOP_PANE : 0) |
                  (host_monitor::supported() ? host_monitor::CAP_MONITOR_OFF : 0);
-      if (proc::gpu_hevc_encoder_installed()) {
+      if (proc::coop_pane_supported() && proc::gpu_hevc_encoder_installed()) {
         caps |= CAP_GPU_HEVC;
       }
       tree.put("root.UmbraCaps", caps);

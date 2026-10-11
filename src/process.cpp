@@ -83,6 +83,15 @@ namespace proc {
     return app.uuid == COOP_PANE_UUID || app.name == COOP_PANE_NAME;
   }
 
+  bool coop_pane_supported() {
+#ifdef _WIN32
+    return vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK;
+#else
+    // Linux capture support alone does not provide a virtual Co-op Pane.
+    return false;
+#endif
+  }
+
 #ifdef _WIN32
   VDISPLAY::DRIVER_STATUS vDisplayDriverStatus = VDISPLAY::DRIVER_STATUS::UNKNOWN;
 
@@ -1630,7 +1639,7 @@ namespace proc {
        the running app, so an ordinary Moonlight client sees it only while a co-op session is
        streaming. A host whose apps.json already has an entry with this name keeps that
        entry (the rig's, or a user's own) and gets no second one. */
-    if (vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK &&
+    if (coop_pane_supported() &&
         std::none_of(apps.begin(), apps.end(), [](const proc::ctx_t &app) { return app.name == COOP_PANE_NAME; })) {
       proc::ctx_t ctx;
       ctx.idx = std::to_string(i);

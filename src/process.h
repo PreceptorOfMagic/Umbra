@@ -210,6 +210,8 @@ namespace proc {
 
   /** Umbra: is this app the co-op pane, built in or a same-named apps.json entry? */
   bool is_coop_pane(const ctx_t &app);
+  // True only when this host can provide the built-in virtual Co-op Pane.
+  bool coop_pane_supported();
 }  // namespace proc
 
 #ifdef BOOST_PROCESS_VERSION
