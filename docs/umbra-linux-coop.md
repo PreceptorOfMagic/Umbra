@@ -1,6 +1,6 @@
 # Linux Co-op Pane: Flatpak capture feasibility
 
-Status: **portal capture, KDE native virtual-pane capture and lifecycle implemented, under validation; not released** (2026-10-12). Current acceptance candidate: see the 21:15 section at the end.
+Status: **per-client virtual displays, GPU-frame capture and KDE co-op panes implemented, under validation; not released** (2026-10-13). Current candidate: see the Windows-parity section at the end.
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 
@@ -549,3 +549,77 @@ Each run had its own bounded host and gears harness, torn down afterwards. Evide
 `~/umbra-flatpak/gpu-linux/network-mint-accept-*`; host logs are in VEGA's Mint home as
 `umbra-coop-probe/mint-accept-{auto-sdr2020-8,sdr-10}-host.log`. The automatic run does not exercise the
 custom converter fix; the TV's Rec2020 case on KDE is covered by the Ubuntu rows above.
+
+## Windows-parity display and encoding — 2026-10-13 00:40
+
+The user requirement: Linux Umbra streams exactly like Windows Umbra. The reference is the Vibepollo
+edition's defaults (`virtual_display_mode=per_client`, `virtual_display_layout=exclusive`): every
+stream gets its own virtual display at the client's width, height and rate before the app starts,
+it is the only active display, and ordinary streams use the native encoder from GPU memory.
+
+Before this work an ordinary TV session on KDE captured the 1920x1080@60 physical output and
+upscaled it to the requested 3840x2160. The host forced the GPU HEVC co-op encoder because the TV
+asked for HDR (`resolve_desktop_hdr_encoder`). The result was ~44 fps with one host thread at 98%.
+
+Commits on `linux/coop`:
+
+- `4e5f5fb5`: every KDE stream creates its KWin virtual output at the client's WxH@fps first
+  (process.cpp). It is made the only enabled output (`umbra_kde_output_exclusive`). Outputs it
+  switches off are recorded in appdata `kde_exclusive_outputs` before any change. They are
+  re-enabled on release and at host start. Resumed ordinary sessions re-fit the display. The
+  portal-HDR GPU HEVC route is off where KDE virtual displays are used: KWin captures them 8-bit,
+  so Automatic stays on the native encoder.
+- `b6913de5`, `73e0623e`: PipeWire DMA-BUF in EGL-importable modifiers for NVENC (compositor GPU
+  is NVIDIA) and VA-API. The newest buffer stays checked out and the existing VRAM encoders
+  (`gl_cuda_vram`, VA-API vram) get duplicated fds. CPU buffers remain the fallback, and a failed
+  attempt never tears down the virtual display. Each failure point logs its reason.
+- `cf8c74a0`: where streams use native virtual displays, the encoder probe uses a capture-free
+  display (dummy images only). Host start never opens the screen-sharing prompt.
+- `43777e07`: the pointer is centred on the virtual display after launch and resume (KDE's
+  top-left hot corner otherwise opened Overview). `[UMBRA-CAPTURE]` logs compositor arrivals
+  against encoder deliveries every 10s.
+- `a8e846b2`: 4 PipeWire buffers when one is held. `50ab1f74`: GPU HEVC sessions take DMA-BUF and
+  read it back on the capture thread. `2462bc48`: Mesa rusticl is enabled for `radeonsi,iris` unless
+  the user set `RUSTICL_ENABLE`. `2462bc48` is the final code; the recipe pins it.
+
+Final candidate `Umbra-0.5.1-parity-final-x86_64.flatpak`, SHA256 prefix dc11f7d3a691b6bb;
+`/app/bin/sunshine` f283f37893ac8e38…, installed on VEGA Ubuntu 26.04/KDE and Mint 22.3.
+
+Live checks on VEGA (RTX 2060 SUPER, 595.99.02). Each was a real-time host encode into a network
+probe and live decoder at a requested 165 fps. Source and decoded images were read.
+
+| Check | Result |
+|---|---|
+| V0 host start | Probe display, no prompt; NVENC H.264/HEVC found in <0.5s |
+| V1 Desktop 3840x2160@165, Automatic, Rec2020 request | Virtual 3840x2160@165000 mHz, DP-1 disabled during / enabled after; DMA-BUF GPU frames -> hevc_nvenc; KWin arrived 1655/10s, every frame delivered; client 3610/25s; host CPU ~15%, NVENC ~71%; decoded == source, pointer centred, no Overview |
+| V2 Desktop 1920x1080 -> Disconnect -> Resume 1080x1920 | 3595 + 3624 frames; resize on resume, GPU frames both phases; portrait desktop decoded correctly |
+| V3 Co-op pane 1920x2160, Automatic (NVENC) | 3609/25s; whole-desktop pane with taskbar |
+| V4 Co-op pane GPU HEVC 1920x2176 -> Resume 2176x1920 | 1627 frames, 4 IDRs, failed 0; DMA-BUF read back; ~42 frames/s, every frame encoded; GPU HEVC 17-25 ms/frame |
+| V5 SIGKILL mid-stream | KWin re-enabled DP-1 within 3s on its own; restarted host: no prompt |
+| Mint 22.3 X11, Automatic 3840x2160 | 1484/25s (60 Hz physical X11 output); X11 has no virtual displays |
+
+Eclipse's Automatic co-op plan uses each host's native encoder for NVIDIA+NVIDIA or unknown-vendor
+pairs, and GPU HEVC only for mixed vendors (`coop_stream_plan_choose`). A PC1 (RTX 4070) + VEGA
+(RTX 2060 SUPER) co-op therefore takes the V3 path.
+
+Hard Linux limits measured or read from upstream source (for the website, later):
+
+- HDR co-op panes: KWin's screencast offers only 8-bit formats plus NV12 (KWin master
+  `src/plugins/screencast/screencaststream.cpp`, fetched 2026-10-12). A GNOME 50.1 Mutter
+  `RecordVirtual` monitor reports `supported-color-modes [0]` (measured), while the physical DP-1
+  reports `[0, 2, 1]`. Linux virtual panes are SDR on both desktops; `UmbraCoopHdr=0` keeps the TV
+  pair SDR.
+- KDE ordinary streams are SDR, for the same KWin reason. GNOME ordinary HDR still works by
+  capturing an HDR-mode physical monitor.
+- X11 (Mint/Cinnamon) has no per-client virtual display. Streams run at the physical output's mode.
+
+Not yet done:
+
+- GNOME per-client virtual displays (Mutter `RecordVirtual` works for SDR, measured). GNOME still
+  captures the physical monitor through the portal.
+- The GPU HEVC co-op encoder still receives CPU pixels: two copies Windows avoids through D3D11
+  interop. Its per-frame cost is the shared encoder's (Windows records: 4.7-5.3 ms RTX 4070,
+  10.2-11.7 ms RX Vega).
+- AMD has not been run with this candidate (VEGA holds the RTX 2060 SUPER). This covers the VA-API
+  GPU-frame path, rusticl OpenCL for GPU HEVC and AMD+NVIDIA mixed co-op.
+- `BUILD_VERSION` still reads `v0.5.1-gpu-test`.
