@@ -52,6 +52,9 @@ modules:
   # CUDA toolkit: build-time only (cleanup "*" removes it from the bundle)
   - "modules/cuda.json"
 
+  # Source-built custom encoder, both depths and shared Windows kernels.
+  - "modules/umbra-gpu-hevc.json"
+
   - name: umbra
     builddir: true
     build-options:
@@ -75,6 +78,7 @@ modules:
       - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
       - -DCMAKE_CUDA_COMPILER=/app/cuda/bin/nvcc
       - -DCMAKE_CUDA_HOST_COMPILER=/app/gcc14/bin/g++
+      - -DSUNSHINE_GPU_HEVC_DIR=/app/lib/umbra/gpu-hevc
       - -DSUNSHINE_ENABLE_PORTAL=ON
       - -DSUNSHINE_ASSETS_DIR=share/sunshine
       - -DSUNSHINE_BUILD_FLATPAK=ON

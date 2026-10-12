@@ -1,0 +1,35 @@
+{
+  "name": "umbra-gpu-hevc",
+  "buildsystem": "simple",
+  "build-commands": [
+    "cmake -S x265/source -B x265-8 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=OFF -DENABLE_PIC=ON -DENABLE_SHARED=OFF -DENABLE_ASSEMBLY=OFF -DENABLE_CLI=OFF",
+    "cmake --build x265-8 --target x265-static -j4",
+    "cmake -S x265/source -B x265-10 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_PIC=ON -DENABLE_SHARED=OFF -DENABLE_ASSEMBLY=OFF -DENABLE_CLI=OFF",
+    "cmake --build x265-10 --target x265-static -j4",
+    "cmake -S gpu-hevc -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/app -DBUILD_LINUX_HOST_LIBS=ON -DOPENCL_HEADERS=\"$PWD/opencl\" -DX265_SOURCE=\"$PWD/x265\" -DX265_BUILD_8=\"$PWD/x265-8\" -DX265_BUILD_10=\"$PWD/x265-10\"",
+    "cmake --build build --target aurora_gpu_hevc8 aurora_gpu_hevc10 -j4",
+    "cmake --install build",
+    "install -Dm644 x265/COPYING /app/share/licenses/umbra-gpu-hevc/x265-COPYING",
+    "install -Dm644 opencl/LICENSE /app/share/licenses/umbra-gpu-hevc/OpenCL-Headers-LICENSE",
+    "install -Dm644 gpu-hevc/SOURCE-PROVENANCE.json /app/share/licenses/umbra-gpu-hevc/SOURCE-PROVENANCE.json"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://bitbucket.org/multicoreware/x265_git/get/b81f650e21e8aacbe6a9ad04ce14aefc05b932c0.tar.gz",
+      "sha256": "540de59b5004274f70a4fe229e86c7602d49b5b1a96112fd95a9dcdb5c9f1dc9",
+      "dest": "x265"
+    },
+    {
+      "type": "archive",
+      "url": "https://github.com/KhronosGroup/OpenCL-Headers/archive/386ca390b2f52efeb3e1a55a500690eb8013f60e.tar.gz",
+      "sha256": "310552b495dfd1bb9aa25ab9c5232a1dccbd6804304e2acb1740106a74e24b49",
+      "dest": "opencl"
+    },
+    {
+      "type": "dir",
+      "path": "../gpu-hevc",
+      "dest": "gpu-hevc"
+    }
+  ]
+}

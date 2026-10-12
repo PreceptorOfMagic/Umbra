@@ -1,0 +1,4 @@
+{
+  global: aghl_probe; aghl_open; aghl_encode; aghl_close;
+  local: *;
+};
