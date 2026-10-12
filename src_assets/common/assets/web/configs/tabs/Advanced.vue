@@ -99,6 +99,7 @@ const config = ref(props.config)
           <template #linux>
             <option value="nvfbc">NvFBC</option>
             <option value="wlr">wlroots</option>
+            <option value="portal">Desktop portal (Wayland / Flatpak)</option>
             <option value="kms">KMS</option>
             <option value="x11">X11</option>
           </template>

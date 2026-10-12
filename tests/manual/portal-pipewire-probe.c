@@ -18,6 +18,11 @@ static GVariant *response;
 static guint request_number;
 static gboolean stopped;
 static gint frames;
+static gint snapshot_requested;
+static gboolean request_snapshot(gpointer unused) {
+  g_atomic_int_set(&snapshot_requested,TRUE);
+  return G_SOURCE_CONTINUE;
+}
 
 
 static gboolean stop_probe(gpointer unused) {
@@ -119,7 +124,8 @@ static void on_process(void *data) {
       (uint64_t)(h-1)*stride+w*4>d->maxsize-d->chunk->offset){g_atomic_int_set(&failed,TRUE);stop_probe(NULL);goto out;}
   gint n=g_atomic_int_add(&frames,1)+1;
   static guint last_width,last_height;
-  if(n==1 || n%300==0 || w!=last_width || h!=last_height){
+  gboolean requested=g_atomic_int_compare_and_exchange(&snapshot_requested,TRUE,FALSE);
+  if(requested || n==1 || n%300==0 || w!=last_width || h!=last_height){
     last_width=w;last_height=h;
     printf("frame=%d size=%ux%u seq=%" G_GUINT64_FORMAT " pts=%" G_GINT64_FORMAT " stride=%d offset=%u\n",n,w,h,header?header->seq:0,header?header->pts:0,stride,d->chunk->offset);fflush(stdout);
     FILE *out=fopen("portal-frame.ppm","wb");
@@ -204,6 +210,7 @@ int main(int argc,char **argv) {
   if(fd<0)goto done;
   remote_fd=fd;remote_node=node;
   g_unix_signal_add(SIGUSR1,reconnect,NULL);
+  g_unix_signal_add(SIGUSR2,request_snapshot,NULL);
   if (argc==3) reconnect(NULL);
   else { puts("Capture deferred; send SIGUSR1 after configuring the output");fflush(stdout); }
   g_timeout_add_seconds(duration,stop_probe,NULL);g_timeout_add_seconds(5,stats,NULL);

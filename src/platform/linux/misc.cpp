@@ -363,12 +363,20 @@ std::string get_local_ip_for_gateway() {
     // Unimplemented
   }
 
+#ifdef SUNSHINE_BUILD_PORTAL
+  void portal_inhibit(bool active);
+#endif
+
   void streaming_will_start() {
-    // Nothing to do
+#ifdef SUNSHINE_BUILD_PORTAL
+    portal_inhibit(true);
+#endif
   }
 
   void streaming_will_stop() {
-    // Nothing to do
+#ifdef SUNSHINE_BUILD_PORTAL
+    portal_inhibit(false);
+#endif
   }
 
   void restart_on_exit() {
@@ -876,6 +884,9 @@ std::string get_local_ip_for_gateway() {
 #ifdef SUNSHINE_BUILD_X11
       X11,  ///< X11
 #endif
+#ifdef SUNSHINE_BUILD_PORTAL
+      PORTAL, ///< XDG ScreenCast / PipeWire
+#endif
       MAX_FLAGS  ///< The maximum number of flags
     };
   }  // namespace source
@@ -918,7 +929,17 @@ std::string get_local_ip_for_gateway() {
   }
 #endif
 
+#ifdef SUNSHINE_BUILD_PORTAL
+  bool portal_available();
+  void portal_shutdown();
+  std::vector<std::string> portal_display_names();
+  std::shared_ptr<display_t> portal_display(mem_type_e, const std::string &, const video::config_t &);
+#endif
+
   std::vector<std::string> display_names(mem_type_e hwdevice_type) {
+#ifdef SUNSHINE_BUILD_PORTAL
+    if (sources[source::PORTAL]) return portal_display_names();
+#endif
 #ifdef SUNSHINE_BUILD_CUDA
     // display using NvFBC only supports mem_type_e::cuda
     if (sources[source::NVFBC] && hwdevice_type == mem_type_e::cuda) {
@@ -953,6 +974,9 @@ std::string get_local_ip_for_gateway() {
   }
 
   std::shared_ptr<display_t> display(mem_type_e hwdevice_type, const std::string &display_name, const video::config_t &config) {
+#ifdef SUNSHINE_BUILD_PORTAL
+    if (sources[source::PORTAL]) return portal_display(hwdevice_type, display_name, config);
+#endif
 #ifdef SUNSHINE_BUILD_CUDA
     if (sources[source::NVFBC] && hwdevice_type == mem_type_e::cuda) {
       BOOST_LOG(info) << "Screencasting with NvFBC"sv;
@@ -1005,6 +1029,15 @@ std::string get_local_ip_for_gateway() {
     }
 #endif
 
+#ifdef SUNSHINE_BUILD_PORTAL
+    // A sandboxed Wayland client should use the desktop's consent broker.
+    // DRM enumeration alone does not establish permission to read scanout.
+    if (config::video.capture.empty() && window_system == window_system_e::WAYLAND &&
+        std::filesystem::exists("/.flatpak-info") && portal_available()) {
+      sources[source::PORTAL] = true;
+    }
+#endif
+
 #ifdef SUNSHINE_BUILD_CUDA
     if ((config::video.capture.empty() && sources.none()) || config::video.capture == "nvfbc") {
       if (verify_nvfbc()) {
@@ -1036,6 +1069,12 @@ std::string get_local_ip_for_gateway() {
     }
 #endif
 
+#ifdef SUNSHINE_BUILD_PORTAL
+    if ((config::video.capture.empty() && sources.none()) || config::video.capture == "portal") {
+      if (portal_available()) sources[source::PORTAL] = true;
+    }
+#endif
+
     if (sources.none()) {
       BOOST_LOG(error) << "Unable to initialize capture method"sv;
       return nullptr;
@@ -1045,7 +1084,14 @@ std::string get_local_ip_for_gateway() {
       BOOST_LOG(warning) << "Couldn't load EGL library"sv;
     }
 
+#ifdef SUNSHINE_BUILD_PORTAL
+    struct portal_deinit_t: deinit_t {
+      ~portal_deinit_t() override { portal_shutdown(); }
+    };
+    return std::make_unique<portal_deinit_t>();
+#else
     return std::make_unique<deinit_t>();
+#endif
   }
 
   class linux_high_precision_timer: public high_precision_timer {

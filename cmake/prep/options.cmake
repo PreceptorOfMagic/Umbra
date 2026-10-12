@@ -54,6 +54,8 @@ elseif(UNIX)  # Linux
             "Configure manifest file required for Flatpak build. Recommended to use with SUNSHINE_CONFIGURE_ONLY" OFF)
 
     # Linux capture methods
+    option(SUNSHINE_ENABLE_PORTAL
+            "Enable XDG desktop portal capture through PipeWire." ${SUNSHINE_BUILD_FLATPAK})
     option(SUNSHINE_ENABLE_CUDA
             "Enable cuda specific code." ON)
     option(SUNSHINE_ENABLE_DRM

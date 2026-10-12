@@ -129,6 +129,14 @@ if(LIBVA_FOUND)
             "${CMAKE_SOURCE_DIR}/src/platform/linux/vaapi.cpp")
 endif()
 
+# XDG portal / PipeWire (available in the Flatpak runtime; no host helper).
+if(SUNSHINE_ENABLE_PORTAL)
+    pkg_check_modules(PORTAL REQUIRED IMPORTED_TARGET gio-unix-2.0>=2.66 libpipewire-0.3>=0.3.40)
+    add_compile_definitions(SUNSHINE_BUILD_PORTAL)
+    list(APPEND PLATFORM_LIBRARIES PkgConfig::PORTAL)
+    list(APPEND PLATFORM_TARGET_FILES "${CMAKE_SOURCE_DIR}/src/platform/linux/portalgrab.cpp")
+endif()
+
 # wayland
 if(${SUNSHINE_ENABLE_WAYLAND})
     find_package(Wayland REQUIRED)
@@ -177,12 +185,13 @@ if(X11_FOUND)
             "${CMAKE_SOURCE_DIR}/src/platform/linux/x11grab.cpp")
 endif()
 
-if(NOT ${CUDA_FOUND}
+if(NOT SUNSHINE_ENABLE_PORTAL
+        AND NOT ${CUDA_FOUND}
         AND NOT ${WAYLAND_FOUND}
         AND NOT ${X11_FOUND}
         AND NOT (${LIBDRM_FOUND} AND ${LIBCAP_FOUND})
         AND NOT ${LIBVA_FOUND})
-    message(FATAL_ERROR "Couldn't find either cuda, wayland, x11, (libdrm and libcap), or libva")
+    message(FATAL_ERROR "Couldn't find either portal, cuda, wayland, x11, (libdrm and libcap), or libva")
 endif()
 
 # tray icon
