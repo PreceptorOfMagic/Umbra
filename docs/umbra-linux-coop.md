@@ -1,6 +1,6 @@
 # Linux Co-op Pane: Flatpak capture feasibility
 
-Status: **portal capture and KDE virtual-pane lifecycle implemented, under validation; not released** (2026-10-12).
+Status: **portal capture, KDE native virtual-pane capture and lifecycle implemented, under validation; not released** (2026-10-12). Current acceptance candidate: see the 21:15 section at the end.
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 
@@ -481,3 +481,52 @@ Both comparisons matched completely. This closes compilation and syntax
 regression coverage for that change; live Windows GPU/frame, mixed-host and
 performance parity are still separate gates. Evidence: private
 C:/Users/camer/umbra-linux-compat-20261012/windows-encoder/header-contract.
+
+## Acceptance fixes — 2026-10-12 21:15
+
+The user's TV run against the earlier candidate (bundle SHA256
+714f5e2a36ac6f215d072db85ab017c99e31bbe149ba8829998c635f45c7406f) failed twice: an HDR
+request ended in a network error, and starting co-op showed a desktop approval prompt. That
+bundle is superseded and must not be delivered. Fixes on `linux/coop`:
+
+- `138452e2`: a client that requests Rec2020 while the captured desktop is SDR. The custom
+  converter rejected BT2020 SDR, no frame was produced and the client reported a network error.
+  That path now converts and signals Rec709; true HDR capture remains HDR. Visible stream sizes
+  can be any even value from 64 to 8192: the coded frame is padded to 32 and the SPS signals a
+  conformance crop.
+- `e821638d`: the KDE co-op pane uses KWin's native `zkde_screencast_unstable_v1` virtual output.
+  The desktop file declares the interface and the Flatpak gets the user PipeWire socket, so the
+  portal picker never appears for co-op. KWin's normal per-application authorization applies;
+  there is no global permission bypass. Dispatch waits are bounded to 3s and Quit destroys the
+  output. Ordinary desktop capture still uses the portal and may need first-use monitor consent.
+- `73010ad9`: allow mode changes on Umbra-owned native output names. The old guard only accepted
+  the portal prefix and rejected the first native pane.
+- `9ed871b0`: recipe pins `73010ad9` and adds `--filesystem=xdg-run/pipewire-0`.
+
+Candidate `Umbra-0.5.1-linux-candidate-x86_64.flatpak`, SHA256
+9cc288f793423b4ea42f94088b2990d719e799ad5ad0ac224345759fe2714131 (identical to
+`Umbra-0.5.1-acceptance-fixes-2-x86_64.flatpak`); installed `/app/bin/sunshine` SHA256
+3b3cc8433b1dbbb1e22ec9646a7097c3b3672f2ec988675355ba1f3f5eead1a9, commit a8259f093ce2.
+
+Live checks on VEGA (Ubuntu 26.04.1, RTX 2060 SUPER, 595.99.02): real-time host encoding into a
+network probe and FIFO decoder. Each phase ran 25s at a requested 60fps. Source and decoded images
+were opened and read.
+
+| Run | Build | Frames | Result |
+|---|---|---:|---|
+| KDE SDR, 3840x2160 Main10, Rec2020 request | old 714f | 0 | Reproduced the colour rejection (expected negative) |
+| Same request | e821 | 1090 | BT709 decode at exact size, correct proportions; 2 IDRs, recovery 1 |
+| Custom Main8 1918x1078 | e821 | 1138 | Exact size, no padded strip or stretch |
+| Native KDE pane, HEVC8 1920x2176 | e821 | — | No prompt, but the mode guard rejected it; fixed in 73010 |
+| Native KDE pane, HEVC8 1920x2160 | 73010 | 291 | No prompt, exact mode, Quit removed the output |
+| Native KDE pane, custom Main8 1920x2176 | 73010 | 785 | No prompt; moving gears in source and decode; Quit removed the output |
+| Native pane Disconnect/Resume, 1920x2176 -> 2176x1920 | 73010 | 1720 | 4 IDRs, recovery 2; lifecycle without a picker |
+| Same, resumed-aspect visual (21:12) | 73010 | 1712 | Decoder reconfigured to 2176x1920; letterboxed landscape with round gears matching source window position |
+| GNOME automatic 3840x2160 Main10, true HDR | 73010 | 941 | HDR enabled, valid metadata; PQ pattern layout and aspect correct |
+
+All runs reported launch, cancel and failure counts of 0. Evidence:
+`~/umbra-flatpak/gpu-linux/acceptance-*` and `~/umbra-flatpak/vega/gnome/network-fixed-hdr-4k`.
+These are one-host checks, not TV presentation. They are not verdicts on mixed-host co-op, 165fps,
+latency or calibrated HDR. Linux virtual co-op is SDR. Mint 22.3 has not had the corrected
+candidate installed. TV, co-op, game, pad, audio, AMD/multi-GPU and Windows-parity acceptance are
+still outstanding.
