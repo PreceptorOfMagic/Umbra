@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>@PROJECT_FQDN@</id>
+
+  <name>@PROJECT_NAME@</name>
+  <summary>@PROJECT_BRIEF_DESCRIPTION@</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>@PROJECT_LICENSE@</project_license>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+    <control>gamepad</control>
+  </supports>
+
+  <url type="homepage">https://github.com/PreceptorOfMagic/Umbra</url>
+  <url type="bugtracker">https://github.com/PreceptorOfMagic/Umbra/issues</url>
+  <url type="vcs-browser">https://github.com/PreceptorOfMagic/Umbra</url>
+
+  <description>
+    <p>
+      @PROJECT_LONG_DESCRIPTION@
+    </p>
+    <p>
+      Umbra is based on Apollo, which is based on Sunshine by LizardByte. It is not affiliated with
+      or endorsed by LizardByte or the Apollo project.
+    </p>
+
+    <p>
+      On supported Wayland desktops, approve screen sharing in your desktop's normal permission
+      dialog. Remembered permission avoids repeating this step when the desktop supports it.
+      Virtual Co-op Pane support depends on the desktop's display controls.
+    </p>
+    <p>
+      Streamed keyboard, mouse and controller input may require one administrator-approved setup:
+      <code>flatpak run --command=additional-install.sh @PROJECT_FQDN@</code>.
+      Run Umbra as your normal desktop user.
+    </p>
+    <p>
+      The local configuration page uses a self-signed certificate. Confirm that the address is
+      your own streaming computer when accepting its certificate.
+    </p>
+  </description>
+
+  <releases>
+    <release version="@PROJECT_VERSION@" date="@PROJECT_YEAR@-@PROJECT_MONTH@-@PROJECT_DAY@">
+      <description>
+        <p>See the release notes on GitHub.</p>
+      </description>
+    </release>
+  </releases>
+
+  <developer id="io.github.PreceptorOfMagic">
+    <name>PreceptorOfMagic</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <launchable type="desktop-id">@PROJECT_FQDN@.desktop</launchable>
+</component>

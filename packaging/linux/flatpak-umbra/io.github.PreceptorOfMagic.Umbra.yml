@@ -1,0 +1,176 @@
+# Private development candidate. Not published or validated as a release.
+# CUDA12.9 + source-built GCC14 preserve pre-Turing targets on supported runtime25.08.
+app-id: io.github.PreceptorOfMagic.Umbra
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node22
+command: sunshine
+separate-locales: false
+finish-args:
+  - --device=all  # access all devices
+  - --env=PULSE_PROP_media.category=Manager  # allow the host to manage audio sinks
+  - --filesystem=home  # need to save files in user's home directory
+  - --share=ipc  # required for X11 shared memory extension
+  - --share=network  # access network
+  - --socket=pulseaudio  # play sounds using pulseaudio
+  - --socket=wayland  # show windows using Wayland
+  - --socket=fallback-x11  # show windows using X11
+  - --system-talk-name=org.freedesktop.Avahi  # talk to avahi on the system bus
+  - --talk-name=org.freedesktop.Flatpak  # talk to flatpak on the session bus
+
+cleanup:
+  - /gcc14
+  - /cuda
+  - /lib/debug/gcc14
+  - /lib/debug/cuda
+  - /lib/debug/source/gcc14-cuda-host
+  - /lib/debug/source/mpc-cuda-host
+  - /lib/debug/source/cuda
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /lib/*.la
+  - /lib/*.a
+  - /share/man
+
+modules:
+  - "modules/gcc14-cuda-host.json"
+  # Build dependencies
+  - "modules/nlohmann_json.json"
+
+  # Runtime dependencies
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+  - "modules/avahi.json"
+  - "modules/boost.json"
+  - "modules/libevdev.json"
+  - "modules/libnotify.json"
+  - "modules/miniupnpc.json"
+  - "modules/numactl.json"
+
+  # CUDA toolkit: build-time only (cleanup "*" removes it from the bundle)
+  - "modules/cuda.json"
+
+  - name: umbra
+    builddir: true
+    build-options:
+      append-path: /usr/lib/sdk/node22/bin
+      env:
+        BUILD_VERSION: "v0.5.1-portal-test"
+        BRANCH: "linux/coop"
+        COMMIT: "1a0a38c8a7b0b49907bf0ae833ae2e7f9d55ccda"
+        XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
+        npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
+        npm_config_nodedir: /usr/lib/sdk/node22
+        npm_config_offline: 'true'
+        NPM_CONFIG_LOGLEVEL: info
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DBOOST_USE_STATIC=OFF
+      - -DBUILD_DOCS=OFF
+      - -DBUILD_TESTS=OFF
+      - -DBUILD_WERROR=OFF
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DCMAKE_CUDA_COMPILER=/app/cuda/bin/nvcc
+      - -DCMAKE_CUDA_HOST_COMPILER=/app/gcc14/bin/g++
+      - -DSUNSHINE_ENABLE_PORTAL=ON
+      - -DSUNSHINE_ASSETS_DIR=share/sunshine
+      - -DSUNSHINE_BUILD_FLATPAK=ON
+      - -DSUNSHINE_EXECUTABLE_PATH=/app/bin/sunshine
+      - -DSUNSHINE_ENABLE_WAYLAND=ON
+      - -DSUNSHINE_ENABLE_X11=ON
+      - -DSUNSHINE_ENABLE_DRM=ON
+      - -DSUNSHINE_ENABLE_CUDA=ON
+      - -DAPOLLO_BETA_PROFILE=OFF
+    no-make-install: false
+    post-install:
+      - install -D $FLATPAK_BUILDER_BUILDDIR/packaging/linux/flatpak/scripts/* /app/bin
+      - install -D $FLATPAK_BUILDER_BUILDDIR/packaging/linux/flatpak/apps.json /app/share/sunshine/apps.json
+      - install -Dm644 $FLATPAK_BUILDER_BUILDDIR/LICENSE /app/share/licenses/io.github.PreceptorOfMagic.Umbra/LICENSE
+    sources:
+      - generated-sources.json
+      - type: git
+        # Development commit; publish only after the compatibility matrix passes.
+        url: "https://github.com/PreceptorOfMagic/Umbra.git"
+        branch: "linux/coop"
+        commit: "1a0a38c8a7b0b49907bf0ae833ae2e7f9d55ccda"
+        # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
+        # packaging/linux/flatpak/deps tools are not used by the build).
+        disable-submodules: true
+      # LizardByte/build-deps force-pushes its dist branch, so this pinned commit is no longer on any branch
+      # and git refuses to fetch it; GitHub still serves it as an archive (same commit, sha256-pinned).
+      - type: archive
+        url: "https://github.com/LizardByte/build-deps/archive/cf5dffaf4c62a5e5e2949c37b642cfc5ad962b98.tar.gz"
+        sha256: "84dfb94797eca7eefbbadebbc48e3acc024e1c698e96a7feae1087ed2e89f750"
+        dest: "third-party/build-deps"
+      - type: git
+        url: "https://github.com/LizardByte/doxyconfig.git"
+        commit: "a73f908fb70fac4f6076a28f0a751239ea5ac2d3"
+        dest: "third-party/doxyconfig"
+      - type: git
+        url: "https://github.com/google/googletest.git"
+        commit: "52eb8108c5bdec04579160ae17225d66034bd723"
+        dest: "third-party/googletest"
+      - type: git
+        url: "https://github.com/games-on-whales/inputtino.git"
+        commit: "83cf70ef33196a2a022671ccf8a686fc8f67ae8e"
+        dest: "third-party/inputtino"
+      - type: git
+        url: "https://github.com/LizardByte/libdisplaydevice.git"
+        commit: "a0674741ec9a5eea335cddc0e7002b9f50782909"
+        dest: "third-party/libdisplaydevice"
+      - type: git
+        url: "https://github.com/sleepybishop/nanors.git"
+        commit: "19f07b513e924e471cadd141943c1ec4adc8d0e0"
+        dest: "third-party/nanors"
+      - type: git
+        url: "https://github.com/FFmpeg/nv-codec-headers.git"
+        commit: "22441b505d9d9afc1e3002290820909846c24bdc"
+        dest: "third-party/nv-codec-headers"
+      - type: git
+        url: "https://github.com/LizardByte/nvapi-open-source-sdk.git"
+        commit: "cce4e90b629f712ae6eebafac97739bd1196cdef"
+        dest: "third-party/nvapi-open-source-sdk"
+      - type: git
+        url: "https://github.com/ClassicOldSong/Simple-Web-Server"
+        commit: "5b29c7004cc53252a8eff06d62899c8847ada971"
+        dest: "third-party/Simple-Web-Server"
+      - type: git
+        url: "https://github.com/michaeltyson/TPCircularBuffer.git"
+        commit: "cc520397504bb72bc6df79ff03eb72988a6dc50d"
+        dest: "third-party/TPCircularBuffer"
+      - type: git
+        url: "https://github.com/LizardByte/tray.git"
+        commit: "db96aeab04c4a62477ea5186f1c0d43183df0a98"
+        dest: "third-party/tray"
+      - type: git
+        url: "https://github.com/LizardByte/Virtual-Gamepad-Emulation-Client.git"
+        commit: "8d71f6740ffff4671cdadbca255ce528e3cd3fef"
+        dest: "third-party/ViGEmClient"
+      - type: git
+        url: "https://gitlab.freedesktop.org/wayland/wayland-protocols.git"
+        commit: "0091197f5c1b1f2c131f1410e99f9c95d50646be"
+        dest: "third-party/wayland-protocols"
+      - type: git
+        url: "https://gitlab.freedesktop.org/wlroots/wlr-protocols.git"
+        commit: "a5028afbe4a1cf0daf020c4104c1565a09d6e58a"
+        dest: "third-party/wlr-protocols"
+      - type: git
+        url: "https://github.com/ClassicOldSong/moonlight-common-c"
+        commit: "ad329b240f18826f320ce6a99226b36354b86b59"
+        dest: "third-party/moonlight-common-c"
+      - type: file
+        path: package-lock.json
+      - type: file
+        path: io.github.PreceptorOfMagic.Umbra.metainfo.xml
+      # Flatpak identity only: give the project its own app id and metainfo. Each step fails the
+      # build if the 0.5.0 tree is not what it expects.
+      - type: shell
+        commands:
+          - grep -qx 'set(PROJECT_FQDN "dev.lizardbyte.app.Sunshine")' CMakeLists.txt
+          - sed -i 's|^set(PROJECT_FQDN "dev.lizardbyte.app.Sunshine")$|set(PROJECT_FQDN "io.github.PreceptorOfMagic.Umbra")|' CMakeLists.txt
+          - grep -qx 'set(PROJECT_FQDN "io.github.PreceptorOfMagic.Umbra")' CMakeLists.txt
+          - mv packaging/linux/flatpak/dev.lizardbyte.app.Sunshine.desktop packaging/linux/flatpak/io.github.PreceptorOfMagic.Umbra.desktop
+          - mv io.github.PreceptorOfMagic.Umbra.metainfo.xml packaging/linux/io.github.PreceptorOfMagic.Umbra.metainfo.xml

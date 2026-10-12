@@ -198,5 +198,5 @@ scaling, negative desktop origins and game placement remain open.
 
 The graphical Flatpak launcher now offers input setup, with defer/retry and an Input Setup desktop
 action. Denied host access and cancellation of the actual desktop polkit prompt both displayed
-failure without creating the host rule/unit. Successful privileged setup, first-run deferral,
+failure without creating the host rule/unit. First-run deferral and explicit reopening were also measured. Successful privileged setup,
 autostart and uninstall still need validation. The service bypasses interactive setup.

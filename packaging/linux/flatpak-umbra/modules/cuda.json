@@ -1,0 +1,50 @@
+{
+  "name": "cuda",
+  "buildsystem": "simple",
+  "build-options": {
+    "no-debuginfo": true
+  },
+  "cleanup": [
+    "*"
+  ],
+  "build-commands": [
+    "mkdir -p /app/cuda",
+    "cp -a nvcc/. /app/cuda/",
+    "cp -a cudart/. /app/cuda/",
+    "cp -a cccl/. /app/cuda/",
+    "ln -s lib /app/cuda/lib64"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.9.86-archive.tar.xz",
+      "sha256": "7a1a5b652e5ef85c82b721d10672fc9a2dbaab44e9bd3c65a69517bf53998c35",
+      "dest": "nvcc",
+      "only-arches": [
+        "x86_64"
+      ]
+    },
+    {
+      "type": "archive",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.9.79-archive.tar.xz",
+      "sha256": "1f6ad42d4f530b24bfa35894ccf6b7209d2354f59101fd62ec4a6192a184ce99",
+      "dest": "cudart",
+      "only-arches": [
+        "x86_64"
+      ]
+    },
+    {
+      "type": "archive",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.9.27-archive.tar.xz",
+      "sha256": "8b1a5095669e94f2f9afd7715533314d418179e9452be61e2fde4c82a3e542aa",
+      "dest": "cccl",
+      "only-arches": [
+        "x86_64"
+      ]
+    },
+    {
+      "type": "patch",
+      "path": "cuda-glibc242.patch"
+    }
+  ]
+}

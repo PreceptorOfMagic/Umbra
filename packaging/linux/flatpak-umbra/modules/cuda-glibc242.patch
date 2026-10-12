@@ -1,0 +1,20 @@
+--- a/nvcc/include/crt/math_functions.h
++++ b/nvcc/include/crt/math_functions.h
+@@ -597 +597 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 rsqrt(double x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 rsqrt(double x) noexcept (true);
+@@ -621 +621 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  rsqrtf(float x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  rsqrtf(float x) noexcept (true);
+@@ -2556 +2556 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 sinpi(double x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 sinpi(double x) noexcept (true);
+@@ -2579 +2579 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  sinpif(float x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  sinpif(float x) noexcept (true);
+@@ -2601 +2601 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 cospi(double x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ double                 cospi(double x) noexcept (true);
+@@ -2623 +2623 @@
+-extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  cospif(float x);
++extern __DEVICE_FUNCTIONS_DECL__ __device_builtin__ float                  cospif(float x) noexcept (true);

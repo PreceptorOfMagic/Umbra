@@ -1,0 +1,58 @@
+{
+  "name": "gcc14-cuda-host",
+  "buildsystem": "autotools",
+  "no-autogen": true,
+  "builddir": true,
+  "build-options": {
+    "no-debuginfo": true,
+    "cflags": "-O2 -pipe",
+    "cxxflags": "-O2 -pipe"
+  },
+  "config-opts": [
+    "--prefix=/app/gcc14",
+    "--enable-languages=c,c++",
+    "--disable-bootstrap",
+    "--disable-multilib",
+    "--disable-nls",
+    "--disable-libsanitizer",
+    "--disable-libquadmath",
+    "--disable-libgomp",
+    "--disable-libssp",
+    "--disable-libvtv",
+    "--disable-lto",
+    "--without-isl",
+    "--with-system-zlib",
+    "--with-mpc=/app/gcc14"
+  ],
+  "cleanup": [
+    "*"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://ftp.gnu.org/gnu/gcc/gcc-14.4.0/gcc-14.4.0.tar.xz",
+      "sha256": "752b6f567beac83159c77a7680b1316bdd784738bff9a9d070112c09da90f6d9"
+    }
+  ],
+  "modules": [
+    {
+      "name": "mpc-cuda-host",
+      "buildsystem": "autotools",
+      "config-opts": [
+        "--prefix=/app/gcc14",
+        "--disable-shared",
+        "--enable-static"
+      ],
+      "cleanup": [
+        "*"
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz",
+          "sha256": "ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8"
+        }
+      ]
+    }
+  ]
+}

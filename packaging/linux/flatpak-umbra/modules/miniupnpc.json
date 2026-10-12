@@ -1,0 +1,33 @@
+{
+  "name": "miniupnpc",
+  "buildsystem": "cmake-ninja",
+  "builddir": true,
+  "config-opts": [
+    "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+    "-DUPNPC_BUILD_STATIC=OFF",
+    "-DUPNPC_BUILD_SHARED=ON",
+    "-DUPNPC_BUILD_TESTS=OFF",
+    "-DUPNPC_BUILD_SAMPLE=OFF"
+  ],
+  "sources": [
+    {
+      "url": "https://miniupnp.tuxfamily.org/files/miniupnpc-2.3.3.tar.gz",
+      "sha256": "d52a0afa614ad6c088cc9ddff1ae7d29c8c595ac5fdd321170a05f41e634bd1a",
+      "x-checker-data": {
+        "type": "anitya",
+        "project-id": 1986,
+        "stable-only": true,
+        "url-template": "https://miniupnp.tuxfamily.org/files/miniupnpc-$version.tar.gz"
+      },
+      "type": "archive"
+    }
+  ],
+  "cleanup": [
+    "/share/man",
+    "/lib/pkgconfig",
+    "/lib/libminiupnpc.so",
+    "/lib/cmake",
+    "/include",
+    "/bin/external-ip.sh"
+  ]
+}
