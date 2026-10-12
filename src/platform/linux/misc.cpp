@@ -931,6 +931,7 @@ std::string get_local_ip_for_gateway() {
 
 #ifdef SUNSHINE_BUILD_PORTAL
   bool portal_available();
+  bool portal_virtual_active();
   void portal_shutdown();
   std::vector<std::string> portal_display_names();
   std::shared_ptr<display_t> portal_display(mem_type_e, const std::string &, const video::config_t &);
@@ -938,7 +939,7 @@ std::string get_local_ip_for_gateway() {
 
   std::vector<std::string> display_names(mem_type_e hwdevice_type) {
 #ifdef SUNSHINE_BUILD_PORTAL
-    if (sources[source::PORTAL]) return portal_display_names();
+    if (sources[source::PORTAL] || portal_virtual_active()) return portal_display_names();
 #endif
 #ifdef SUNSHINE_BUILD_CUDA
     // display using NvFBC only supports mem_type_e::cuda
@@ -975,7 +976,7 @@ std::string get_local_ip_for_gateway() {
 
   std::shared_ptr<display_t> display(mem_type_e hwdevice_type, const std::string &display_name, const video::config_t &config) {
 #ifdef SUNSHINE_BUILD_PORTAL
-    if (sources[source::PORTAL]) return portal_display(hwdevice_type, display_name, config);
+    if (sources[source::PORTAL] || portal_virtual_active()) return portal_display(hwdevice_type, display_name, config);
 #endif
 #ifdef SUNSHINE_BUILD_CUDA
     if (sources[source::NVFBC] && hwdevice_type == mem_type_e::cuda) {

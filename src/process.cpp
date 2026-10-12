@@ -39,6 +39,10 @@
 #include "wired_pin.h"
 #include "uuid.h"
 
+#ifdef SUNSHINE_BUILD_PORTAL
+  #include "platform/linux/portal.h"
+#endif
+
 #ifdef _WIN32
   // from_utf8() string conversion function
   #include "platform/windows/misc.h"
@@ -55,6 +59,19 @@ namespace proc {
   namespace pt = boost::property_tree;
 
   proc_t proc;
+
+#ifdef SUNSHINE_BUILD_PORTAL
+  static bool prepare_linux_pane(int width, int height, int milli_hz, bool coop) {
+    if (width < 64 || width > 8192 || height < 64 || height > 8192 || width % 2 || height % 2) return false;
+    if (!milli_hz) milli_hz = 60000;
+    if (milli_hz < 1000) milli_hz *= 1000;
+    if (milli_hz < 1000 || milli_hz > 360000) return false;
+    if (config::video.double_refreshrate) milli_hz *= 2;
+    const int pad = coop ? config::video.coop_pad_rows : 0;
+    if (pad > 0 && pad % 16 == 0 && 2 * pad < height / 2) height -= 2 * pad;
+    return platf::portal_prepare_virtual(width, height, milli_hz);
+  }
+#endif
 
   int input_only_app_id = -1;
   std::string input_only_app_id_str;
@@ -86,6 +103,8 @@ namespace proc {
   bool coop_pane_supported() {
 #ifdef _WIN32
     return vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK;
+#elif defined(SUNSHINE_BUILD_PORTAL)
+    return platf::portal_coop_supported();
 #else
     // Linux capture support alone does not provide a virtual Co-op Pane.
     return false;
@@ -409,7 +428,19 @@ namespace proc {
     }
 
 #else
-
+#ifdef SUNSHINE_BUILD_PORTAL
+    if (launch_session->virtual_display || _app.virtual_display) {
+      if (launch_session->aurora_gpu_hevc ||
+          !prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop)) {
+        BOOST_LOG(error) << "The desktop could not create the requested virtual pane.";
+        return 503;
+      }
+      this->virtual_display = true;
+      launch_session->virtual_display = true;
+      this->display_name = "portal";
+      config::video.output_name = "portal";
+    }
+#endif
     display_device::configure_display(config::video, *launch_session);
 
 #endif
@@ -740,6 +771,15 @@ namespace proc {
     _env["APOLLO_CLIENT_RENDER_HEIGHT"] = std::to_string(session.height);
     BOOST_LOG(info) << "[AURORA-GPU-HEVC] resumed virtual display verified "
       << mode.dmPelsWidth << "x" << mode.dmPelsHeight;
+#elif defined(SUNSHINE_BUILD_PORTAL)
+    if (session.aurora_gpu_hevc || !prepare_linux_pane(session.width, session.height, session.fps, session.umbra_coop)) return false;
+    config::video.output_name = "portal";
+    _env["SUNSHINE_CLIENT_WIDTH"] = std::to_string(session.width);
+    _env["APOLLO_CLIENT_WIDTH"] = std::to_string(session.width);
+    _env["SUNSHINE_CLIENT_HEIGHT"] = std::to_string(session.height);
+    _env["APOLLO_CLIENT_HEIGHT"] = std::to_string(session.height);
+    _env["APOLLO_CLIENT_RENDER_WIDTH"] = std::to_string(session.width);
+    _env["APOLLO_CLIENT_RENDER_HEIGHT"] = std::to_string(session.height);
 #endif
     return true;
   }
@@ -889,6 +929,9 @@ namespace proc {
     wired_pin::revert();   // Umbra: the session's wired pin, if any
 
     bool has_run = _app_id > 0;
+#ifdef SUNSHINE_BUILD_PORTAL
+    platf::portal_release_virtual();
+#endif
 
 #ifdef _WIN32
     // Revert HDR state
@@ -1629,7 +1672,7 @@ namespace proc {
       apps.emplace_back(std::move(ctx));
     }
 
-  #ifdef _WIN32
+  #if defined(_WIN32) || defined(SUNSHINE_BUILD_PORTAL)
     /* Umbra: THE CO-OP PANE IS BUILT IN, so a user never creates it. Eclipse's co-op launches
        an app named exactly "Co-op Pane" on both hosts. Shipped only in the default apps.json it
        existed on a FRESH install alone -- an upgrade keeps its old apps.json -- and a user could

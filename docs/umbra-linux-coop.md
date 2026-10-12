@@ -1,6 +1,6 @@
 # Linux Co-op Pane: Flatpak capture feasibility
 
-Status: **portal capture backend implemented and under validation; Linux Co-op Pane is not implemented or released** (2026-10-12).
+Status: **portal capture and KDE virtual-pane lifecycle implemented, under validation; not released** (2026-10-12).
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 
@@ -36,8 +36,9 @@ on runtime 23.08 captured the resized screen correctly.
 ## Protocol and implementation boundaries
 
 - [XDG ScreenCast](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html)
-  defines source type 4 as a virtual monitor and returns a PipeWire remote fd. First consent must
-  remain the normal desktop prompt; persistent permission and token rotation still need testing.
+  defines source type 4 as a virtual monitor and returns a PipeWire remote fd. First consent remains
+  the normal desktop prompt. Monitor and virtual permissions have both restored without further input
+  in repeated processes on the tested KDE desktop; revocation still needs testing.
 - KWin's direct screencast interface is filtered for sandboxed clients in its
   [interface policy](https://invent.kde.org/plasma/kwin/-/blob/Plasma/6.6/src/wayland_server.cpp).
   Porting a native KWin capturer alone is insufficient for the Flatpak.
@@ -46,15 +47,16 @@ on runtime 23.08 captured the resized screen correctly.
   (`tests/manual/kde-mode-probe.c`) successfully selects and creates custom modes through KDE's
   output-management protocol **inside the existing Flatpak permissions**. It limits changes to the
   exact Umbra portal output, places it beside existing outputs, and checks `current_mode` after
-  `applied`. Inspected captures show gears at3840x1080 and1920x2160; no physical output was disabled.
-  This controller still needs a production implementation with bounded dispatch, ownership and
-  topology checks. These KDE protocols are private/versioned, not a promise of support on GNOME.
+  `applied`. Inspected captures show gears at 3840x1080 and 1920x2160; no physical output was disabled.
+  The host now includes a bounded controller restricted to that exact virtual output;
+  it checks protocol versions, current mode and applied placement. These KDE protocols are private/versioned, not a promise of support on GNOME.
 - The prototype uses MemFd, not DMA-BUF or an encoder. Production capture should reuse an audited
   PipeWire backend, preserve buffer ownership, handle format changes, and verify hardware encoding.
   The new host backend uses the measured MemFd path with an owned copy per frame. It has not yet
   established DMA-BUF or hardware-encoder performance.
-- Linux currently has no built-in Co-op Pane. `proc::coop_pane_supported()` must remain false there
-  until a usable implementation exists. Co-op and GPU-HEVC capability bits cannot advertise a plan.
+- The private development host exposes its built-in Co-op Pane only inside Umbra Flatpak when the
+  portal offers virtual sources and the required KDE output protocols are present. Other Linux
+  desktops leave that capability clear. Linux GPU-HEVC remains unsupported.
 
 ## Manual diagnostic
 
@@ -105,7 +107,7 @@ A monitor run with the desktop asleep produced BLACK pixels despite valid buffer
 motion evidence. Waking the display before the repeat produced visibly correct gears. The host now
 requests XDG Inhibit(suspend|idle) only while streams are active, releases it on the last stream's
 stop and shutdown, and does not block logout/user switching. KDE's ActiveInhibitions reports
-Umbra's sleep:idle request. A100-second run kept real gears visible at the end (inspected), then
+Umbra's sleep:idle request. A 100-second run kept real gears visible at the end (inspected), then
 ActiveInhibitions returned empty and all owned capture/render processes stopped.
 
 The standalone mode diagnostic requires the two pinned KDE XML files under `tests/manual/protocols`.
@@ -115,10 +117,53 @@ C source plus the generated C files against wayland-client. With no arguments it
 physical outputs, unsupported protocol versions and ambiguous matching outputs. It is not installed
 as an end-user helper. The XML is MIT-CMU, retained unchanged from plasma-wayland-protocols v1.20.0.
 
+## Virtual-pane lifecycle validation
+
+The actual host capture/controller classes, built with SDK 23.08 and run in the installed Umbra
+sandbox, created 1920x2160@165, captured real gears, destroyed capture while retaining permission,
+changed to 3840x1080@120 and captured real gears again. Both saved images were inspected. The second
+process restored virtual-screen permission without input. Releasing the session removed the virtual
+output; DP-1 remained enabled at 1920x1080@60. All owned gears/capture processes were stopped.
+
+That sequence caught a reconnect bug: duplicating the first PipeWire socket worked only once.
+Each new capture core now calls OpenPipeWireRemote for a new connection. The same lifecycle test
+then passed with 744 tall and 974 wide buffers in 18-second phases. These are capture checks, not
+an encoder benchmark, end-to-end frame-rate claim or TV verdict. The full host test below followed.
+
+Host launch and co-op resume request the client's geometry; Quit releases the virtual session.
+Normal discovery only reads capabilities and never opens a consent picker. The mode controller
+changes only the exact portal-created Umbra output, preserving physical outputs. Game placement,
+full session behavior and fractional-scale pointer routing remain to be verified.
+
+## Full host / client check (2026-10-12)
+
+The full CUDA-enabled host built with the existing SDK 23.08 dependencies and ran as an ordinary
+user inside the installed Umbra Flatpak sandbox on VEGA. H.264 and HEVC NVENC probes succeeded.
+Eclipse 1.3.4 on an isolated Xvfb client received live HEVC/SDR desktop video. Inspected captures
+showed gears; a streamed mouse drag moved their window. Disconnect and Resume restored video.
+
+A temporary separate apps.json added a virtual-screen test app; the installed apps.json was kept.
+Launching it created the portal output beside DP-1 and streamed its live contents. A screenshot
+at 61 seconds showed gears. Disconnect retained the output, Resume restored HEVC video without
+new consent, and a deliberate host-side window movement was visible on the client. Quit removed
+only the virtual output. Active idle inhibitors were empty after teardown. No owned renderer,
+host, client or Xvfb remained. This tests the virtual-display host path; it is NOT a two-host
+co-op splice, geometry-changing co-op resume or TV verdict. Virtual-screen pointer routing is
+still unverified (the ordinary desktop mouse test does not cover that offset).
+
+The TV was reachable by developer SSH, but the remote-control websocket rejected the connection
+(code1008). No TV stream or TV quality verdict was claimed. The inherited native X11 startup
+heap abort also reproduced with the pre-portal baseline binary; its cause remains OPEN. The
+XInitThreads experiment did not fix it and was reverted. CUDA's existing CPU upload path rejected
+10-bit/P010, and /dev/uhid permissions disabled DualSense emulation on this host. These remain
+release limitations, not passing test results. The inherited pairing unit tests still fail to
+compile against the existing Umbra API; the production target built with BUILD_TESTS=OFF.
+Standalone manual diagnostics are excluded from the unit-test source glob.
+
 ## Release requirements still open
 
-1. Integrate virtual-pane creation, its in-sandbox mode controller, placement, Disconnect/resume
-   and Quit cleanup with the actual host session lifecycle. Co-op caps stay clear until this works.
+1. Validate the integrated virtual pane through actual host launch, Disconnect/resume and Quit,
+   plus game placement. The development build is not yet a release candidate.
 2. Validate hardware encoding and optimize capture throughput, then run live Eclipse/TV tests with
    inspected screenshots. The observed virtual capture is around60fps, not a proven165fps path.
 3. Replace freedesktop23.08 for release: Flathub metadata on2026-10-12 marks it end-of-life. CUDA12.6's

@@ -153,6 +153,15 @@ if(WAYLAND_FOUND)
         pkg_check_modules(WAYLAND_PROTOCOLS wayland-protocols REQUIRED)
     endif()
 
+    if(SUNSHINE_ENABLE_PORTAL)
+        GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-device-v2)
+        GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-management-v2)
+        add_compile_definitions(SUNSHINE_BUILD_KDE_OUTPUT)
+        list(APPEND PLATFORM_TARGET_FILES "${CMAKE_SOURCE_DIR}/src/platform/linux/kde-output.c")
+        set_source_files_properties("${CMAKE_SOURCE_DIR}/src/platform/linux/kde-output.c"
+                PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
+    endif()
+
     GEN_WAYLAND("${WAYLAND_PROTOCOLS_DIR}" "unstable/xdg-output" xdg-output-unstable-v1)
     GEN_WAYLAND("${WAYLAND_PROTOCOLS_DIR}" "unstable/linux-dmabuf" linux-dmabuf-unstable-v1)
     GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/wlr-protocols" "unstable" wlr-screencopy-unstable-v1)

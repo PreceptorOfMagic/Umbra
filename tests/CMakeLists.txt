@@ -41,6 +41,8 @@ list(APPEND TEST_DEFINITIONS SUNSHINE_TESTS)
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_SOURCE_DIR}/tests/*.h
         ${CMAKE_SOURCE_DIR}/tests/*.cpp)
+# Standalone live diagnostics provide their own main and adapters.
+list(FILTER TEST_SOURCES EXCLUDE REGEX "/manual/")
 
 set(SUNSHINE_SOURCES
         ${SUNSHINE_TARGET_FILES})

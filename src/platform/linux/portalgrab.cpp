@@ -22,6 +22,10 @@
 #include "src/platform/common.h"
 #include "src/video.h"
 #include "src/globals.h"
+#include "portal.h"
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+#include "kde-output.h"
+#endif
 
 using namespace std::literals;
 
@@ -33,7 +37,6 @@ namespace portal {
   class session_t {
   public:
     ~session_t() {
-      if (fd >= 0) close(fd);
       if (bus && !handle.empty()) {
         auto reply = g_dbus_connection_call_sync(bus, service, handle.c_str(),
           "org.freedesktop.portal.Session", "Close", nullptr, nullptr,
@@ -43,7 +46,8 @@ namespace portal {
       if (bus) g_object_unref(bus);
     }
 
-    bool open() {
+    bool open(uint32_t requested_type = 1) {
+      source_type = requested_type;
       // Each caller uses its own context: the tray's GLib loop must not receive
       // callbacks whose stack storage belongs to the encoder-probe thread.
       auto context = g_main_context_new();
@@ -55,8 +59,8 @@ namespace portal {
       bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
       if (!bus) return false;
       const auto version = property("version");
-      if (!(property("AvailableSourceTypes") & 1)) return false;
-      auto token_path = platf::appdata() / "portal-monitor-token";
+      if (!(property("AvailableSourceTypes") & source_type)) return false;
+      auto token_path = platf::appdata() / (source_type == 4 ? "portal-virtual-token" : "portal-monitor-token");
       // Tokens are backend specific. A desktop switch must get fresh consent.
       if (const char *desktop = std::getenv("XDG_CURRENT_DESKTOP")) {
         std::string suffix(desktop);
@@ -72,7 +76,9 @@ namespace portal {
       }
       GVariantBuilder options;
       g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
-      g_variant_builder_add(&options, "{sv}", "session_handle_token", g_variant_new_string("umbra_monitor"));
+      static std::atomic<uint64_t> session_number {0};
+      const auto session_token = "umbra_session_" + std::to_string(++session_number);
+      g_variant_builder_add(&options, "{sv}", "session_handle_token", g_variant_new_string(session_token.c_str()));
       auto response = request("CreateSession", options, context);
       if (!response) return false;
       const char *session_handle = nullptr;
@@ -81,7 +87,7 @@ namespace portal {
       if (handle.empty()) return false;
 
       g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
-      g_variant_builder_add(&options, "{sv}", "types", g_variant_new_uint32(1));
+      g_variant_builder_add(&options, "{sv}", "types", g_variant_new_uint32(source_type));
       g_variant_builder_add(&options, "{sv}", "multiple", g_variant_new_boolean(false));
       if (property("AvailableCursorModes") & 2)
         g_variant_builder_add(&options, "{sv}", "cursor_mode", g_variant_new_uint32(2));
@@ -109,6 +115,12 @@ namespace portal {
       if (g_variant_n_children(streams) != 1) return false;
       GVariant *properties;
       g_variant_get_child(streams, 0, "(u@a{sv})", &node, &properties);
+      uint32_t returned_type = 0;
+      g_variant_lookup(properties, "source_type", "u", &returned_type);
+      if (source_type == 4 && returned_type != 4) {
+        g_variant_unref(properties);
+        return false;
+      }
       g_variant_lookup(properties, "position", "(ii)", &x, &y);
       g_variant_lookup(properties, "size", "(ii)", &width, &height);
       g_variant_unref(properties);
@@ -121,22 +133,29 @@ namespace portal {
           g_error_free(error);
         }
       }
+      return node != PW_ID_ANY;
+    }
+
+    // Each PipeWire core needs its own connection. dup() shares the same socket
+    // protocol state and cannot reconnect after an encoder probe destroys its core.
+    int open_remote() {
+      GVariantBuilder options;
       g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
       GUnixFDList *fds = nullptr;
       auto reply = g_dbus_connection_call_with_unix_fd_list_sync(bus, service, path, interface,
         "OpenPipeWireRemote", g_variant_new("(oa{sv})", handle.c_str(), &options), G_VARIANT_TYPE("(h)"),
         G_DBUS_CALL_FLAGS_NONE, 10000, nullptr, &fds, nullptr, nullptr);
-      if (!reply) return false;
+      if (!reply) return -1;
       int index;
       g_variant_get(reply, "(h)", &index);
-      fd = g_unix_fd_list_get(fds, index, nullptr);
-      g_object_unref(fds);
+      int fd = fds ? g_unix_fd_list_get(fds, index, nullptr) : -1;
+      if (fds) g_object_unref(fds);
       g_variant_unref(reply);
-      return fd >= 0;
+      return fd;
     }
 
-    int fd = -1, x = 0, y = 0, width = 0, height = 0;
-    uint32_t node = PW_ID_ANY;
+    int x = 0, y = 0, width = 0, height = 0;
+    uint32_t node = PW_ID_ANY, source_type = 1;
 
   private:
     GDBusConnection *bus = nullptr;
@@ -269,7 +288,7 @@ namespace portal {
       if (!loop) return false;
       context = pw_context_new(pw_thread_loop_get_loop(loop), nullptr, 0);
       if (!context) return false;
-      int fd = dup(session->fd);
+      int fd = session->open_remote();
       if (fd < 0) return false;
       core = pw_context_connect_fd(context, fd, nullptr, 0); // PipeWire takes fd ownership, including failure.
       if (!core) return false;
@@ -288,9 +307,10 @@ namespace portal {
             static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS), params, 1) < 0 ||
           pw_thread_loop_start(loop) < 0) return false;
       std::unique_lock lock(mutex);
-      if (!changed.wait_for(lock, 5s, [&] { return failed || sequence; }) || failed) return false;
-      width = negotiated_width;
-      height = negotiated_height;
+      if (!changed.wait_for(lock, 5s, [&] { return failed || (sequence && (session->source_type != 4 ||
+            (frame_width == session->width && frame_height == session->height))); }) || failed) return false;
+      width = frame_width;
+      height = frame_height;
       offset_x = session->x;
       offset_y = session->y;
       env_width = offset_x + width;
@@ -377,6 +397,7 @@ namespace portal {
     std::condition_variable changed;
     std::vector<uint8_t> latest;
     int negotiated_width = 0, negotiated_height = 0;
+    int frame_width = 0, frame_height = 0;
     uint64_t sequence = 0;
     bool failed = false, streaming = false, initialized = false;
     std::chrono::steady_clock::time_point timestamp;
@@ -454,6 +475,8 @@ namespace portal {
           static_cast<uint8_t *>(d.data) + d.chunk->offset + size_t(row) * d.chunk->stride, w * 4);
       // Arrival time shares the host steady clock. Do not mix compositor PTS
       // into latency accounting without verifying its clock mapping.
+      self.frame_width = w;
+      self.frame_height = h;
       self.timestamp = std::chrono::steady_clock::now();
       ++self.sequence;
       self.changed.notify_all();
@@ -505,6 +528,63 @@ namespace platf {
       }
       g_clear_object(&inhibit_bus);
     }
+  }
+
+  bool portal_virtual_active() {
+    std::lock_guard lock(portal::session_mutex);
+    return portal::active_session && portal::active_session->source_type == 4;
+  }
+
+  void portal_release_virtual() {
+    std::lock_guard lock(portal::session_mutex);
+    if (portal::active_session && portal::active_session->source_type == 4) portal::active_session.reset();
+  }
+
+  bool portal_prepare_virtual(int width, int height, int milli_hz) {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    if (!portal_coop_supported() || width < 64 || width > 8192 || height < 64 || height > 8192 ||
+        width % 2 || height % 2 || milli_hz < 1000 || milli_hz > 360000) return false;
+    std::lock_guard lock(portal::session_mutex);
+    auto session = portal::active_session;
+    if (!session || session->source_type != 4) {
+      session = std::make_shared<portal::session_t>();
+      if (!session->open(4)) return false;
+    }
+    const char *app_id = std::getenv("FLATPAK_ID");
+    if (!app_id) return false;
+    std::string output = "Virtual-virtual-xdp-kde-"s + app_id;
+    if (!umbra_kde_output_resize(output.c_str(), width, height, milli_hz, &session->x, &session->y)) return false;
+    session->width = width;
+    session->height = height;
+    portal::active_session = std::move(session);
+    BOOST_LOG(info) << "Portal virtual pane verified: " << width << 'x' << height << " @ " << milli_hz << " mHz";
+    return true;
+#else
+    return false;
+#endif
+  }
+
+  bool portal_coop_supported() {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    const char *app_id = std::getenv("FLATPAK_ID");
+    if (!app_id || std::strcmp(app_id, "io.github.PreceptorOfMagic.Umbra") || !std::getenv("WAYLAND_DISPLAY")) return false;
+    // This read-only query must not open a picker during server discovery.
+    auto bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
+    if (!bus) return false;
+    auto reply = g_dbus_connection_call_sync(bus, portal::service, portal::path, "org.freedesktop.DBus.Properties",
+      "Get", g_variant_new("(ss)", portal::interface, "AvailableSourceTypes"), G_VARIANT_TYPE("(v)"),
+      G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, nullptr);
+    g_object_unref(bus);
+    if (!reply) return false;
+    GVariant *value;
+    g_variant_get(reply, "(v)", &value);
+    bool available = g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32) && (g_variant_get_uint32(value) & 4);
+    g_variant_unref(value);
+    g_variant_unref(reply);
+    return available && umbra_kde_output_supported();
+#else
+    return false;
+#endif
   }
 
   bool portal_available() {
