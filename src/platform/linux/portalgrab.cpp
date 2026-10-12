@@ -4,6 +4,7 @@
  * returning it; an encoder must never retain a pointer into a requeued buffer.
  */
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <condition_variable>
 #include <cstring>
@@ -35,6 +36,7 @@
 
 using namespace std::literals;
 
+#include "gnome-capture.h"
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
 #include "kde-capture.h"
 #endif
@@ -56,10 +58,11 @@ namespace portal {
       if (bus) g_object_unref(bus);
     }
 
-    bool open(uint32_t requested_type = 1, int virtual_width = 1920, int virtual_height = 1080) {
+    bool open(uint32_t requested_type = 1, int virtual_width = 1920, int virtual_height = 1080, int virtual_milli_hz = 60000) {
       source_type = requested_type;
+      milli_hz = virtual_milli_hz;
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
-      if (source_type == 4) {
+      if (source_type == 4 && kde_virtual_t().available()) {
         native = std::make_unique<kde_virtual_t>();
         if (!native->open(virtual_width, virtual_height)) {
           BOOST_LOG(error) << "KDE unattended virtual capture unavailable; check Umbra capture permissions";
@@ -69,6 +72,24 @@ namespace portal {
         has_position = true;
         BOOST_LOG(info) << "KDE native virtual capture created without portal approval";
         return true;
+      }
+#endif
+      if (source_type == 4 && gnome_virtual_t::available()) {
+        gnome = std::make_unique<gnome_virtual_t>();
+        if (!gnome->open(virtual_width, virtual_height, virtual_milli_hz)) {
+          BOOST_LOG(error) << "GNOME virtual display unavailable (Mutter ScreenCast/DisplayConfig)";
+          gnome.reset();
+          return false;
+        }
+        node = gnome->node;
+        has_position = true;
+        BOOST_LOG(info) << "GNOME native virtual display " << gnome->connector << " created without a prompt";
+        return true;
+      }
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+      if (source_type == 4) {
+        BOOST_LOG(error) << "No native virtual display (KDE or GNOME) for this desktop";
+        return false;
       }
 #endif
       // Each caller uses its own context: the tray's GLib loop must not receive
@@ -162,12 +183,14 @@ namespace portal {
     // Each PipeWire core needs its own connection. dup() shares the same socket
     // protocol state and cannot reconnect after an encoder probe destroys its core.
     std::string virtual_output_name() const {
+      if (gnome) return gnome->connector;
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
       if (native) return native->output_name;
 #endif
       return {};
     }
     int open_remote() {
+      if (gnome) return gnome->open_remote();
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
       if (native) return native->open_remote();
 #endif
@@ -186,9 +209,10 @@ namespace portal {
       return fd;
     }
 
-    int x = 0, y = 0, width = 0, height = 0;
+    int x = 0, y = 0, width = 0, height = 0, milli_hz = 60000;
     bool has_position = false;
     uint32_t node = PW_ID_ANY, source_type = 1;
+    std::unique_ptr<gnome_virtual_t> gnome;  // GNOME per-client virtual display
 
   private:
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
@@ -335,7 +359,7 @@ namespace portal {
         std::lock_guard lock(session_mutex);
         idle = !active_session;
       }
-      if (idle && platf::portal_coop_supported()) {
+      if (idle && !platf::portal_physical_capture_requested() && platf::portal_coop_supported()) {
         probe = true;
         width = negotiated_width = probe_width > 0 ? probe_width : 1920;
         height = negotiated_height = probe_height > 0 ? probe_height : 1080;
@@ -424,12 +448,24 @@ namespace portal {
         spa_pod_builder_pop(&builder, &choice);
         params.push_back(static_cast<const spa_pod *>(spa_pod_builder_pop(&builder, &object)));
       }
+#endif
+      // GNOME's virtual display takes its mode from the consumer's format: pin it to the session's.
+      auto pinned_size = SPA_RECTANGLE(uint32_t(session->width), uint32_t(session->height));
+      auto zero_rate = SPA_FRACTION(0, 1), max_rate = SPA_FRACTION(uint32_t(session->milli_hz), 1000u), low_rate = SPA_FRACTION(1, 1);
+      auto add_mode = [&](spa_pod_builder *b) {
+        if (!session->gnome) return;
+        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&pinned_size),
+          SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&zero_rate),
+          SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction(&max_rate, &low_rate, &max_rate), 0);
+      };
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
       if (sdr_dma) {
         spa_pod_frame object, choice;
         spa_pod_builder_push_object(&builder, &object, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
         spa_pod_builder_add(&builder, SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
           SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
           SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA), 0);
+        add_mode(&builder);
         spa_pod_builder_prop(&builder, SPA_FORMAT_VIDEO_modifier, SPA_POD_PROP_FLAG_MANDATORY | SPA_POD_PROP_FLAG_DONT_FIXATE);
         spa_pod_builder_push_choice(&builder, &choice, SPA_CHOICE_Enum, 0);
         spa_pod_builder_long(&builder, sdr_dma->modifiers.front());
@@ -438,11 +474,15 @@ namespace portal {
         params.push_back(static_cast<const spa_pod *>(spa_pod_builder_pop(&builder, &object)));
       }
 #endif
-      params.push_back(static_cast<const spa_pod *>(spa_pod_builder_add_object(&builder,
-        SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
-        SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
-        SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-        SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA))));
+      {
+        spa_pod_frame object;
+        spa_pod_builder_push_object(&builder, &object, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
+        spa_pod_builder_add(&builder, SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
+          SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+          SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA), 0);
+        add_mode(&builder);
+        params.push_back(static_cast<const spa_pod *>(spa_pod_builder_pop(&builder, &object)));
+      }
       if (pw_stream_connect(stream, PW_DIRECTION_INPUT, session->node,
             static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS), params.data(), params.size()) < 0 ||
           pw_thread_loop_start(loop) < 0) {
@@ -880,45 +920,82 @@ namespace platf {
   }
 
   bool portal_prepare_virtual(int width, int height, int milli_hz) {
-#ifdef SUNSHINE_BUILD_KDE_OUTPUT
-    if (!portal_coop_supported() || width < 64 || width > 8192 || height < 64 || height > 8192 ||
-        width % 2 || height % 2 || milli_hz < 1000 || milli_hz > 360000) return false;
+    if (width < 64 || width > 8192 || height < 64 || height > 8192 ||
+        width % 2 || height % 2 || milli_hz < 1000 || milli_hz > 360000 || !portal_coop_supported()) return false;
     std::lock_guard lock(portal::session_mutex);
     auto session = portal::active_session;
     if (!session || session->source_type != 4) {
       session = std::make_shared<portal::session_t>();
-      if (!session->open(4, width, height)) return false;
+      if (!session->open(4, width, height, milli_hz)) return false;
+    } else if (session->gnome && !session->gnome->resize(width, height, milli_hz)) {
+      BOOST_LOG(error) << "GNOME virtual display could not change to " << width << 'x' << height;
+      return false;
     }
-    const char *app_id = std::getenv("FLATPAK_ID");
-    if (!app_id) return false;
-    std::string output = session->virtual_output_name();
-    if (!umbra_kde_output_resize(output.c_str(), width, height, milli_hz, &session->x, &session->y)) return false;
-    // Windows Umbra's default layout (virtual_display_layout=exclusive): the stream's virtual
-    // display is the only active screen, so games open on it at the client's size and rate.
-    if (umbra_kde_output_exclusive(output.c_str(), exclusive_state_path().c_str())) {
-      session->x = 0;
-      session->y = 0;
-      BOOST_LOG(info) << "Virtual display " << output << " is the only active display";
-    } else {
-      BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+    if (session->gnome) {
+      // Windows Umbra's default layout (virtual_display_layout=exclusive), as on KDE below.
+      if (session->gnome->exclusive()) {
+        session->x = 0;
+        session->y = 0;
+        BOOST_LOG(info) << "Virtual display " << session->gnome->connector << " is the only active display";
+      } else {
+        BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+      }
     }
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    else {
+      const char *app_id = std::getenv("FLATPAK_ID");
+      if (!app_id) return false;
+      std::string output = session->virtual_output_name();
+      if (!umbra_kde_output_resize(output.c_str(), width, height, milli_hz, &session->x, &session->y)) return false;
+      // Windows Umbra's default layout (virtual_display_layout=exclusive): the stream's virtual
+      // display is the only active screen, so games open on it at the client's size and rate.
+      if (umbra_kde_output_exclusive(output.c_str(), exclusive_state_path().c_str())) {
+        session->x = 0;
+        session->y = 0;
+        BOOST_LOG(info) << "Virtual display " << output << " is the only active display";
+      } else {
+        BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+      }
+    }
+#else
+    else return false;
+#endif
     session->width = width;
     session->height = height;
+    session->milli_hz = milli_hz;
     portal::active_session = std::move(session);
     BOOST_LOG(info) << "Portal virtual pane verified: " << width << 'x' << height << " @ " << milli_hz << " mHz";
     return true;
-#else
-    return false;
-#endif
   }
 
-  bool portal_coop_supported() {
+  bool portal_kde_native_supported() {
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
     portal::kde_virtual_t native;
     return native.available() && umbra_kde_output_supported();
 #else
     return false;
 #endif
+  }
+
+  // A per-client virtual display without a prompt: KDE (KWin) or GNOME (Mutter).
+  bool portal_coop_supported() {
+    return portal_kde_native_supported() || portal::gnome_virtual_t::available();
+  }
+
+  // GNOME: HDR requests capture a physical monitor that is in HDR mode (virtual monitors are SDR).
+  bool portal_physical_hdr_active() {
+    return !portal_kde_native_supported() && portal::gnome_virtual_t::available() &&
+           portal::gnome_virtual_t::physical_hdr_active();
+  }
+
+  namespace {
+    std::atomic<bool> physical_capture {false};
+  }
+  void portal_physical_capture(bool on) {
+    physical_capture = on;
+  }
+  bool portal_physical_capture_requested() {
+    return physical_capture;
   }
 
   bool portal_available() {

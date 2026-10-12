@@ -439,7 +439,12 @@ namespace proc {
     // Windows Umbra's default (virtual_display_mode=per_client): every stream gets its own
     // virtual display at the client's width, height and rate before the app starts. KDE's
     // native virtual output provides that without a prompt; elsewhere the screen is captured.
-    if (launch_session->virtual_display || _app.virtual_display || platf::portal_coop_supported()) {
+    // HDR on GNOME: resolve_desktop_hdr_encoder chose the physical HDR monitor (virtual displays
+    // there are SDR). Every other session gets its per-client virtual display.
+    const bool physical_hdr = launch_session->aurora_gpu_hevc && launch_session->enable_hdr &&
+                              !launch_session->umbra_coop && !launch_session->virtual_display && !_app.virtual_display;
+    platf::portal_physical_capture(physical_hdr);
+    if (launch_session->virtual_display || _app.virtual_display || (!physical_hdr && platf::portal_coop_supported())) {
       if (!prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop, launch_session->aurora_gpu_hevc)) {
         BOOST_LOG(error) << "The desktop could not create the requested virtual pane.";
         return 503;
@@ -945,6 +950,7 @@ namespace proc {
     bool has_run = _app_id > 0;
 #ifdef SUNSHINE_BUILD_PORTAL
     platf::portal_release_virtual();
+    platf::portal_physical_capture(false);
 #endif
 
 #ifdef _WIN32

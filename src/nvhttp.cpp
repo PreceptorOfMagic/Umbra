@@ -86,7 +86,9 @@ namespace nvhttp {
     return config::video.encoder.empty() && config::video.hevc_mode != 1 &&
            video::active_hevc_mode >= 2 &&
            platf::portal_capture_active() && proc::gpu_hevc_encoder_installed() &&
-           !platf::portal_coop_supported();
+           !platf::portal_kde_native_supported() &&
+           // GNOME: only while a physical monitor is in HDR mode (its virtual displays are SDR).
+           (!platf::portal_coop_supported() || platf::portal_physical_hdr_active());
 #else
     return false;
 #endif

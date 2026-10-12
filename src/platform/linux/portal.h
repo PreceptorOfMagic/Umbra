@@ -3,6 +3,10 @@
 namespace platf {
   bool portal_capture_active();
   bool portal_coop_supported();
+  bool portal_kde_native_supported();
+  bool portal_physical_hdr_active();
+  void portal_physical_capture(bool on);
+  bool portal_physical_capture_requested();
   bool portal_prepare_virtual(int width, int height, int milli_hz);
   bool portal_virtual_active();
   void portal_release_virtual();
