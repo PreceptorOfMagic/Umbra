@@ -10,6 +10,7 @@
 #include <array>
 #include <algorithm>
 #include <limits>
+#include <string>
 
 namespace portal {
 // Context and GL entry points belong to this capture instance. No global GL
@@ -24,6 +25,7 @@ class dma_reader_t {
   using query_modifiers_t = EGLBoolean(EGLAPIENTRY *)(EGLDisplay,EGLint,EGLint,EGLuint64KHR*,EGLBoolean*,EGLint*);
 public:
   std::vector<uint64_t> modifiers;
+  std::string vendor;  // GL_VENDOR of the compositor-side GPU this context imports on
   ~dma_reader_t() {
     if (display != EGL_NO_DISPLAY) {
       if (context != EGL_NO_CONTEXT) eglDestroyContext(display, context);
@@ -31,7 +33,8 @@ public:
     }
     if (wayland) wl_display_disconnect(wayland);
   }
-  bool init() {
+  // fourcc: the DRM format whose importable (non-external) modifiers are offered to PipeWire.
+  bool init(uint32_t fourcc = DRM_FORMAT_XBGR2101010) {
     if (!eglGetPlatformDisplay || !eglCreateContext || !eglMakeCurrent) return false;
     wayland = wl_display_connect(nullptr);
     if (!wayland) return false;
@@ -52,9 +55,10 @@ public:
     auto query = reinterpret_cast<query_modifiers_t>(eglGetProcAddress("eglQueryDmaBufModifiersEXT"));
     if (!create_image || !destroy_image || !query) return false;
     std::array<EGLuint64KHR,256> candidates {}; std::array<EGLBoolean,256> external {};
-    if (!query(display, DRM_FORMAT_XBGR2101010, candidates.size(), candidates.data(), external.data(), &count) || count > int(candidates.size())) return false;
+    if (!query(display, fourcc, candidates.size(), candidates.data(), external.data(), &count) || count > int(candidates.size())) return false;
     for (int i=0;i<count;++i) if (!external[i]) modifiers.push_back(candidates[i]);
-    BOOST_LOG(info) << "Portal HDR import GPU: " << gl.GetString(GL_RENDERER) << ", modifiers=" << modifiers.size();
+    if (auto v = gl.GetString(GL_VENDOR)) vendor = reinterpret_cast<const char *>(v);
+    BOOST_LOG(info) << "Portal DMA-BUF import GPU: " << gl.GetString(GL_RENDERER) << ", fourcc=0x" << std::hex << fourcc << std::dec << ", modifiers=" << modifiers.size();
     return !modifiers.empty();
   }
   // Borrowed DMA fds stay producer-owned. Readback/finish precedes requeue.
