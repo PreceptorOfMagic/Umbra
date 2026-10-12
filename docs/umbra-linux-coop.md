@@ -174,3 +174,29 @@ Standalone manual diagnostics are excluded from the unit-test source glob.
    Make missing features explicit in setup while preserving ordinary desktop streaming where usable.
 5. Produce a staged, reproducible Flatpak and compatibility matrix before publication. GNOME virtual
    panes, HDR, DMA-BUF, high-rate capture and Linux co-op remain unverified.
+
+## Runtime25.08 and input setup (2026-10-12)
+
+The rebuilt Flatpak uses Freedesktop25.08, CUDA12.9 and source-built GCC14.4 for nvcc.
+The toolkit needs six math declaration exception specifications matched to glibc2.42; CUDA objects
+also need explicit position-independent code for the SDK's PIE link. Compilation includes the
+existing Maxwell-through-Hopper architecture list. This is not old-GPU execution validation.
+The exported application excludes the compiler/toolkit and their debug/source payloads.
+
+Installed on VEGA as a separate portal-test branch, the runtime25 package passed live NVENC HEVC
+SDR desktop and virtual-display streaming to Eclipse1.3.4, including Disconnect/Resume/Quit.
+Desktop images after more than a minute and virtual images after more than two minutes were
+inspected. A host-side window movement after resume reached the client. Quit removed the virtual
+output while preserving DP-1. This remains a single-host test, not a two-host splice or TV result.
+
+A live absolute-pointer drag on the non-origin virtual display initially failed. Source traced
+this to inputtino_mouse.cpp discarding touch_port offsets: inputtino normalizes desktop coordinates,
+but client_to_touchport returns capture-local coordinates. Adding the offsets was tested with the
+same live setup: a client drag of (+360,+176) moved the host window from (2200,328) to (2560,504),
+with both images inspected. This establishes scale1 positive-offset routing only; fractional
+scaling, negative desktop origins and game placement remain open.
+
+The graphical Flatpak launcher now offers input setup, with defer/retry and an Input Setup desktop
+action. Denied host access and cancellation of the actual desktop polkit prompt both displayed
+failure without creating the host rule/unit. Successful privileged setup, first-run deferral,
+autostart and uninstall still need validation. The service bypasses interactive setup.

@@ -27,7 +27,9 @@ namespace platf::mouse {
 
   void move_abs(input_raw_t *raw, const touch_port_t &touch_port, float x, float y) {
     if (raw->mouse) {
-      (*raw->mouse).move_abs(x, y, touch_port.width, touch_port.height);
+      // Client coordinates are local to the capture; inputtino expects desktop coordinates.
+      (*raw->mouse).move_abs(x + touch_port.offset_x, y + touch_port.offset_y,
+                            touch_port.width, touch_port.height);
     }
   }
 
