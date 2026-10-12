@@ -126,6 +126,9 @@ class gnome_virtual_t {
 
   // Negotiate WxH and max-framerate on the virtual stream; Mutter sizes the monitor from it.
   bool negotiate(int w, int h, int milli_hz) {
+    // This can be the process's first PipeWire use (launch precedes capture); pw_init is counted.
+    static std::once_flag pipewire;
+    std::call_once(pipewire, [] { pw_init(nullptr, nullptr); });
     int fd = open_remote();
     if (fd < 0) return false;
     struct sizer_t {
