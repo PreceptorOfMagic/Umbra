@@ -1069,6 +1069,15 @@ namespace nvhttp {
       codec_mode_flags &= ~(SCM_HEVC_REXT10_444 | SCM_AV1_MAIN10 | SCM_AV1_HIGH10_444);
       codec_mode_flags |= SCM_HEVC | SCM_HEVC_MAIN10;
     }
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+    // Where every stream captures a KDE virtual display, the capture is 8-bit (KWin screencast
+    // formats): a native 10-bit stream carries no extra picture, only cost (measured 3840x2160:
+    // 88 fps Main10 vs 144 fps Main8). The flags also followed whichever display the last probe
+    // used (8-bit at start, 10-bit after a stream). Offer 8-bit only. GPU HEVC negotiates its own depth.
+    else if (platf::portal_coop_supported()) {
+      codec_mode_flags &= ~(SCM_HEVC_MAIN10 | SCM_HEVC_REXT10_444 | SCM_AV1_MAIN10 | SCM_AV1_HIGH10_444);
+    }
+#endif
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
     // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
     // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog),
