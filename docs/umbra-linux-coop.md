@@ -408,3 +408,31 @@ This closes the measured Mint startup deadlock. The earlier WSL/Xvfb heap abort
 has not yet been rerun and is not established as the same defect. Native input
 permissions, controller gameplay, decoded audio, TV presentation, AMD and X11
 virtual panes remain unqualified. This is a one-host smoke, not co-op acceptance.
+
+## Mint input-device first setup and reboot — 2026-10-12 16:26
+
+Mint had a static /dev/uhid node without a registered /sys/class/misc/uhid device.
+The old helper checked only /dev existence, skipped modprobe, and then its udev
+trigger could not grant access. Loading uhid and triggering its real device gave
+the logged-in user read/write ACLs and passed access checks inside the Flatpak.
+The helper now explicitly loads both modules. The uhid rule also gets
+static_node=uhid, matching the existing uinput approach, so static nodes receive
+the rule's permissions and uaccess tag at boot. After Mint -> Ubuntu -> Mint,
+both nodes had camer:rw ACLs and were writable inside Flatpak before uhid loaded.
+Host encoder/input probing created Xbox, DualSense and Nintendo virtual devices.
+The first-run input UI correctly returned without a prompt when access was ready.
+Rules were installed through authorized SSH sudo for this headless diagnostic;
+the GUI's administrator-password success path remains unqualified.
+
+A live input-mode diagnostic sent right-hat/stick16384/trigger64 and releases.
+The exact corresponding host evdev events were observed; its virtual Xbox device
+was removed on Quit. Main8 live stream4336frames/75s,2IDRs/recovery1,clean launch/
+Quit. This proves synthetic network-to-virtual-controller input, not a physical
+pad, game mapping or co-op assignment. Mouse enqueue succeeded but independent
+mouse delivery was not measured. A separate default capture/GPU-selection run
+passed4361frames/75s with a deliberate Steam-window movement visible in received
+images. OS package updates ran concurrently; these are not performance comparisons.
+The no-desktop tray failure path also reached the configuration HTTP endpoint
+without deadlocking, then shut down. Evidence: private vega/dual-distro tree
+under ~/umbra-flatpak (network-input, input-events.log, network-auto,
+mint-return-boot.log, mint-tray-failure.log).

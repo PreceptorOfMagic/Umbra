@@ -19,8 +19,10 @@ if ! flatpak-spawn --host pkexec sh -c '
   [ -s "$tmp" ]
   chmod 0644 "$tmp"
   mv -f "$tmp" "$dest"
-  [ -e /dev/uinput ] || modprobe uinput
-  [ -e /dev/uhid ] || modprobe uhid
+  # A static /dev node may exist before its module is loaded. Such a node has
+  # no sysfs device to trigger, so checking /dev alone can leave access denied.
+  modprobe uinput
+  modprobe uhid
   udevadm control --reload-rules
   udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
   udevadm trigger --action=add --subsystem-match=misc --sysname-match=uhid
