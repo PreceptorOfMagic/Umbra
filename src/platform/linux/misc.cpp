@@ -1022,6 +1022,11 @@ std::string get_local_ip_for_gateway() {
     // https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/30039
     set_env("AMD_DEBUG", "lowlatencyenc");
 
+    // Mesa's OpenCL (rusticl, shipped in the Flatpak GL runtime) exposes no GPU unless named here.
+    // The GPU HEVC co-op encoder needs OpenCL on AMD/Intel; NVIDIA brings its own ICD. A value the
+    // user already set wins.
+    setenv("RUSTICL_ENABLE", "radeonsi,iris", 0);
+
     // These are allowed to fail.
     gbm::init();
 
