@@ -932,6 +932,7 @@ std::string get_local_ip_for_gateway() {
 
 #ifdef SUNSHINE_BUILD_PORTAL
   bool portal_available();
+  bool portal_capture_active() { return sources[source::PORTAL]; }
   bool portal_virtual_active();
   void portal_shutdown();
   std::vector<std::string> portal_display_names();

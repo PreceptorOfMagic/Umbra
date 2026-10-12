@@ -45,6 +45,9 @@
 #include "uuid.h"
 #include "video.h"
 #include "zwpad.h"
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+  #include "platform/linux/portal.h"
+#endif
 
 #ifdef _WIN32
   #include "platform/windows/virtual_display.h"
@@ -70,6 +73,19 @@ namespace nvhttp {
   /** UmbraCaps bit 3: the GPU HEVC co-op encoder is installed (proc::gpu_hevc_encoder_installed). Only
    *  meaningful with bit 2: a host reporting bit 2 without bit 3 is a KNOWN "no", not an unknown. */
   constexpr int CAP_GPU_HEVC = 8;
+  // Native CPU-upload encoders may lack Main10 even though the portal/custom
+  // path supports it. Preserve explicit encoder choices and HEVC disablement.
+  bool automatic_portal_hdr_available() {
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+    // Keep ordinary SDR HEVC working through the native path too: advertising
+    // Main10 also advertises HEVC to clients that do not request HDR.
+    return config::video.encoder.empty() && config::video.hevc_mode != 1 &&
+           video::active_hevc_mode == 2 && video::active_av1_mode < 3 &&
+           platf::portal_capture_active() && proc::gpu_hevc_encoder_installed();
+#else
+    return false;
+#endif
+  }
   // UmbraCaps bit 4: host_monitor::CAP_MONITOR_OFF (umbraMonitorOff on /launch and /resume).
 }  // namespace nvhttp
 
@@ -960,7 +976,8 @@ namespace nvhttp {
     tree.put("root.uniqueid", http::unique_id);
     tree.put("root.HttpsPort", net::map_port(PORT_HTTPS));
     tree.put("root.ExternalPort", net::map_port(PORT_HTTP));
-    tree.put("root.MaxLumaPixelsHEVC", video::active_hevc_mode > 1 ? "1869449984" : "0");
+    const bool portal_hdr = automatic_portal_hdr_available();
+    tree.put("root.MaxLumaPixelsHEVC", video::active_hevc_mode > 1 || portal_hdr ? "1869449984" : "0");
 
     // Only include the MAC address for requests sent from paired clients over HTTPS.
     // For HTTP requests, use a placeholder MAC address that Moonlight knows to ignore.
@@ -1041,6 +1058,7 @@ namespace nvhttp {
         codec_mode_flags |= SCM_AV1_HIGH10_444;
       }
     }
+    if (portal_hdr) codec_mode_flags |= SCM_HEVC | SCM_HEVC_MAIN10;
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
     // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
     // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog),
@@ -1251,6 +1269,18 @@ namespace nvhttp {
     }
   }
 
+  void resolve_desktop_hdr_encoder(rtsp_stream::launch_session_t &session, int appid) {
+    if (session.aurora_gpu_hevc || !session.enable_hdr || session.umbra_coop ||
+        session.virtual_display || !automatic_portal_hdr_available()) return;
+    // A co-op pane remains a coordinated client decision even when its tuning
+    // is disabled. Never change just one half to a different encoder.
+    for (const auto &app : proc::proc.get_apps()) {
+      if (util::from_view(app.id) == appid && proc::is_coop_pane(app)) return;
+    }
+    session.aurora_gpu_hevc = true;
+    BOOST_LOG(info) << "Automatic portal HDR uses GPU HEVC; capture determines HDR or SDR";
+  }
+
   void applist(resp_https_t response, req_https_t request) {
     print_req<SunshineHTTPS>(request);
 
@@ -1316,7 +1346,11 @@ namespace nvhttp {
 
         pt::ptree app_node;
 
-        app_node.put("IsHdrSupported"s, video::active_hevc_mode == 3 ? 1 : 0);
+        bool app_hdr = video::active_hevc_mode == 3 || automatic_portal_hdr_available();
+#ifdef __linux__
+        if (proc::is_coop_pane(app)) app_hdr = false;
+#endif
+        app_node.put("IsHdrSupported"s, app_hdr ? 1 : 0);
         app_node.put("AppTitle"s, app_name);
         app_node.put("UUID", app.uuid);
         app_node.put("IDX", app.idx);
@@ -1434,6 +1468,7 @@ namespace nvhttp {
     host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p);
     resolve_coop_flag(*launch_session, args, appid);
+    resolve_desktop_hdr_encoder(*launch_session, appid);
     launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
@@ -1612,6 +1647,7 @@ namespace nvhttp {
     }
     auto launch_session = make_launch_session(host_audio, false, args, named_cert_p);
     resolve_coop_flag(*launch_session, args, current_appid);
+    resolve_desktop_hdr_encoder(*launch_session, current_appid);
     launch_session->client_address = request->remote_endpoint().address().to_string();
     tree.put("root.auroraGpuHevc", launch_session->aurora_gpu_hevc ? 1 : 0);
 #ifdef APOLLO_BETA_PROFILE
