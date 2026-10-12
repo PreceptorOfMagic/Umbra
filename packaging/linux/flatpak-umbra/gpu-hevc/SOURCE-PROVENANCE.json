@@ -33,8 +33,6 @@
     "src/picture_encoder.h": "e043c86d076a2c568edbcc43f939d393b98649116e9826ac654a9cf10546c98f",
     "src/rate_control.h": "b98885de061fd4711ba290a5cd16fe57c3022c632d87db7d8f6b107dc77b57a4",
     "src/x265_headers.h": "4fde258d8eaf03fa00a030c4b8b45ef5bb276b7f8b81c0e2218f6d99443c08b8",
-    "tests/__pycache__/check_core_cadence.cpython-314.pyc": "d5dd88ee8cafe4964bf698bd7e360419cbb53c23fa757b1b3a82920a4abb1758",
-    "tests/__pycache__/check_picture_streamed.cpython-314.pyc": "031ba52df3abc529bf55520bfcf948714b7765da126edd7d1be0dd5de24a0dc8",
     "tests/apollo_adapter_smoke.cpp": "44d11bb5da049ba298c83806959fd939ac0aebee72ab200e796e5750ea239014",
     "tests/build_coeff_oracle.sh": "1c0c7b0146096d1fe2e1d8e59a53caa24a2e8d06cb2badf860ad0a37c05fc5b8",
     "tests/build_picture_headers.sh": "4c329d9dff1fc452aba5e395659b8487c35deafcaf0c3812ff2d280b96a3dabb",
