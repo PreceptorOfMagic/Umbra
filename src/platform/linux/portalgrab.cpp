@@ -34,6 +34,10 @@
 
 using namespace std::literals;
 
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+#include "kde-capture.h"
+#endif
+
 namespace portal {
   constexpr auto service = "org.freedesktop.portal.Desktop";
   constexpr auto path = "/org/freedesktop/portal/desktop";
@@ -51,8 +55,21 @@ namespace portal {
       if (bus) g_object_unref(bus);
     }
 
-    bool open(uint32_t requested_type = 1) {
+    bool open(uint32_t requested_type = 1, int virtual_width = 1920, int virtual_height = 1080) {
       source_type = requested_type;
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+      if (source_type == 4) {
+        native = std::make_unique<kde_virtual_t>();
+        if (!native->open(virtual_width, virtual_height)) {
+          BOOST_LOG(error) << "KDE unattended virtual capture unavailable; check Umbra capture permissions";
+          return false;
+        }
+        node = native->node;
+        has_position = true;
+        BOOST_LOG(info) << "KDE native virtual capture created without portal approval";
+        return true;
+      }
+#endif
       // Each caller uses its own context: the tray's GLib loop must not receive
       // callbacks whose stack storage belongs to the encoder-probe thread.
       auto context = g_main_context_new();
@@ -143,7 +160,16 @@ namespace portal {
 
     // Each PipeWire core needs its own connection. dup() shares the same socket
     // protocol state and cannot reconnect after an encoder probe destroys its core.
+    std::string virtual_output_name() const {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+      if (native) return native->output_name;
+#endif
+      return {};
+    }
     int open_remote() {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+      if (native) return native->open_remote();
+#endif
       GVariantBuilder options;
       g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
       GUnixFDList *fds = nullptr;
@@ -164,6 +190,9 @@ namespace portal {
     uint32_t node = PW_ID_ANY, source_type = 1;
 
   private:
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    std::unique_ptr<kde_virtual_t> native;
+#endif
     GDBusConnection *bus = nullptr;
     std::string handle;
     unsigned request_number = 0;
@@ -641,11 +670,11 @@ namespace platf {
     auto session = portal::active_session;
     if (!session || session->source_type != 4) {
       session = std::make_shared<portal::session_t>();
-      if (!session->open(4)) return false;
+      if (!session->open(4, width, height)) return false;
     }
     const char *app_id = std::getenv("FLATPAK_ID");
     if (!app_id) return false;
-    std::string output = "Virtual-virtual-xdp-kde-"s + app_id;
+    std::string output = session->virtual_output_name();
     if (!umbra_kde_output_resize(output.c_str(), width, height, milli_hz, &session->x, &session->y)) return false;
     session->width = width;
     session->height = height;
@@ -659,22 +688,8 @@ namespace platf {
 
   bool portal_coop_supported() {
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
-    const char *app_id = std::getenv("FLATPAK_ID");
-    if (!app_id || std::strcmp(app_id, "io.github.PreceptorOfMagic.Umbra") || !std::getenv("WAYLAND_DISPLAY")) return false;
-    // This read-only query must not open a picker during server discovery.
-    auto bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
-    if (!bus) return false;
-    auto reply = g_dbus_connection_call_sync(bus, portal::service, portal::path, "org.freedesktop.DBus.Properties",
-      "Get", g_variant_new("(ss)", portal::interface, "AvailableSourceTypes"), G_VARIANT_TYPE("(v)"),
-      G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, nullptr);
-    g_object_unref(bus);
-    if (!reply) return false;
-    GVariant *value;
-    g_variant_get(reply, "(v)", &value);
-    bool available = g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32) && (g_variant_get_uint32(value) & 4);
-    g_variant_unref(value);
-    g_variant_unref(reply);
-    return available && umbra_kde_output_supported();
+    portal::kde_virtual_t native;
+    return native.available() && umbra_kde_output_supported();
 #else
     return false;
 #endif

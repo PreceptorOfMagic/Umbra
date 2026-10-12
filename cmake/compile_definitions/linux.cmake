@@ -157,6 +157,7 @@ if(WAYLAND_FOUND)
     endif()
 
     if(SUNSHINE_ENABLE_PORTAL)
+        GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." zkde-screencast-unstable-v1)
         GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-device-v2)
         GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-management-v2)
         GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/umbra-color-protocol" "." color-management-v1)
