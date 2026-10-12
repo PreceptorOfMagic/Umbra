@@ -73,14 +73,15 @@ namespace nvhttp {
   /** UmbraCaps bit 3: the GPU HEVC co-op encoder is installed (proc::gpu_hevc_encoder_installed). Only
    *  meaningful with bit 2: a host reporting bit 2 without bit 3 is a KNOWN "no", not an unknown. */
   constexpr int CAP_GPU_HEVC = 8;
-  // Native CPU-upload encoders may lack Main10 even though the portal/custom
-  // path supports it. Preserve explicit encoder choices and HEVC disablement.
+  // The portal's HDR pixel conversion is currently implemented by GPU HEVC.
+  // Native Main10 support alone does not supply that capture conversion.
+  // Preserve explicit encoder choices and HEVC disablement.
   bool automatic_portal_hdr_available() {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
     // Keep ordinary SDR HEVC working through the native path too: advertising
     // Main10 also advertises HEVC to clients that do not request HDR.
     return config::video.encoder.empty() && config::video.hevc_mode != 1 &&
-           video::active_hevc_mode == 2 && video::active_av1_mode < 3 &&
+           video::active_hevc_mode >= 2 &&
            platf::portal_capture_active() && proc::gpu_hevc_encoder_installed();
 #else
     return false;
@@ -1058,7 +1059,12 @@ namespace nvhttp {
         codec_mode_flags |= SCM_AV1_HIGH10_444;
       }
     }
-    if (portal_hdr) codec_mode_flags |= SCM_HEVC | SCM_HEVC_MAIN10;
+    if (portal_hdr) {
+      // HDR requests use the custom encoder's HEVC 4:2:0 contract. Keep native
+      // SDR codec choices, but do not offer an incompatible HDR format.
+      codec_mode_flags &= ~(SCM_HEVC_REXT10_444 | SCM_AV1_MAIN10 | SCM_AV1_HIGH10_444);
+      codec_mode_flags |= SCM_HEVC | SCM_HEVC_MAIN10;
+    }
     tree.put("root.ServerCodecModeSupport", codec_mode_flags);
     // Umbra: always present, so a client can tell this build from stock Apollo/Sunshine; bits = features.
     // Umbra caps: bit 0 wired pin (wired_pin.h), bit 1 host log for a paired client's support bundle (/umbralog),
