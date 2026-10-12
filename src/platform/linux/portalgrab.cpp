@@ -303,7 +303,9 @@ namespace portal {
     ~display_t() override {
       if (loop) pw_thread_loop_stop(loop);
       streaming = false;
-      if (!initialized && !retry_sdr && session) {
+      // A failed attempt never tears down the stream's virtual display (owned by launch/Quit) or a
+      // session the CPU-frame retry is about to reuse.
+      if (!initialized && !retry_sdr && !gpu_attempt && session && session->source_type != 4) {
         std::lock_guard lock(session_mutex);
         if (active_session == session) active_session.reset();
       }
@@ -355,6 +357,7 @@ namespace portal {
         if (reader->init(DRM_FORMAT_XRGB8888) &&
             (type == platf::mem_type_e::vaapi || reader->vendor.find("NVIDIA") != std::string::npos)) {
           sdr_dma = std::move(reader);
+          gpu_attempt = true;
         } else {
           BOOST_LOG(info) << "Portal GPU frames unavailable for this encoder; using CPU frames";
         }
@@ -414,10 +417,17 @@ namespace portal {
         SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA))));
       if (pw_stream_connect(stream, PW_DIRECTION_INPUT, session->node,
             static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS), params.data(), params.size()) < 0 ||
-          pw_thread_loop_start(loop) < 0) return false;
+          pw_thread_loop_start(loop) < 0) {
+        BOOST_LOG(warning) << "Portal capture: PipeWire stream connect failed";
+        return false;
+      }
       std::unique_lock lock(mutex);
       if (!changed.wait_for(lock, 5s, [&] { return failed || (sequence && (session->source_type != 4 ||
-            (frame_width == session->width && frame_height == session->height))); }) || failed) return false;
+            (frame_width == session->width && frame_height == session->height))); }) || failed) {
+        BOOST_LOG(warning) << "Portal capture: " << (failed ? "stream failed" : "no frame within 5s") << " ("
+          << (sdr_dma ? "GPU frames offered" : "CPU frames") << ", frames=" << sequence << ')';
+        return false;
+      }
       hdr = frame_hdr;
       gpu_frames = negotiated_gpu;
       width = frame_width;
@@ -558,7 +568,7 @@ namespace portal {
     bool hdr = false, negotiated_hdr = false, frame_hdr = false, retry_sdr = false;
     // GPU frames: the newest DMA-BUF stays checked out (held) until a newer one replaces it; the
     // encoder imports duplicated fds. Read under mutex; PipeWire thread owns requeueing.
-    bool gpu_frames = false, negotiated_gpu = false;
+    bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false;
     pw_buffer *held = nullptr;
     egl::surface_descriptor_t held_sd {0, 0, {-1, -1, -1, -1}, 0, 0, {}, {}};
     SS_HDR_METADATA hdr_metadata {};
@@ -581,7 +591,8 @@ namespace portal {
     bool failed = false, streaming = false, initialized = false;
     std::chrono::steady_clock::time_point timestamp;
 
-    void fail() {
+    void fail(const char *why = nullptr) {
+      if (why) BOOST_LOG(warning) << "Portal capture failed: " << why;
       std::lock_guard lock(mutex);
       failed = true;
       changed.notify_all();
@@ -613,6 +624,9 @@ namespace portal {
       if (!w || !h || w > 16384 || h > 16384 || uint64_t(w) * h * 4 > 256 * 1024 * 1024 ||
           (pq ? !allow_pq : (self.format.format != SPA_VIDEO_FORMAT_BGRA && self.format.format != SPA_VIDEO_FORMAT_BGRx)) ||
           (!pq && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) && !gpu)) {
+        BOOST_LOG(warning) << "Portal format rejected: " << w << 'x' << h << " spa_format=" << self.format.format
+          << " modifier_flag=" << ((self.format.flags & SPA_VIDEO_FLAG_MODIFIER) ? 1 : 0)
+          << " modifier=0x" << std::hex << self.format.modifier << std::dec << " gpu_offered=" << (self.sdr_dma ? 1 : 0);
         self.fail(); return;
       }
       {
@@ -632,7 +646,7 @@ namespace portal {
           SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << (pq || gpu ? SPA_DATA_DmaBuf : SPA_DATA_MemFd)))),
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
           SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Header), SPA_PARAM_META_size, SPA_POD_Int(sizeof(spa_meta_header))))};
-      if (pw_stream_update_params(self.stream, params, 2) < 0) self.fail();
+      if (pw_stream_update_params(self.stream, params, 2) < 0) self.fail("buffer parameters rejected");
     }
     static void process(void *data) {
       auto &self = *static_cast<display_t *>(data);
@@ -655,13 +669,17 @@ namespace portal {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
       if (!pq && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER)) {
         // GPU frame: no copy. Keep this buffer checked out; requeue the one it replaces.
-        if (b.n_datas > 4) { self.fail(); return; }
+        if (b.n_datas > 4) { self.fail("GPU frame has more than 4 planes"); return; }
         egl::surface_descriptor_t sd {int(w), int(h), {-1, -1, -1, -1},
           self.format.format == SPA_VIDEO_FORMAT_BGRA ? uint32_t(DRM_FORMAT_ARGB8888) : uint32_t(DRM_FORMAT_XRGB8888),
           self.format.modifier, {}, {}};
         for (uint32_t i = 0; i < b.n_datas; ++i) {
           const auto &plane = b.datas[i];
-          if (plane.type != SPA_DATA_DmaBuf || plane.fd < 0 || !plane.chunk || plane.chunk->stride <= 0) { self.fail(); return; }
+          if (plane.type != SPA_DATA_DmaBuf || plane.fd < 0 || !plane.chunk || plane.chunk->stride <= 0) {
+            BOOST_LOG(warning) << "Portal GPU frame plane " << i << " unusable: type=" << plane.type << " fd=" << plane.fd
+              << " stride=" << (plane.chunk ? plane.chunk->stride : -1);
+            self.fail(); return;
+          }
           sd.fds[i] = int(plane.fd);
           sd.pitches[i] = uint32_t(plane.chunk->stride);
           sd.offsets[i] = plane.chunk->offset;
@@ -801,6 +819,7 @@ namespace platf {
       if (!portal::active_session || portal::active_session->source_type != 4) return;
       portal::active_session.reset();
     }
+    BOOST_LOG(info) << "Released the stream's virtual display";
     portal_restore_outputs();
   }
 
