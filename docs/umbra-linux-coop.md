@@ -105,7 +105,8 @@ on runtime 23.08 captured the resized screen correctly.
   established DMA-BUF or hardware-encoder performance.
 - The private development host exposes its built-in Co-op Pane only inside Umbra Flatpak when the
   portal offers virtual sources and the required KDE output protocols are present. Other Linux
-  desktops leave that capability clear. Linux GPU-HEVC remains unsupported.
+  desktops leave that capability clear. This was the initial capture checkpoint; the Linux
+  GPU-HEVC implementation and runtime evidence are described below.
 
 ## Manual diagnostic
 
@@ -382,8 +383,8 @@ Packaged live network10bitSDR check on Plasma/NVIDIA, adapter_name=/dev/dri/rend
 pci:0000:01:00.0. Main10 limitedBT709. Source and two decoded images showed correct
 desktop/gears colors, geometry and changed gear positions. All owned processes
 stopped after completion. Evidence:~/umbra-flatpak/gpu-linux/network-selection/.
-Earlier HDR runtime evidence applies to ABI2; the algorithm is unchanged inABI3,
-but HDR3, AMD and physical multi-GPU still require runtime coverage.
+At this checkpoint HDR runtime evidence applied to ABI2. The ABI3 HDR regression
+below closes that version gap; AMD and physical multi-GPU remain unqualified.
 
 ## Mint X11 startup and live stream — 2026-10-12 15:58
 
@@ -436,3 +437,47 @@ The no-desktop tray failure path also reached the configuration HTTP endpoint
 without deadlocking, then shut down. Evidence: private vega/dual-distro tree
 under ~/umbra-flatpak (network-input, input-events.log, network-auto,
 mint-return-boot.log, mint-tray-failure.log).
+
+## Packaged ABI3 HDR regression — 2026-10-12 16:51
+
+Ubuntu26.04.1/GNOME50.1/NVIDIA595.99.02, headless RTX2060SUPER. Installed
+hdr-test artifact a7a785ea0d873fb1e6ef69ddb42c368a9edf75f60e7779a7abed90c329fc4bc9
+contains the full host with the X11 startup fix and both ABI3 encoder libraries.
+Each diagnostic used real network encoding for75s and a FIFO-fed live decoder.
+
+| Check | Frames | Result |
+|---|---:|---|
+| HDR10,1024x1024 |3322|DMA-BUF HDR/PQ; selected RTX2060SUPER PCI0000:01:00.0; valid target metadata;2IDRs/recovery1|
+| SDR8 on HDR desktop,1920x1088 |3705|HDRoff,MainBT709;2IDRs/recovery1;full grey/RGB pattern visible|
+| HDR10 -> SDR10 at35s,1920x1088 |3399|Same connection;encoder reopened HDR0;client HDRoff;3IDRs/recovery2|
+
+All three completed launch/Quit with failed0. Source and late decoded images
+were inspected: four grey steps, bottom RGB/white patches and the moving marker
+remained visible with correct aspect fitting. HDR grey samples decoded to
+approximately102,206,410,1025nits for intended100,203,400,1000nit patches. This
+retains the previously documented shared conversion scaling discrepancy; it
+is not bit-exact colour preservation or Windows colour-parity evidence.
+The switch preview retains FFmpeg's initial BT2020 output conversion; its
+appearance alone does not establish the new stream's colour metadata.
+
+The first SDR attempt outlived the pattern's120s timeout and ended on the
+desktop. It is retained as transport evidence only and superseded for pattern
+qualification by network-sdr-abi3-pattern. Restart the bounded host/pattern
+harness for each75s test. Evidence:~/umbra-flatpak/vega/gnome/network-hdr-abi3,
+network-sdr-abi3-pattern and network-hdr-switch-abi3. Cleanup restored SDR and
+Plasma; no owned host/pattern/decoder remained. No TV, HDR-game, co-op, AMD,
+physical multi-GPU, latency or sustained60fps verdict follows from these checks.
+
+## Windows shared-header regression — 2026-10-12 16:56
+
+Both Windows host libraries rebuilt with MSVC2022 /W4 /WX against the original
+pinned Windows x265 dependencies. No deployed Windows binary was replaced.
+The only changed shared source file versus gpu-hevc-v12/project/src is the
+RPS constructor initialization replacing memset. A configuration-only manual
+contract test compared reference/candidate parameter sets, slice bytes and
+160 CABAC contexts byte for byte:1152 cases at8bit and2304 at10bit, including
+HDR, both pane geometries, QP extremes, intra/inter and POC wrap boundaries.
+Both comparisons matched completely. This closes compilation and syntax
+regression coverage for that change; live Windows GPU/frame, mixed-host and
+performance parity are still separate gates. Evidence: private
+C:/Users/camer/umbra-linux-compat-20261012/windows-encoder/header-contract.

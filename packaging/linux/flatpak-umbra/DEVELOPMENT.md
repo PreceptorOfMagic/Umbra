@@ -10,8 +10,8 @@ remembered permission where supported, and clear setup for streamed input. A des
 virtual-display controls must not prevent ordinary desktop streaming.
 
 The final release also requires the custom GPU HEVC encoder for mixed-hardware co-op with Windows
-behavioral parity, plus HDR wherever capture, encoding and presentation support it. Both are open
-implementation/validation gates, not features of this development package. See the final release
+behavioral parity, plus HDR wherever capture, encoding and presentation support it. The development package now includes the Linux custom encoder and portal HDR path.
+Mixed-host parity and final release qualification remain open. See the final release
 scope and implementation order in [the Linux co-op record](../../../docs/umbra-linux-coop.md).
 
 ## Build choices
@@ -61,13 +61,13 @@ ICU73 dependency; rebuild dependencies rather than shipping old runtime librarie
 | Environment | Evidence | Still required |
 |---|---|---|
 | Plasma6.6.6 Wayland, NVIDIA2060SUPER | Portal capture, virtual sizing, HEVCSDR stream, Disconnect/Resume/Quit on23.08 and25.08 | Real co-op, game placement, fractional-scale/negative-origin input, high-rate behavior |
-| NVIDIA X11 | Previous0.5.1 NvFBC live stream | Regression test new artifact |
+| Mint22.3/Cinnamon6.6.9 X11, NVIDIA580.178.04 | Packaged Main8/Main10 custom streams; automatic capture/GPU; synthetic network controller delivered to evdev; input ACLs survived reboot | Real gamepad/game/audio, GUI privileged setup, co-op, performance |
 | AMD X11 | Previous0.5.0 VAAPI live stream | Regression test new artifact |
-| GNOME Wayland | Standard portal integration implemented | Real installation, capture/input/audio and lifecycle tests; virtual pane not advertised |
+| GNOME50.1 Wayland, NVIDIA595.99.02 | Packaged ABI3 HDR10, SDR8 fallback, live HDR-to-SDR switch; source and decoded images inspected | TV/HDR-game presentation, input/audio/gameplay, co-op; virtual pane not advertised |
 | wlroots Wayland | Existing capture paths retained | Real installation and regression tests; KDE-only mode control unavailable |
 
 Also validate clean install, upgrade, permission denial/revocation, restart, uninstall, Intel VAAPI,
 older NVIDIA GPUs, older Intel hardware (25.08 removed intel-vaapi-driver in favor of
-intel-media-driver), fractional scaling and multi-monitor input. Current evidence is SDR only;
-implementing and qualifying HDR where possible remains in the release scope. Do not promise165fps
+intel-media-driver), fractional scaling and multi-monitor input. HDR evidence currently covers GNOME/NVIDIA ordinary streaming. TV presentation,
+HDR games, other GPU/desktop combinations and HDR co-op remain unqualified. Do not promise165fps
 or Windows-equivalent co-op based on mode labels or counters. Publication stays deferred.
