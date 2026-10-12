@@ -30,6 +30,14 @@ else()
     endif()
 endif()
 
+# The Flatpak desktop launcher offers input setup through the normal polkit agent.
+if(SUNSHINE_BUILD_FLATPAK)
+    pkg_check_modules(INPUT_SETUP REQUIRED IMPORTED_TARGET gtk+-3.0)
+    add_executable(umbra-input-setup "${CMAKE_SOURCE_DIR}/packaging/linux/flatpak/input-setup.c")
+    target_link_libraries(umbra-input-setup PRIVATE PkgConfig::INPUT_SETUP)
+    install(TARGETS umbra-input-setup RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+
 # Stop active hosts before upgrade/removal (same hook for DEB and RPM).
 add_executable(umbra-stop-host "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/stop-host.cpp")
 set_target_properties(umbra-stop-host PROPERTIES CXX_STANDARD 17)
