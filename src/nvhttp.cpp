@@ -1055,6 +1055,12 @@ namespace nvhttp {
       }
       tree.put("root.UmbraCaps", caps);
     }
+#ifdef __linux__
+    // The Linux virtual-pane path currently captures SDR. Main10 support in
+    // the custom encoder does not make that capture HDR. Keep this separate
+    // from ordinary desktop HDR, which can use validated portal HDR buffers.
+    tree.put("root.UmbraCoopHdr", 0);
+#endif
 
     tree.put("root.PairStatus", pair_status);
 
