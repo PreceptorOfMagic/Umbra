@@ -24,6 +24,10 @@
 #include "src/globals.h"
 #include "portal.h"
 #include "gpu-hevc.h"
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+#include "portal-color.h"
+#include "portal-dmabuf.h"
+#endif
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
 #include "kde-output.h"
 #endif
@@ -122,7 +126,7 @@ namespace portal {
         g_variant_unref(properties);
         return false;
       }
-      g_variant_lookup(properties, "position", "(ii)", &x, &y);
+      has_position = g_variant_lookup(properties, "position", "(ii)", &x, &y);
       g_variant_lookup(properties, "size", "(ii)", &width, &height);
       g_variant_unref(properties);
       const char *replacement = nullptr;
@@ -156,6 +160,7 @@ namespace portal {
     }
 
     int x = 0, y = 0, width = 0, height = 0;
+    bool has_position = false;
     uint32_t node = PW_ID_ANY, source_type = 1;
 
   private:
@@ -260,7 +265,7 @@ namespace portal {
     return active_session;
   }
 
-  struct image_t: platf::img_t {
+  struct image_t: gpu_hevc::cpu_image_t {
     std::vector<uint8_t> pixels;
   };
 
@@ -269,7 +274,7 @@ namespace portal {
     ~display_t() override {
       if (loop) pw_thread_loop_stop(loop);
       streaming = false;
-      if (!initialized && session) {
+      if (!initialized && !retry_sdr && session) {
         std::lock_guard lock(session_mutex);
         if (active_session == session) active_session.reset();
       }
@@ -277,12 +282,39 @@ namespace portal {
       if (core) pw_core_disconnect(core);
       if (context) pw_context_destroy(context);
       if (loop) pw_thread_loop_destroy(loop);
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+      if (color) umbra_portal_color_close(color);
+#endif
     }
 
-    bool init(platf::mem_type_e type) {
+    bool init(platf::mem_type_e type, bool allow_hdr) {
+      retry_sdr = allow_hdr;
       mem_type = type;
       session = get_session();
       if (!session) return false;
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+      if (allow_hdr && session->has_position) {
+        umbra_portal_hdr output {};
+        color = umbra_portal_color_open(session->x, session->y, &output);
+        if (color && output.hdr) {
+          dma = std::make_unique<dma_reader_t>();
+          if (!dma->init()) { dma.reset(); umbra_portal_color_close(color); color = nullptr; }
+          else {
+            for (unsigned i=0;i<3;++i) {
+              hdr_metadata.displayPrimaries[i].x = (output.xy[i*2]+10)/20;
+              hdr_metadata.displayPrimaries[i].y = (output.xy[i*2+1]+10)/20;
+            }
+            hdr_metadata.whitePoint.x = (output.xy[6]+10)/20;
+            hdr_metadata.whitePoint.y = (output.xy[7]+10)/20;
+            hdr_metadata.minDisplayLuminance = output.min_luminance;
+            hdr_metadata.maxDisplayLuminance = output.max_luminance;
+            hdr_metadata.maxContentLightLevel = output.max_cll;
+            hdr_metadata.maxFrameAverageLightLevel = output.max_fall;
+          }
+        }
+        if (!color) BOOST_LOG(info) << "Portal HDR output metadata/import unavailable; using SDR capture";
+      }
+#endif
       static std::once_flag once;
       std::call_once(once, [] { pw_init(nullptr, nullptr); });
       loop = pw_thread_loop_new("umbra-portal", nullptr);
@@ -297,19 +329,38 @@ namespace portal {
         PW_KEY_MEDIA_TYPE, "Video", PW_KEY_MEDIA_CATEGORY, "Capture", PW_KEY_MEDIA_ROLE, "Screen", nullptr));
       if (!stream) return false;
       pw_stream_add_listener(stream, &listener, &events, this);
-      uint8_t storage[1024];
+      uint8_t storage[8192];
       spa_pod_builder builder = SPA_POD_BUILDER_INIT(storage, sizeof storage);
-      const spa_pod *params[] = {static_cast<const spa_pod *>(spa_pod_builder_add_object(&builder,
+      std::vector<const spa_pod *> params;
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+      if (dma) {
+        spa_pod_frame object, choice;
+        spa_pod_builder_push_object(&builder, &object, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
+        spa_pod_builder_add(&builder, SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
+          SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+          SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_xBGR_210LE),
+          SPA_FORMAT_VIDEO_colorPrimaries, SPA_POD_Id(SPA_VIDEO_COLOR_PRIMARIES_BT2020),
+          SPA_FORMAT_VIDEO_transferFunction, SPA_POD_Id(14u /* SMPTE2084, PipeWire1.6 */), 0);
+        spa_pod_builder_prop(&builder, SPA_FORMAT_VIDEO_modifier, SPA_POD_PROP_FLAG_MANDATORY | SPA_POD_PROP_FLAG_DONT_FIXATE);
+        spa_pod_builder_push_choice(&builder, &choice, SPA_CHOICE_Enum, 0);
+        spa_pod_builder_long(&builder, dma->modifiers.front());
+        for (auto modifier : dma->modifiers) spa_pod_builder_long(&builder, modifier);
+        spa_pod_builder_pop(&builder, &choice);
+        params.push_back(static_cast<const spa_pod *>(spa_pod_builder_pop(&builder, &object)));
+      }
+#endif
+      params.push_back(static_cast<const spa_pod *>(spa_pod_builder_add_object(&builder,
         SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
         SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
         SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-        SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA)))};
+        SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRx, SPA_VIDEO_FORMAT_BGRA))));
       if (pw_stream_connect(stream, PW_DIRECTION_INPUT, session->node,
-            static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS), params, 1) < 0 ||
+            static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS), params.data(), params.size()) < 0 ||
           pw_thread_loop_start(loop) < 0) return false;
       std::unique_lock lock(mutex);
       if (!changed.wait_for(lock, 5s, [&] { return failed || (sequence && (session->source_type != 4 ||
             (frame_width == session->width && frame_height == session->height))); }) || failed) return false;
+      hdr = frame_hdr;
       width = frame_width;
       height = frame_height;
       offset_x = session->x;
@@ -321,12 +372,13 @@ namespace portal {
         env_height = std::max(env_height, monitor->viewport.offset_y + monitor->viewport.height);
       }
       initialized = true;
-      BOOST_LOG(info) << "Portal capture ready: " << width << 'x' << height << " (PipeWire CPU buffers)";
+      BOOST_LOG(info) << "Portal capture ready: " << width << 'x' << height << (hdr ? " (PipeWire DMA-BUF HDR/PQ)" : " (PipeWire SDR buffers)");
       return true;
     }
 
     std::shared_ptr<platf::img_t> alloc_img() override {
       auto img = std::make_shared<image_t>();
+      img->capture_format = capture_format();
       img->width = width;
       img->height = height;
       img->pixel_pitch = 4;
@@ -338,7 +390,7 @@ namespace portal {
 
     int dummy_img(platf::img_t *img) override {
       std::lock_guard lock(mutex);
-      if (negotiated_width != width || negotiated_height != height || latest.empty()) return -1;
+      if (negotiated_width != width || negotiated_height != height || negotiated_hdr != hdr || latest.empty()) return -1;
       std::memcpy(img->data, latest.data(), latest.size());
       img->frame_timestamp = timestamp;
       return 0;
@@ -355,12 +407,22 @@ namespace portal {
     }
 
     std::unique_ptr<platf::gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
-      return gpu_hevc::make_device(config, is_hdr());
+      return gpu_hevc::make_device(config, is_hdr(), capture_format());
+    }
+
+    bool is_hdr() override { return hdr; }
+    bool get_hdr_metadata(SS_HDR_METADATA &metadata) override {
+      if (!hdr) return false;
+      metadata = hdr_metadata;
+      return true;
     }
 
     platf::capture_e capture(const push_captured_image_cb_t &push, const pull_free_image_cb_t &pull, bool *) override {
       uint64_t consumed = 0;
       for (;;) {
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+        if (color && !umbra_portal_color_current(color)) return platf::capture_e::reinit;
+#endif
         std::unique_lock lock(mutex);
         changed.wait_for(lock, 100ms, [&] { return failed || sequence != consumed; });
         if (failed) {
@@ -369,7 +431,7 @@ namespace portal {
           if (active_session == session) active_session.reset();
           return platf::capture_e::error;
         }
-        if (negotiated_width != width || negotiated_height != height) return platf::capture_e::reinit;
+        if (negotiated_width != width || negotiated_height != height || negotiated_hdr != hdr) return platf::capture_e::reinit;
         if (consumed == sequence) {
           lock.unlock();
           if (!push(nullptr, false)) return platf::capture_e::ok;
@@ -380,7 +442,7 @@ namespace portal {
         std::shared_ptr<platf::img_t> img;
         if (!pull(img)) return platf::capture_e::interrupted;
         lock.lock();
-        if (negotiated_width != width || negotiated_height != height) return platf::capture_e::reinit;
+        if (negotiated_width != width || negotiated_height != height || negotiated_hdr != hdr) return platf::capture_e::reinit;
         std::memcpy(img->data, latest.data(), latest.size());
         img->frame_timestamp = timestamp;
         consumed = sequence;
@@ -390,8 +452,17 @@ namespace portal {
     }
 
   private:
+    gpu_hevc::capture_format_e capture_format() const {
+      return hdr ? gpu_hevc::capture_format_e::bt2020_pq_xbgr2101010 : gpu_hevc::capture_format_e::bgra8;
+    }
     std::shared_ptr<session_t> session;
     platf::mem_type_e mem_type;
+    bool hdr = false, negotiated_hdr = false, frame_hdr = false, retry_sdr = false;
+    SS_HDR_METADATA hdr_metadata {};
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+    umbra_portal_color *color = nullptr;
+    std::unique_ptr<dma_reader_t> dma;
+#endif
     pw_thread_loop *loop = nullptr;
     pw_context *context = nullptr;
     pw_core *core = nullptr;
@@ -400,7 +471,7 @@ namespace portal {
     spa_video_info_raw format {};
     std::mutex mutex;
     std::condition_variable changed;
-    std::vector<uint8_t> latest;
+    std::vector<uint8_t> latest, pending;
     int negotiated_width = 0, negotiated_height = 0;
     int frame_width = 0, frame_height = 0;
     uint64_t sequence = 0;
@@ -425,12 +496,19 @@ namespace portal {
       if (id != SPA_PARAM_Format || !param) return;
       if (spa_format_video_raw_parse(param, &self.format) < 0) { self.fail(); return; }
       const auto w = self.format.size.width, h = self.format.size.height;
+      const bool pq = self.format.format == SPA_VIDEO_FORMAT_xBGR_210LE;
+      bool allow_pq = false;
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+      allow_pq = self.dma && self.color && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) &&
+        self.format.color_primaries == SPA_VIDEO_COLOR_PRIMARIES_BT2020 && self.format.transfer_function == 14u;
+#endif
       if (!w || !h || w > 16384 || h > 16384 || uint64_t(w) * h * 4 > 256 * 1024 * 1024 ||
-          (self.format.format != SPA_VIDEO_FORMAT_BGRA && self.format.format != SPA_VIDEO_FORMAT_BGRx)) {
+          (pq ? !allow_pq : (self.format.format != SPA_VIDEO_FORMAT_BGRA && self.format.format != SPA_VIDEO_FORMAT_BGRx))) {
         self.fail(); return;
       }
       {
         std::lock_guard lock(self.mutex);
+        self.negotiated_hdr = pq;
         self.negotiated_width = w;
         self.negotiated_height = h;
         self.changed.notify_all();
@@ -441,7 +519,7 @@ namespace portal {
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
           SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(3, 2, 4),
           SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1), SPA_PARAM_BUFFERS_size, SPA_POD_Int(w * h * 4),
-          SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << SPA_DATA_MemFd))),
+          SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << (pq ? SPA_DATA_DmaBuf : SPA_DATA_MemFd)))),
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
           SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Header), SPA_PARAM_META_size, SPA_POD_Int(sizeof(spa_meta_header))))};
       if (pw_stream_update_params(self.stream, params, 2) < 0) self.fail();
@@ -459,25 +537,35 @@ namespace portal {
       if (!b.n_datas) return;
       auto &d = b.datas[0];
       auto header = static_cast<spa_meta_header *>(spa_buffer_find_meta_data(&b, SPA_META_Header, sizeof(spa_meta_header)));
-      if (!d.data || !d.chunk || !d.chunk->size || (d.chunk->flags & SPA_CHUNK_FLAG_CORRUPTED) ||
+      if (!d.chunk || (d.chunk->flags & SPA_CHUNK_FLAG_CORRUPTED) ||
           (header && (header->flags & SPA_META_HEADER_FLAG_CORRUPTED))) return;
       const auto w = self.format.size.width, h = self.format.size.height;
-      if (!w || !h || d.chunk->stride < static_cast<int>(w * 4) || d.chunk->offset > d.maxsize ||
-          uint64_t(h - 1) * d.chunk->stride + w * 4 > d.maxsize - d.chunk->offset ||
-          uint64_t(h - 1) * d.chunk->stride + w * 4 > d.chunk->size) {
+      const bool pq = self.format.format == SPA_VIDEO_FORMAT_xBGR_210LE;
+      if (!w || !h) { self.fail(); return; }
+      auto &pixels = self.pending;
+      try {
+        if (pq) {
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+          if (!self.dma || !self.dma->read(b, self.format, pixels)) { self.fail(); return; }
+#else
+          self.fail(); return;
+#endif
+        } else {
+          if (!d.data || d.type != SPA_DATA_MemFd || !d.chunk->size || d.chunk->stride < static_cast<int>(w * 4) ||
+              d.chunk->offset > d.maxsize || uint64_t(h - 1) * d.chunk->stride + w * 4 > d.maxsize - d.chunk->offset ||
+              uint64_t(h - 1) * d.chunk->stride + w * 4 > d.chunk->size) { self.fail(); return; }
+          pixels.resize(static_cast<size_t>(w) * h * 4);
+          for (uint32_t row = 0; row < h; ++row)
+            std::memcpy(pixels.data() + size_t(row) * w * 4,
+              static_cast<uint8_t *>(d.data) + d.chunk->offset + size_t(row) * d.chunk->stride, w * 4);
+        }
+      } catch (const std::exception &failure) {
+        BOOST_LOG(error) << "Portal capture allocation/import failed: " << failure.what();
         self.fail(); return;
       }
       std::lock_guard lock(self.mutex);
-      try {
-        self.latest.resize(static_cast<size_t>(w) * h * 4);
-      } catch (const std::bad_alloc &) {
-        self.failed = true;
-        self.changed.notify_all();
-        return;
-      }
-      for (uint32_t row = 0; row < h; ++row)
-        std::memcpy(self.latest.data() + size_t(row) * w * 4,
-          static_cast<uint8_t *>(d.data) + d.chunk->offset + size_t(row) * d.chunk->stride, w * 4);
+      self.latest.swap(pixels);
+      self.frame_hdr = pq;
       // Arrival time shares the host steady clock. Do not mix compositor PTS
       // into latency accounting without verifying its clock mapping.
       self.frame_width = w;
@@ -614,10 +702,16 @@ namespace platf {
     portal::retry_after = {};
   }
   std::vector<std::string> portal_display_names() { return {"portal"}; }
-  std::shared_ptr<display_t> portal_display(mem_type_e type, const std::string &name, const video::config_t &) {
+  std::shared_ptr<display_t> portal_display(mem_type_e type, const std::string &name, const video::config_t &config) {
     if ((!name.empty() && name != "portal") ||
         (type != mem_type_e::system && type != mem_type_e::cuda && type != mem_type_e::vaapi)) return nullptr;
+    const bool want_hdr = config.aurora_gpu_hevc && config.dynamicRange == 1;
     auto display = std::make_shared<portal::display_t>();
-    return display->init(type) ? display : nullptr;
+    if (display->init(type, want_hdr)) return display;
+    if (!want_hdr) return nullptr;
+    BOOST_LOG(warning) << "Portal HDR initialization failed; retrying SDR capture";
+    display.reset();
+    display = std::make_shared<portal::display_t>();
+    return display->init(type, false) ? display : nullptr;
   }
 } // namespace platf

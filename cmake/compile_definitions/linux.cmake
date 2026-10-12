@@ -159,6 +159,11 @@ if(WAYLAND_FOUND)
     if(SUNSHINE_ENABLE_PORTAL)
         GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-device-v2)
         GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/kde-output-protocols" "." kde-output-management-v2)
+        GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/umbra-color-protocol" "." color-management-v1)
+        add_compile_definitions(SUNSHINE_BUILD_PORTAL_HDR)
+        list(APPEND PLATFORM_TARGET_FILES "${CMAKE_SOURCE_DIR}/src/platform/linux/portal-color.c")
+        set_source_files_properties("${CMAKE_SOURCE_DIR}/src/platform/linux/portal-color.c"
+                PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
         add_compile_definitions(SUNSHINE_BUILD_KDE_OUTPUT)
         list(APPEND PLATFORM_TARGET_FILES "${CMAKE_SOURCE_DIR}/src/platform/linux/kde-output.c")
         set_source_files_properties("${CMAKE_SOURCE_DIR}/src/platform/linux/kde-output.c"

@@ -1,13 +1,13 @@
 {
   "source_repository": "Eclipse-dev",
-  "commit": "8c092dd6b1860538a2a3aef65947c949123e5f1f",
+  "commit": "9d66834a5f57d3fe46de8fc815f095b1e9371e84",
   "path": "experimental/gpu-hevc",
   "files": {
     "ALGORITHM.md": "5dc375dca3765ef956a93802f82850ae4ee93ba0e0dc698775173a02dece6189",
     "CMakeLists.txt": "bcf7803ba996a9bbb3a25690fd6534a3d0f4ec46544ac4394656ec785947b746",
     "COPYING": "d8afb1bcc7a2cfc603683b168d6987ef0a48e59e0da3693bf55c5d33b67e2b49",
     "COPYING-GPL-3": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-    "LINUX.md": "f7434545098966a2c06bf56a6da71bc20a805e1c9c6900fbf73a3643aedcc21a",
+    "LINUX.md": "7a867f86732501b2cdc34216350e44104b7b2bb0abc37df0c514c5c962c83926",
     "PARITY_2026_09_16.md": "9c8478219fd1e8f6d884f7c75f150e212a8fe870a251014755ff2bf17e244b12",
     "PICTURE_PIPELINE.md": "3f085df43fc5ff35b4912aef1666d1751df98617f911a28a807ce35d5d43f81b",
     "PIXEL_PIPELINE.md": "de11a43d45d17475ad6ba892133a49f81d55345dbfda945559cbc58c2b8d2903",
@@ -16,15 +16,15 @@
     "kernels/cabac_parallel.cl": "51d47077c6f005a99bae9773b0f7cbab04b6570f579b06d9baac0e486976b421",
     "kernels/capture.cl": "473de8a1e8b4b35ef03e571a1dd932a7647cc77ebb0cade82709b4d58afef7d2",
     "kernels/coefficients.cl": "07d8fc307981982db66c489146bfa961929f39c6bdee3c991eae896afb204f2f",
-    "kernels/linux_capture.cl": "2cd056b0f66c4ea21edf331417729a804f22b2588f5096df708131a2403906c6",
+    "kernels/linux_capture.cl": "d1ad9110a3a11d12f9006a4ac622ffa155425865c041b66318a90786b879aced",
     "kernels/motion.cl": "fa82b20f692902ee95036c2c9a65d2030f78ca55410106b430035b8d1f161ae5",
     "kernels/picture.cl": "468224310e3669f1ae8789b15ccfcaf099721e69672d1d7367f069a41afafc9b",
     "kernels/prediction.cl": "fad5f576afcbd7e4b5debe1e58e3201af2df4d15b824c4850ce8dd5943b13d9d",
     "kernels/residual.cl": "9cb6a5701b208c159cb750be61b2c0efbf177a1b5639d29d79d4e82df920bc80",
     "src/aurora_gpu_hevc.cpp": "9b36afd6688db42d9764ff44fde25269731331e59a260f09d94b4dbb33260266",
     "src/aurora_gpu_hevc.h": "ceb36fedf20fcafb88b9fe5cd6c46a598299919c6cfa0a2e9a60b7a8e9f6825c",
-    "src/aurora_gpu_hevc_linux.cpp": "23f994d32558f0f64d2e55a28f0efc15269c11b73ca576f82053354ce093b8d6",
-    "src/aurora_gpu_hevc_linux.h": "2d8a1818cf5d074dd742f652c3e9b139b64982ad5ca017d7756ae1439c38d3ab",
+    "src/aurora_gpu_hevc_linux.cpp": "708fb499a3c89a62cf63aac57f5fbc3caf78bab9da88789ec435d100e9261ea4",
+    "src/aurora_gpu_hevc_linux.h": "54653c9e7488a3df98f0dea670d450b8d7c8f5cdfbb510890481f4cc8a6a6423",
     "src/cabac_backend.h": "b07c18c43ae2319e42049388888147a35e9755d18ef77e924e572752cc7eec38",
     "src/d3d11_interop.h": "09cd0e337efa6700f200ea199b8d153b08567ee8bb6c8519e470368c1eda8d67",
     "src/frame_encoder.h": "f9cae9dedcd39d6d9e067e4748352e964cd1f7a0d5064f5478121e1c27f49aad",
@@ -68,6 +68,7 @@
     "tests/prediction_oracle.cpp": "62dc24a3469e2f2b9a71b0fa7ae644990beda64e0ce090cc2ac0aba507bdcff1",
     "tests/residual_oracle.cpp": "a3e790388c1cea67d6e98a89ba5626e383130410929ee9a9a9b94e23bab6936a",
     "tests/residual_trace.h": "ebcd28a30480ea12a13d0f9ab4e01efb372d8e82492d6bc37274ee836a3ea2c0",
-    "tests/trace_x265.h": "3c43701c7a82bcb46c4f6e443c3c32c1bd46932b097b0c825fe308523685308c"
+    "tests/trace_x265.h": "3c43701c7a82bcb46c4f6e443c3c32c1bd46932b097b0c825fe308523685308c",
+    "tests/linux_abi_contract.c": "fa287d8cc5824f6600fdefae0c690b271deb3a3db0a5e5e89c6469ce5bb29329"
   }
 }

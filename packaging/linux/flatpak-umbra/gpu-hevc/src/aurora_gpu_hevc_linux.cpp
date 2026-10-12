@@ -66,7 +66,7 @@ struct aghl_session {
     std::unique_ptr<GpuPictureEncoder> encoder;
     ParallelCabac dispatch;
     Buffer conversionError;
-    std::unique_ptr<Image> input,fitted;
+    std::unique_ptr<Image> input,fitted,packed;
     uint32_t inputWidth=0,inputHeight=0,inputFormat=0,poc=0;
     bool haveFrame=false,failed=false;
     uint64_t lastFrame=0;
@@ -78,7 +78,7 @@ struct aghl_session {
         rate(config.bitrate_kbps,config.framerate),dispatch(device,1,1),conversionError(device,4) {
         initPictureKernels(device,cl.id,directory,config.bit_depth);
         addProgram(device,cl.id,readFile(directory/"capture.cl"),"-cl-std=CL1.2",{{"capture_yuv","capture_yuv"}});
-        addProgram(device,cl.id,readFile(directory/"linux_capture.cl"),"-cl-std=CL1.2",{{"capture_fit","capture_fit"}});
+        addProgram(device,cl.id,readFile(directory/"linux_capture.cl"),"-cl-std=CL1.2",{{"capture_fit","capture_fit"},{"capture_unpack_pq","capture_unpack_pq"}});
         PictureConfig p;p.width=config.width;p.height=config.height;p.depth=config.bit_depth;p.mvCosts=headers.mvCosts;
         p.adaptiveQp=p.deblock=p.isolatedIntra=p.originalMotion=true;
         encoder=std::make_unique<GpuPictureEncoder>(device,p);
@@ -86,24 +86,30 @@ struct aghl_session {
     void encode(const aghl_frame* f,uint64_t frame,bool requestedIdr,agh_packet& out) {
         if(failed)throw std::runtime_error("GPU encoder failed earlier; close and recreate the session");
         if(!f || f->size!=sizeof *f || !f->data || !f->width || !f->height || f->width>8192 || f->height>8192 ||
-           f->format<AGHL_BGRA8 || f->format>AGHL_SCRGB16F || (config.hdr && f->format!=AGHL_SCRGB16F) ||
+           f->format<AGHL_BGRA8 || f->format>AGHL_XBGR2101010_PQ ||
+           (config.hdr && f->format!=AGHL_SCRGB16F && f->format!=AGHL_XBGR2101010_PQ) ||
+           (!config.hdr && f->format==AGHL_XBGR2101010_PQ) ||
            (haveFrame && frame<=lastFrame))throw std::runtime_error("Invalid Linux capture or frame identity");
         const size_t pixel=f->format==AGHL_SCRGB16F?8:4,row=size_t(f->width)*pixel;
         if(f->row_pitch<row || f->row_pitch>std::numeric_limits<size_t>::max()/f->height ||
            f->bytes<f->row_pitch*(f->height-1)+row)throw std::runtime_error("Capture buffer pitch/size mismatch");
+        const bool pq=f->format==AGHL_XBGR2101010_PQ;
+        const bool linear=f->format==AGHL_SCRGB16F || pq;
         auto start=std::chrono::steady_clock::now();
         if(!input || inputWidth!=f->width || inputHeight!=f->height || inputFormat!=f->format) {
-            input.reset();fitted.reset();
+            input.reset();fitted.reset();packed.reset();
             input=std::make_unique<Image>(cl,device,f->width,f->height,f->format==AGHL_BGRA8?CL_BGRA:CL_RGBA,
-                f->format==AGHL_SCRGB16F?CL_HALF_FLOAT:CL_UNORM_INT8);
+                linear?CL_HALF_FLOAT:CL_UNORM_INT8);
+            if(pq)packed=std::make_unique<Image>(cl,device,f->width,f->height,CL_RGBA,CL_UNSIGNED_INT8);
             inputWidth=f->width;inputHeight=f->height;inputFormat=f->format;
         }
         const size_t origin[3]={0,0,0},region[3]={f->width,f->height,1};
-        check(cl.writeImage(device.queue,input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
+        check(cl.writeImage(device.queue,pq?packed->mem:input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
+        if(pq)dispatch.call("capture_unpack_pq",size_t(f->width)*f->height,256,nullptr,packed->mem,input->mem,f->width,f->height);
         cl_mem source=input->mem;
         if(f->width!=config.width || f->height!=config.height) {
             if(!fitted)fitted=std::make_unique<Image>(cl,device,config.width,config.height,CL_RGBA,
-                f->format==AGHL_SCRGB16F?CL_HALF_FLOAT:CL_UNORM_INT8);
+                linear?CL_HALF_FLOAT:CL_UNORM_INT8);
             dispatch.call("capture_fit",size_t(config.width)*config.height,256,nullptr,input->mem,fitted->mem,config.width,config.height);
             source=fitted->mem;
         }

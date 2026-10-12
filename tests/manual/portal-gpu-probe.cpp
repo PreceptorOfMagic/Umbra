@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   std::signal(SIGINT, stop); std::signal(SIGTERM, stop); std::signal(SIGPIPE, stop);
   auto cleanup = util::fail_guard([] { platf::portal_shutdown(); });
   auto display = std::make_shared<portal::display_t>();
-  if (!display->init(platf::mem_type_e::system)) return 1;
+  if (!display->init(platf::mem_type_e::system, depth == 10)) return 1;
   platf::portal_inhibit(true);
   video::config_t config {};
   config.width = (display->width + 31) & ~31;
@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
   std::ofstream stream(argv[3], std::ios::binary);
   if (!stream) return 4;
   std::cout << "LIVE_READY source=" << display->width << 'x' << display->height << " coded="
-            << config.width << 'x' << config.height << " depth=" << depth << " HDR=0\n" << std::flush;
+            << config.width << 'x' << config.height << " depth=" << depth << " HDR=" << display->is_hdr() << "\n" << std::flush;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
   bool cursor = true, failed = false;
   unsigned frames = 0;

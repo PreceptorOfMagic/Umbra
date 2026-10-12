@@ -41,8 +41,9 @@ dependent on the measured capture/driver/encoder path. Normal operation must sta
 3. Establish SDR mixed-hardware compatibility with live encodes and inspected client/TV images,
    including game geometry changes, reconnects and recovery. Retain the Windows behavior as the
    reference and avoid changing its ABI merely to introduce a Linux adapter.
-4. Extend capture and conversion for HDR. The current portal backend negotiates only BGRx/BGRA,
-   and does not implement HDR detection/metadata; the existing CUDA CPU-upload path rejects P010.
+4. Extend capture and conversion for HDR. The initial portal backend negotiated only BGRx/BGRA
+   without HDR metadata. The production checkpoint below adds a validated GNOME DMA path;
+   the native CUDA CPU-upload path still rejects P010.
    These require implementation, not a capability-bit change. Audit compositor-specific support
    before selecting the HDR capture route; then validate true HDR and SDR fallback end to end.
 5. Include the encoder libraries, kernels, provenance, licenses and supported-runtime checks in
@@ -284,8 +285,8 @@ True HDR capture/conversion/metadata and valid SDR fallback remain open.
 Linux pane launch/resume now accepts custom sessions, requires32-pixel alignment,
 and bypasses native encoder seam padding as Windows does. Custom sessions select
 CPU capture explicitly; X11, wlroots RAM and KMS RAM capturers have adapters.
-X11 rejects unsupported pixel masks/depth/byte order. The current CPU adapter
-rejects HDR before opening an encoder, pending a real HDR capture conversion.
+X11 rejects unsupported pixel masks/depth/byte order. At this checkpoint the CPU adapter rejected HDR; the later portal-specific HDR
+implementation below supersedes that restriction only for explicitly typed PQ frames.
 Full runtime25 host build passes; X11/wlroots/KMS execution remains unqualified.
 
 Actual network tests used the installed Eclipse client protocol libraries and
@@ -311,3 +312,52 @@ and those built libraries were used in the network checks above. Vendored source
 hashes identify Eclipse8c092dd6. A complete installed bundle check is still due.
 Evidence: ~/umbra-flatpak/gpu-linux/ (network-8,network-10,network-resume plus host
 logs). The previous failed geometry preview is retained separately.
+
+## Production portal HDR checkpoint — 2026-10-12 15:05
+
+The custom encoder's Linux ABI2 accepts explicit little-endian xBGR2101010
+BT.2020/PQ input. Vendored source/provenance now pins Eclipse9d66834a. The host
+requests HDR only for a custom10bit session, only after matching exactly one
+Wayland output's logical position to the portal selection and obtaining complete
+BT.2020/PQ target metadata. Optional protocol absence/ambiguity or GPU-import
+failure leaves SDR available. Shared-memory packed10 is deliberately excluded:
+GNOME50.1 advertised it but returned8bit pixels in the measured diagnostic.
+
+The portal imports negotiated GPU buffers/modifiers into a capture-owned EGL
+context, completes packed10 readback before returning the producer buffer, and
+marks the owned image's color format explicitly. The custom adapter checks the
+format before encoding. Other CPU capturers remain BGRA-only. Metadata queries
+have a3s deadline, range-check GameStream fields, and watch output/topology/color
+changes; these trigger capture/encoder reinitialization. No physical output is
+changed by the host itself. The temporary mode switches below were test actions.
+
+A full SDK25 host build and independently source-built ABI2 libraries were
+assembled into the private `hdr-test` branch beside existing branches on headless
+VEGA (Ubuntu26.04.1/GNOME50.1/NVIDIA595.99.02/RTX2060SUPER). This is an engineering
+bundle, not a clean complete-manifest build or final acceptance release.
+Live network tests used the actual installed host, client protocol libraries,
+Wayland gray/RGB HDR pattern, and FIFO-fed live decoder at1920x1088:
+
+| Run | Frames /75s | Recovery and client state |
+|---|---:|---|
+| HDR10 | 3069 | Initial + requested IDR; HDR enabled, valid target metadata, Main10 BT2020/PQ |
+| SDR8 on HDR desktop | 3640 | Initial + requested IDR; HDR flags off, Main BT709 |
+| HDR10 -> SDR10 desktop switch at35s | 3451 |3 IDRs; same connection, HDR-off notification, encoder reinitialized HDR0 |
+
+All launch/Quit/diagnostic error results were0. Initial source screenshots and
+late decoded images were opened: four gray bands, correctly ordered RGB patches,
+advancing marker and correct aspect-fit. HDR gray Y511/574/638/725 and CbCr514
+match the earlier component conversion, including its small inherited Windows
+P010 scaling offset (not bit-exact luminance). SDR preserved distinct gray bands.
+The switch decoder explicitly reported a change to BT709 and continued through
+cleanup. Its fixed raw-video output retained its initial BT2020 matrix, so the
+late raw preview alone is not evidence of the new stream's matrix; decoder
+reconfiguration plus host/client flags supply that evidence. The initial HDR
+notification can follow the first IDR (observed in the switch test).
+
+Evidence: ~/umbra-flatpak/vega/gnome/network-{hdr,sdr,hdr-switch}-production/.
+This verifies this GNOME/NVIDIA ordinary stream path and fallback, not TV HDR,
+HDR games, controller/audio, mixed-host splicing, GNOME virtual-pane HDR, AMD,
+or Windows visual/performance parity. Throughput remains below60fps. KWin and
+other capture backends need their own runtime qualification; do not advertise
+universal compositor HDR from these tests.

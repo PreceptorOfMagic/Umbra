@@ -30,9 +30,10 @@ namespace {
   class device_t final: public platf::gpu_hevc_encode_device_t {
   public:
     ~device_t() override { if (session) library.close(session); }
-    bool init(const video::config_t &config, bool hdr) {
-      if (hdr) {
-        BOOST_LOG(error) << "[AURORA-GPU-HEVC] HDR capture conversion is unavailable for the Linux CPU adapter";
+    bool init(const video::config_t &config, bool hdr, capture_format_e format) {
+      capture_format = format;
+      if (hdr != (format == capture_format_e::bt2020_pq_xbgr2101010)) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] capture color format does not match HDR state";
         return false;
       }
       colorspace = video::colorspace_from_client_config(config, hdr);
@@ -62,15 +63,17 @@ namespace {
     }
     int convert(platf::img_t &img) override {
       ready = false;
-      // This adapter is attached only to CPU BGRA capturers. GPU handles and
-      // packed 10-bit/PQ buffers must never be interpreted as BGRA/scRGB.
-      if (video::colorspace_is_hdr(colorspace) || !img.data || img.width < 1 || img.height < 1 ||
+      // Only an explicitly typed portal image can carry PQ. Other CPU
+      // capturers retain their existing BGRA contract.
+      auto typed = dynamic_cast<cpu_image_t *>(&img);
+      auto format = typed ? typed->capture_format : capture_format_e::bgra8;
+      if (format != capture_format || !img.data || img.width < 1 || img.height < 1 ||
           img.width > 8192 || img.height > 8192 || img.pixel_pitch != 4 || img.row_pitch < img.width * 4) return -1;
       const size_t row = size_t(img.width) * 4;
       pixels.resize(row * img.height);
       for (int y = 0; y < img.height; ++y)
         std::memcpy(pixels.data() + y * row, img.data + size_t(y) * img.row_pitch, row);
-      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), AGHL_BGRA8, row, pixels.size(), pixels.data()};
+      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), (capture_format == capture_format_e::bt2020_pq_xbgr2101010 ? AGHL_XBGR2101010_PQ : AGHL_BGRA8), row, pixels.size(), pixels.data()};
       ready = true;
       return 0;
     }
@@ -96,6 +99,7 @@ namespace {
     std::string kernels;
     std::vector<uint8_t> pixels;
     aghl_frame frame {};
+    capture_format_e capture_format = capture_format_e::bgra8;
     bool ready = false;
   };
 }
@@ -120,9 +124,9 @@ namespace {
     }();
     return usable;
   }
-  std::unique_ptr<platf::gpu_hevc_encode_device_t> make_device(const video::config_t &config, bool hdr) {
+  std::unique_ptr<platf::gpu_hevc_encode_device_t> make_device(const video::config_t &config, bool hdr, capture_format_e format) {
     auto device = std::make_unique<device_t>();
-    if (!device->init(config, hdr)) return {};
+    if (!device->init(config, hdr, format)) return {};
     return device;
   }
 }

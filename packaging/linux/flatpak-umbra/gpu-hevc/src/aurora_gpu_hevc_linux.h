@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "aurora_gpu_hevc.h"
-#define AGHL_ABI_VERSION 1u
+#define AGHL_ABI_VERSION 2u
 #define AGHL_API __attribute__((visibility("default")))
 #ifdef __cplusplus
 extern "C" {
@@ -12,7 +12,7 @@ typedef struct aghl_config {
     const char* kernel_directory;
     uint32_t bitrate_kbps,framerate;
 } aghl_config;
-enum aghl_format { AGHL_BGRA8=1, AGHL_RGBA8=2, AGHL_SCRGB16F=3 };
+enum aghl_format { AGHL_BGRA8=1, AGHL_RGBA8=2, AGHL_SCRGB16F=3, AGHL_XBGR2101010_PQ=4 };
 typedef struct aghl_frame {
     uint32_t size,width,height,format;
     size_t row_pitch,bytes;
@@ -22,7 +22,8 @@ typedef struct aghl_frame {
 // encode; the returned packet belongs to the session until the next call.
 // Linux portal CPU buffers are uploaded to an OpenCL image; conversion, fitting
 // and picture encoding execute on the GPU. This is not zero-copy capture.
-// HDR requires linear scRGB half-float input (1.0 = 80 nits), not PQ/SDR bytes.
+// HDR accepts linear scRGB half-float (1.0 = 80 nits), or explicit packed
+// little-endian xBGR2101010 BT.2020/ST2084 PQ (R in low10bits). PQ is HDR-only.
 // Exactly one available GPU must be present; ambiguous devices fail explicitly.
 AGHL_API int aghl_probe(char* device,size_t device_capacity,char* error,size_t error_capacity);
 AGHL_API aghl_session* aghl_open(const aghl_config*,char* error,size_t error_capacity);
