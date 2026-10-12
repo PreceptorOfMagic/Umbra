@@ -23,6 +23,7 @@
 #include "src/video.h"
 #include "src/globals.h"
 #include "portal.h"
+#include "gpu-hevc.h"
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
 #include "kde-output.h"
 #endif
@@ -351,6 +352,10 @@ namespace portal {
       if (mem_type == platf::mem_type_e::cuda) return cuda::make_avcodec_encode_device(width, height, false);
 #endif
       return std::make_unique<platf::avcodec_encode_device_t>();
+    }
+
+    std::unique_ptr<platf::gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
+      return gpu_hevc::make_device(config, is_hdr());
     }
 
     platf::capture_e capture(const push_captured_image_cb_t &push, const pull_free_image_cb_t &pull, bool *) override {

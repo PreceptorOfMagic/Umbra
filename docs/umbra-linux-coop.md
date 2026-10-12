@@ -248,3 +248,33 @@ The graphical Flatpak launcher now offers input setup, with defer/retry and an I
 action. Denied host access and cancellation of the actual desktop polkit prompt both displayed
 failure without creating the host rule/unit. First-run deferral and explicit reopening were also measured. Successful privileged setup,
 autostart and uninstall still need validation. The service bypasses interactive setup.
+
+## Linux custom encoder component checkpoint — 2026-10-12 12:50
+
+The production portal capture adapter now loads the Linux 8/10-bit OpenCL libraries.
+The library source lives in Eclipse experimental/gpu-hevc (see LINUX.md). It shares
+Windows v12b picture/rate-control kernels; Linux currently uploads owned CPU BGRA
+capture buffers. Capability discovery checks both libraries, kernels and an actual
+GPU probe. Exactly one usable OpenCL GPU is required for now. No CPU encoder fallback.
+
+Both libraries and the production host built against runtime25.08. Inside VEGA's
+Flatpak sandbox, the manual portal-gpu-probe captured a fresh KDE desktop with
+rotating gears for75s at each depth, streaming through a FIFO to a live decoder:
+8-bit3375frames;10-bit3363frames; both failed=0/status=0 and forced IDR at120. Decoder
+reported Main/yuv420p and Main10/yuv420p10le, limitedBT.709,1920x1088. Early/late
+decoded images were inspected, with visible coloured gears and changed orientation.
+Capture source1920x1080 was aspect-fit. Owned processes/FIFO cleaned and verified.
+Logs/images: ~/umbra-flatpak/gpu-linux/. These are SDR component results, around45fps;
+not GameStream/co-op, HDR, AMD, Windows parity, TV or latency qualification.
+
+The development host uses a compile-time library directory override under the
+test user's home. The installed portal-test Flatpak still predates this integration.
+A self-contained source-built package, X11/KMS adapters, multi-GPU device selection
+and full compatibility matrix remain release gates.
+
+HDR source audit: KWin v6.6.6 OutputScreenCastSource::drmFormat returns ARGB8888;
+ScreenCastStream's format table has no10-bit/float format. This is source evidence
+for the current portal path's limitation, not runtime HDR validation. Sources:
+https://github.com/KDE/kwin/blob/v6.6.6/src/plugins/screencast/outputscreencastsource.cpp
+and https://github.com/KDE/kwin/blob/v6.6.6/src/plugins/screencast/screencaststream.cpp.
+True HDR capture/conversion/metadata and valid SDR fallback remain open.

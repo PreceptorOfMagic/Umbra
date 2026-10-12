@@ -1,5 +1,8 @@
 # linux specific compile definitions
 
+set(SUNSHINE_GPU_HEVC_DIR "${CMAKE_INSTALL_PREFIX}/lib/umbra/gpu-hevc" CACHE PATH "Installed Linux custom GPU HEVC libraries and kernels")
+add_compile_definitions(SUNSHINE_GPU_HEVC_DIR="${SUNSHINE_GPU_HEVC_DIR}")
+
 add_compile_definitions(SUNSHINE_PLATFORM="linux")
 
 # AppImage
@@ -264,6 +267,7 @@ if (${SUNSHINE_BUILD_FLATPAK})
 endif ()
 
 list(APPEND PLATFORM_TARGET_FILES
+        "${CMAKE_SOURCE_DIR}/src/platform/linux/gpu-hevc.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/publish.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/graphics.h"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/graphics.cpp"

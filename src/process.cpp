@@ -42,6 +42,9 @@
 #ifdef SUNSHINE_BUILD_PORTAL
   #include "platform/linux/portal.h"
 #endif
+#ifdef __linux__
+  #include "platform/linux/gpu-hevc.h"
+#endif
 
 #ifdef _WIN32
   // from_utf8() string conversion function
@@ -91,6 +94,8 @@ namespace proc {
     return std::filesystem::is_regular_file(directory / "aurora_gpu_hevc8.dll", ec) &&
            std::filesystem::is_regular_file(directory / "aurora_gpu_hevc10.dll", ec) &&
            std::filesystem::is_directory(directory / "kernels", ec);
+#elif defined(__linux__)
+    return gpu_hevc::available();
 #else
     return false;
 #endif
