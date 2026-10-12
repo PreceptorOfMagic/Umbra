@@ -23,6 +23,13 @@ namespace input {
 
   bool probe_gamepads();
 
+  /**
+   * @brief Put the host pointer at the centre of a width x height desktop whose origin is 0,0.
+   * Used when a stream's virtual display becomes the only display, so the pointer never sits in a
+   * screen corner (KDE's corners open Overview).
+   */
+  void center_pointer(int width, int height);
+
   std::shared_ptr<input_t> alloc(safe::mail_t mail);
 
   struct touch_port_t: public platf::touch_port_t {

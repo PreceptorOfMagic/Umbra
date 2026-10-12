@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <mutex>
 #include <thread>
 #include <gio/gio.h>
@@ -530,7 +531,26 @@ namespace portal {
 
     platf::capture_e capture(const push_captured_image_cb_t &push, const pull_free_image_cb_t &pull, bool *) override {
       if (probe) return platf::capture_e::error;  // probe displays only serve dummy images
-      uint64_t consumed = 0;
+      uint64_t consumed = 0, delivered = 0, stat_sequence = 0;
+      auto stat_start = std::chrono::steady_clock::now();
+      // Every 10s: frames the compositor delivered vs frames handed to the encoder (pacing evidence).
+      auto report = [&](uint64_t now_sequence) {
+        const auto now = std::chrono::steady_clock::now();
+        if (!stat_sequence) {  // the window starts at the first delivered frame
+          stat_sequence = now_sequence;
+          delivered = 0;
+          stat_start = now;
+          return;
+        }
+        const auto seconds = std::chrono::duration<double>(now - stat_start).count();
+        if (seconds < 10) return;
+        BOOST_LOG(info) << "[UMBRA-CAPTURE] " << width << 'x' << height << (gpu_frames ? " gpu" : " cpu")
+          << " arrived=" << (now_sequence - stat_sequence) << " delivered=" << delivered << " in "
+          << std::fixed << std::setprecision(1) << seconds << 's';
+        stat_sequence = now_sequence;
+        delivered = 0;
+        stat_start = now;
+      };
       for (;;) {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
         if (color && !umbra_portal_color_current(color)) return platf::capture_e::reinit;
@@ -575,6 +595,8 @@ namespace portal {
         img->frame_timestamp = timestamp;
         consumed = sequence;
         lock.unlock();
+        ++delivered;
+        report(consumed);
         if (!push(std::move(img), true)) return platf::capture_e::ok;
       }
     }

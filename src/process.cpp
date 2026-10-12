@@ -32,6 +32,7 @@
 #include "logging.h"
 #include "platform/common.h"
 #include "process.h"
+#include "input.h"
 #include "httpcommon.h"
 #include "system_tray.h"
 #include "utility.h"
@@ -447,6 +448,7 @@ namespace proc {
       launch_session->virtual_display = true;
       this->display_name = "portal";
       config::video.output_name = "portal";
+      input::center_pointer(render_width, render_height);
     }
 #endif
     display_device::configure_display(config::video, *launch_session);
@@ -785,6 +787,7 @@ namespace proc {
 #elif defined(SUNSHINE_BUILD_PORTAL)
     if (!prepare_linux_pane(session.width, session.height, session.fps, session.umbra_coop, session.aurora_gpu_hevc)) return false;
     config::video.output_name = "portal";
+    input::center_pointer(session.width, session.height);
     _env["SUNSHINE_CLIENT_WIDTH"] = std::to_string(session.width);
     _env["APOLLO_CLIENT_WIDTH"] = std::to_string(session.width);
     _env["SUNSHINE_CLIENT_HEIGHT"] = std::to_string(session.height);

@@ -1680,6 +1680,11 @@ namespace input {
     return std::make_unique<deinit_t>();
   }
 
+  void center_pointer(int width, int height) {
+    if (!platf_input || width <= 0 || height <= 0) return;
+    platf::abs_mouse(platf_input, platf::touch_port_t {0, 0, width, height}, width / 2.0f, height / 2.0f);
+  }
+
   bool probe_gamepads() {
     auto input = static_cast<platf::input_t *>(platf_input.get());
     const auto gamepads = platf::supported_gamepads(input);
