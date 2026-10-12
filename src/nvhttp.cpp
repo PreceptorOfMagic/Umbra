@@ -80,9 +80,13 @@ namespace nvhttp {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
     // Keep ordinary SDR HEVC working through the native path too: advertising
     // Main10 also advertises HEVC to clients that do not request HDR.
+    // Not where every stream gets a KDE virtual display: KWin captures it as 8-bit
+    // ARGB8888, so there is no HDR to carry, and Automatic must stay on the native
+    // encoder (NVENC) exactly as Windows Umbra does. GPU HEVC stays co-op only there.
     return config::video.encoder.empty() && config::video.hevc_mode != 1 &&
            video::active_hevc_mode >= 2 &&
-           platf::portal_capture_active() && proc::gpu_hevc_encoder_installed();
+           platf::portal_capture_active() && proc::gpu_hevc_encoder_installed() &&
+           !platf::portal_coop_supported();
 #else
     return false;
 #endif

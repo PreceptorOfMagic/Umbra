@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Bounded KDE output control. Only the caller's exact portal-created output
- * may be changed. Physical outputs are read solely to choose a free position.
+ * may be resized. Other outputs are read to choose a free position, and are
+ * only ever disabled by the exclusive layout, which records them first so
+ * umbra_kde_output_restore can re-enable exactly those.
  */
 #include <wayland-client.h>
 #include <errno.h>
@@ -149,9 +151,93 @@ int umbra_kde_output_supported(void) {
  struct context *c=connect_outputs();if(!c)return 0;
  int ok=c->manager && c->count;cleanup(c);return ok;
 }
+static int umbra_output_name(const char *name) {
+ return name && (!strncmp(name,"Virtual-virtual-xdp-kde-",24) || !strncmp(name,"Virtual-virtual-umbra-",22));
+}
+/* State file: one output name per line. Names never contain newlines (KWin connector names). */
+static int read_state(const char *path,char names[][256],int max) {
+ FILE *f=fopen(path,"r");if(!f)return 0;
+ int n=0;char line[256];
+ while(n<max && fgets(line,sizeof line,f)) {
+  line[strcspn(line,"\r\n")]=0;if(!line[0])continue;
+  int dup=0;for(int i=0;i<n;i++)if(!strcmp(names[i],line))dup=1;
+  if(!dup)snprintf(names[n++],256,"%s",line);
+ }
+ fclose(f);return n;
+}
+static int write_state(const char *path,char names[][256],int n) {
+ char tmp[4096];if(snprintf(tmp,sizeof tmp,"%s.tmp",path)>=(int)sizeof tmp)return 0;
+ FILE *f=fopen(tmp,"w");if(!f)return 0;
+ int ok=1;for(int i=0;i<n;i++)if(fprintf(f,"%s\n",names[i])<0)ok=0;
+ if(fflush(f)!=0)ok=0;
+ if(fclose(f)!=0)ok=0;
+ if(!ok || rename(tmp,path)!=0){remove(tmp);return 0;}
+ return 1;
+}
+int umbra_kde_output_exclusive(const char *name,const char *state_path) {
+ if(!umbra_output_name(name) || !state_path)return 0;
+ struct context *c=connect_outputs();if(!c)return 0;
+ int ok=0;struct output *target=NULL;
+ if(!c->manager)goto end;
+ for(int i=0;i<c->count;i++)if(c->outputs[i].alive && !strcmp(c->outputs[i].name,name)) {
+  if(target)goto end;target=&c->outputs[i];
+ }
+ if(!target || !target->enabled)goto end;
+ /* Record first: a disabled output must always be recoverable, even if Umbra dies mid-change.
+  * Entries already recorded by an earlier launch/resume of this session are kept. */
+ char names[32][256];int n=read_state(state_path,names,32),others=0;
+ for(int i=0;i<c->count;i++) {
+  struct output *o=&c->outputs[i];
+  if(o==target || !o->alive || !o->enabled || umbra_output_name(o->name))continue;
+  others++;
+  int known=0;for(int j=0;j<n;j++)if(!strcmp(names[j],o->name))known=1;
+  if(!known){if(n==32)goto end;snprintf(names[n++],256,"%s",o->name);}
+ }
+ if(others && !write_state(state_path,names,n))goto end;
+ struct kde_output_configuration_v2 *config=kde_output_management_v2_create_configuration(c->manager);
+ if(!config)goto end;
+ for(int i=0;i<c->count;i++) {
+  struct output *o=&c->outputs[i];
+  if(o!=target && o->alive && o->enabled && !umbra_output_name(o->name))kde_output_configuration_v2_enable(config,o->obj,0);
+ }
+ kde_output_configuration_v2_position(config,target->obj,0,0);
+ if(!apply(c,config))goto end;
+ ok=target->alive && target->enabled && target->x==0 && target->y==0;
+ for(int i=0;i<c->count;i++) {
+  struct output *o=&c->outputs[i];
+  if(o!=target && o->alive && o->enabled && !umbra_output_name(o->name))ok=0;
+ }
+end:
+ cleanup(c);return ok;
+}
+int umbra_kde_output_restore(const char *state_path) {
+ if(!state_path)return 0;
+ char names[32][256];int n=read_state(state_path,names,32);
+ if(!n){remove(state_path);return 1;}
+ struct context *c=connect_outputs();if(!c)return 0;
+ int ok=0,pending=0;
+ if(!c->manager)goto end;
+ struct kde_output_configuration_v2 *config=kde_output_management_v2_create_configuration(c->manager);
+ if(!config)goto end;
+ for(int i=0;i<c->count;i++) {
+  struct output *o=&c->outputs[i];if(!o->alive || o->enabled)continue;
+  for(int j=0;j<n;j++)if(!strcmp(names[j],o->name)){kde_output_configuration_v2_enable(config,o->obj,1);pending++;}
+ }
+ if(pending){if(!apply(c,config))goto end;}
+ else kde_output_configuration_v2_destroy(config);
+ /* A recorded output that is unplugged now cannot be re-enabled; KWin restores it on replug. */
+ ok=1;
+ for(int i=0;i<c->count;i++) {
+  struct output *o=&c->outputs[i];if(!o->alive || o->enabled)continue;
+  for(int j=0;j<n;j++)if(!strcmp(names[j],o->name))ok=0;
+ }
+ if(ok)remove(state_path);
+end:
+ cleanup(c);return ok;
+}
 int umbra_kde_output_resize(const char *name,int w,int h,int hz,int *x,int *y) {
  /* Name comes from the fixed Umbra app identity, never an arbitrary display preference. */
- if(!name || (strncmp(name,"Virtual-virtual-xdp-kde-",24) && strncmp(name,"Virtual-virtual-umbra-",22)) || w<64 || w>8192 || h<64 || h>8192 || hz<1000 || hz>360000)return 0;
+ if(!umbra_output_name(name) || w<64 || w>8192 || h<64 || h>8192 || hz<1000 || hz>360000)return 0;
  struct context *c=connect_outputs();if(!c)return 0;
  int ok=0;struct output *target=NULL;
  if(!c->manager)goto end;

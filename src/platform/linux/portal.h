@@ -6,4 +6,5 @@ namespace platf {
   bool portal_prepare_virtual(int width, int height, int milli_hz);
   bool portal_virtual_active();
   void portal_release_virtual();
+  void portal_restore_outputs();
 }

@@ -435,7 +435,10 @@ namespace proc {
 
 #else
 #ifdef SUNSHINE_BUILD_PORTAL
-    if (launch_session->virtual_display || _app.virtual_display) {
+    // Windows Umbra's default (virtual_display_mode=per_client): every stream gets its own
+    // virtual display at the client's width, height and rate before the app starts. KDE's
+    // native virtual output provides that without a prompt; elsewhere the screen is captured.
+    if (launch_session->virtual_display || _app.virtual_display || platf::portal_coop_supported()) {
       if (!prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop, launch_session->aurora_gpu_hevc)) {
         BOOST_LOG(error) << "The desktop could not create the requested virtual pane.";
         return 503;
@@ -717,7 +720,10 @@ namespace proc {
     // Umbra: EVERY co-op pane (umbraCoop), not only the GPU HEVC one -- the built-in pane is
     // resumable, and a co-op resumed in the other orientation, at another size or from another
     // client must not reuse the old pane geometry.
-    if (!(session.aurora_gpu_hevc || session.umbra_coop) || !virtual_display) return true;
+    if (!virtual_display) return true;
+#ifndef SUNSHINE_BUILD_PORTAL
+    if (!(session.aurora_gpu_hevc || session.umbra_coop)) return true;
+#endif
 #ifdef _WIN32
     // Called before capture, only with no active streams. Ordinary hardware
     // sessions retain Apollo's existing resume behavior. The GPU path requires

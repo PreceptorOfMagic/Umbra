@@ -657,9 +657,29 @@ namespace platf {
     return portal::active_session && portal::active_session->source_type == 4;
   }
 
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+  // Outputs the exclusive layout switched off, kept until they are back on (survives a crash).
+  static std::string exclusive_state_path() {
+    return (appdata() / "kde_exclusive_outputs").string();
+  }
+#endif
+
+  void portal_restore_outputs() {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    const auto path = exclusive_state_path();
+    if (!std::filesystem::exists(path)) return;
+    if (umbra_kde_output_restore(path.c_str())) BOOST_LOG(info) << "Restored the displays the virtual display replaced";
+    else BOOST_LOG(error) << "Could not re-enable every display listed in " << path;
+#endif
+  }
+
   void portal_release_virtual() {
-    std::lock_guard lock(portal::session_mutex);
-    if (portal::active_session && portal::active_session->source_type == 4) portal::active_session.reset();
+    {
+      std::lock_guard lock(portal::session_mutex);
+      if (!portal::active_session || portal::active_session->source_type != 4) return;
+      portal::active_session.reset();
+    }
+    portal_restore_outputs();
   }
 
   bool portal_prepare_virtual(int width, int height, int milli_hz) {
@@ -676,6 +696,15 @@ namespace platf {
     if (!app_id) return false;
     std::string output = session->virtual_output_name();
     if (!umbra_kde_output_resize(output.c_str(), width, height, milli_hz, &session->x, &session->y)) return false;
+    // Windows Umbra's default layout (virtual_display_layout=exclusive): the stream's virtual
+    // display is the only active screen, so games open on it at the client's size and rate.
+    if (umbra_kde_output_exclusive(output.c_str(), exclusive_state_path().c_str())) {
+      session->x = 0;
+      session->y = 0;
+      BOOST_LOG(info) << "Virtual display " << output << " is the only active display";
+    } else {
+      BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+    }
     session->width = width;
     session->height = height;
     portal::active_session = std::move(session);
