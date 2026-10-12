@@ -40,18 +40,25 @@ Inside the installed app, `additional-install.sh` installs this Flatpak identity
 optional systemd user unit. The desktop's normal administrator prompt authorizes the rule; setup
 returns failure if authorization or device access fails. It loads input device modules if needed,
 reloads rules, triggers those two devices and checks access. The service is not enabled automatically.
+The Input Setup dialog also offers “Start Umbra when I sign in”. This writes an app-specific
+XDG desktop autostart entry and disables the older optional systemd registration without stopping
+a current stream. It works on desktops that do not activate systemd graphical-session targets.
 The graphical launcher offers setup when input access is missing. Users can defer it and reopen
 Input Setup from the desktop application menu. The background service starts the host directly.
 The dialog uses the same helper and shows failure instead of claiming input is ready.
 
-`remove-additional-install.sh` removes only that app-specific rule/unit. It does not delete a native
+`remove-additional-install.sh` removes only that app-specific rule, unit and autostart entry.
+Run it before removing the Flatpak if you want to remove optional host integration too. It does not delete a native
 Sunshine service or older shared files. Earlier Umbra builds installed files named sunshine.service
 and60-sunshine.rules; do not delete those blindly because they may belong to a native installation.
 
 The actual dialog and helper were tested with denied host access and a cancelled desktop polkit
 prompt: the dialog showed the failure and retry, and no rule/unit was created.
-First-run deferral and explicit reopening were also measured. Successful privileged installation,
-logout/login, service autostart and removal still need validation.
+First-run deferral and explicit reopening were also measured. The new startup helper was staged
+inside the installed app on Mint: a real reboot/login started the host and serverinfo answered;
+disabling startup followed by another reboot left the host stopped. The checkbox builds with
+strict compiler warnings. Graphical checkbox interaction and successful polkit authentication
+remain acceptance checks. Input rules and reboot access were validated separately through SSH sudo.
 
 ## Evidence and release gates
 
