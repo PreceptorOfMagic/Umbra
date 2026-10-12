@@ -1028,6 +1028,14 @@ namespace platf {
     const bool readback = config.aurora_gpu_hevc;
     auto display = std::make_shared<portal::display_t>();
     if (display->init(type, want_hdr, gpu_frames, readback, config.width, config.height)) return display;
+    if (gpu_frames && type != mem_type_e::system) {
+      // Measured on KWin and Mutter: the first negotiation after a mode change can come back
+      // linear (modifier 0, not importable here); a fresh one settles on a tiled modifier.
+      BOOST_LOG(info) << "Portal GPU-frame capture: renegotiating once";
+      display.reset();
+      display = std::make_shared<portal::display_t>();
+      if (display->init(type, false, true, false, config.width, config.height)) return display;
+    }
     if ((gpu_frames && type != mem_type_e::system) || (readback && !want_hdr)) {
       BOOST_LOG(warning) << "Portal GPU-frame capture failed; retrying with CPU frames";
       display.reset();
