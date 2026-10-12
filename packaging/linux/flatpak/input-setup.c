@@ -7,6 +7,25 @@ static GtkWidget *dialog, *message;
 static gboolean busy, ready;
 static gchar *deferred;
 
+static gboolean save_autostart(gboolean enabled) {
+  GError *error = NULL;
+  gchar *output = NULL;
+  GSubprocess *child = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_MERGE,
+      &error, "/app/bin/umbra-autostart.sh", enabled ? "enable" : "disable", NULL);
+  gboolean ok = child && g_subprocess_communicate_utf8(child, NULL, NULL, &output, NULL, &error)
+                       && g_subprocess_get_successful(child);
+  if (!ok) {
+    gchar *detail = g_strdup_printf("The startup preference could not be saved.\n\n%s",
+        error ? error->message : (output ? output : "Please try again."));
+    gtk_label_set_text(GTK_LABEL(message), detail);
+    g_free(detail);
+  }
+  g_clear_object(&child);
+  g_clear_error(&error);
+  g_free(output);
+  return ok;
+}
+
 static gboolean input_ready(void) {
   return access("/dev/uinput", W_OK) == 0 && access("/dev/uhid", W_OK) == 0;
 }
@@ -73,13 +92,29 @@ int main(int argc, char **argv) {
   gtk_widget_set_margin_top(message, 24);
   gtk_widget_set_margin_bottom(message, 24);
   gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), message);
+  const gchar *app_id = g_getenv("FLATPAK_ID");
+  gchar *autostart_name = g_strdup_printf("%s.desktop", app_id ? app_id : "");
+  gchar *autostart_path = g_build_filename(g_get_home_dir(), ".config", "autostart", autostart_name, NULL);
+  gboolean autostart_saved = g_file_test(autostart_path, G_FILE_TEST_EXISTS);
+  g_free(autostart_name);
+  g_free(autostart_path);
+  GtkWidget *autostart = gtk_check_button_new_with_label("Start Umbra when I sign in");
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(autostart), autostart_saved);
+  gtk_widget_set_margin_start(autostart, 24);
+  gtk_widget_set_margin_end(autostart, 24);
+  gtk_widget_set_margin_bottom(autostart, 24);
+  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), autostart);
   gtk_dialog_set_response_sensitive(GTK_DIALOG(dialog), SETUP, !ready);
   if (ready) gtk_button_set_label(GTK_BUTTON(gtk_dialog_get_widget_for_response(GTK_DIALOG(dialog), CONTINUE)), "Close");
   gtk_widget_show_all(dialog);
   for (;;) {
     gint response = gtk_dialog_run(GTK_DIALOG(dialog));
     if (busy) continue;
-    if (response != SETUP) break;
+    if (response != SETUP) {
+      gboolean enabled = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(autostart));
+      if (enabled != autostart_saved && !save_autostart(enabled)) continue;
+      break;
+    }
     GError *error = NULL;
     GSubprocess *child = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_MERGE,
                                          &error, "/app/bin/additional-install.sh", NULL);
