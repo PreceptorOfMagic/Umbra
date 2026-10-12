@@ -15,6 +15,7 @@ finish-args:
   - --share=ipc  # required for X11 shared memory extension
   - --share=network  # access network
   - --socket=pulseaudio  # play sounds using pulseaudio
+  - --filesystem=xdg-run/pipewire-0  # KDE native unattended virtual capture
   - --socket=wayland  # show windows using Wayland
   - --socket=fallback-x11  # show windows using X11
   - --system-talk-name=org.freedesktop.Avahi  # talk to avahi on the system bus
@@ -62,7 +63,7 @@ modules:
       env:
         BUILD_VERSION: "v0.5.1-gpu-test"
         BRANCH: "linux/coop"
-        COMMIT: "80f4dcede98b12a61a0bd63557e34351d1fc4563"
+        COMMIT: "73010ad9fe17e18b25850a510b08d112ecbae75b"
         XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
         npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
         npm_config_nodedir: /usr/lib/sdk/node22
@@ -98,7 +99,7 @@ modules:
       - type: git
         # Development commit; publish only after the compatibility matrix passes.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        commit: "80f4dcede98b12a61a0bd63557e34351d1fc4563"
+        commit: "73010ad9fe17e18b25850a510b08d112ecbae75b"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
         disable-submodules: true
