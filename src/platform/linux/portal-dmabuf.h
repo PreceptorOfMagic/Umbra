@@ -62,17 +62,21 @@ public:
     return !modifiers.empty();
   }
   // Borrowed DMA fds stay producer-owned. Readback/finish precedes requeue.
+  // 10-bit PQ (xBGR_210LE) reads back packed 2_10_10_10; 8-bit BGRx/BGRA reads back BGRA bytes.
   bool read(const spa_buffer &buffer, const spa_video_info_raw &format, std::vector<uint8_t> &pixels) {
-    if (!buffer.n_datas || buffer.n_datas > 4 || !(format.flags & SPA_VIDEO_FLAG_MODIFIER) ||
-        format.format != SPA_VIDEO_FORMAT_xBGR_210LE ||
+    const bool pq = format.format == SPA_VIDEO_FORMAT_xBGR_210LE;
+    const bool sdr = format.format == SPA_VIDEO_FORMAT_BGRx || format.format == SPA_VIDEO_FORMAT_BGRA;
+    if (!buffer.n_datas || buffer.n_datas > 4 || !(format.flags & SPA_VIDEO_FLAG_MODIFIER) || (!pq && !sdr) ||
         std::find(modifiers.begin(), modifiers.end(), format.modifier) == modifiers.end()) return false;
+    const EGLint fourcc = pq ? DRM_FORMAT_XBGR2101010 :
+      format.format == SPA_VIDEO_FORMAT_BGRA ? DRM_FORMAT_ARGB8888 : DRM_FORMAT_XRGB8888;
     constexpr EGLint fd_attrs[] {0x3272,0x3275,0x3278,0x3440};
     constexpr EGLint offset_attrs[] {0x3273,0x3276,0x3279,0x3441};
     constexpr EGLint pitch_attrs[] {0x3274,0x3277,0x327A,0x3442};
     constexpr EGLint lo_attrs[] {0x3443,0x3445,0x3447,0x3449};
     constexpr EGLint hi_attrs[] {0x3444,0x3446,0x3448,0x344A};
     std::vector<EGLint> attrs {EGL_WIDTH,EGLint(format.size.width),EGL_HEIGHT,EGLint(format.size.height),
-      0x3271 /* EGL_LINUX_DRM_FOURCC_EXT */,DRM_FORMAT_XBGR2101010};
+      0x3271 /* EGL_LINUX_DRM_FOURCC_EXT */,fourcc};
     for (unsigned i=0;i<buffer.n_datas;++i) {
       const auto &d=buffer.datas[i];
       if (d.type != SPA_DATA_DmaBuf || d.fd < 0 || d.fd > std::numeric_limits<EGLint>::max() || !d.chunk ||
@@ -93,7 +97,8 @@ public:
     gl.EGLImageTargetTexture2DOES(GL_TEXTURE_2D,image);
     if (gl.GetError() != GL_NO_ERROR) return false;
     pixels.resize(size_t(format.size.width)*format.size.height*4);
-    gl.GetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_INT_2_10_10_10_REV,pixels.data());
+    if (pq) gl.GetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_INT_2_10_10_10_REV,pixels.data());
+    else gl.GetTexImage(GL_TEXTURE_2D,0,GL_BGRA,GL_UNSIGNED_BYTE,pixels.data());
     gl.Finish();
     return gl.GetError() == GL_NO_ERROR;
   }

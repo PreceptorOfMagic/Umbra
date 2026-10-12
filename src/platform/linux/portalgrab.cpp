@@ -321,7 +321,9 @@ namespace portal {
 
     // gpu_frames_allowed: a native GPU encoder (NVENC/VA-API) will consume this capture, so frames
     // may stay in GPU memory as on Windows. Never for GPU HEVC sessions, which take CPU pixels.
-    bool init(platf::mem_type_e type, bool allow_hdr, bool gpu_frames_allowed, int probe_width = 1920, int probe_height = 1080) {
+    // readback_allowed: GPU HEVC session; take DMA-BUF and read it back here instead of the compositor's MemFd copy.
+    bool init(platf::mem_type_e type, bool allow_hdr, bool gpu_frames_allowed, bool readback_allowed = false,
+              int probe_width = 1920, int probe_height = 1080) {
       retry_sdr = allow_hdr;
       mem_type = type;
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
@@ -372,11 +374,17 @@ namespace portal {
       // Offer DMA-BUF only in modifiers this GPU's EGL can import, and only to an encoder that can
       // take it: VA-API always, CUDA when the compositor's GPU is NVIDIA (Vibepollo's pipewire
       // policy). CPU buffers stay offered after it as the fallback.
-      if (gpu_frames_allowed && !dma && (type == platf::mem_type_e::vaapi || type == platf::mem_type_e::cuda)) {
+      // GPU HEVC sessions take CPU pixels, but the compositor's own GPU-to-memory copy (MemFd) is
+      // slow and stalls its compositing (measured ~39 fps at 1920x2176 on KWin). They also take
+      // DMA-BUF and read it back here, on this capture's thread. Vendor-neutral: EGL + GL only.
+      const bool want_gpu_frames = gpu_frames_allowed && (type == platf::mem_type_e::vaapi || type == platf::mem_type_e::cuda);
+      const bool want_readback = readback_allowed && !gpu_frames_allowed;
+      if (!dma && (want_gpu_frames || want_readback)) {
         auto reader = std::make_unique<dma_reader_t>();
         if (reader->init(DRM_FORMAT_XRGB8888) &&
-            (type == platf::mem_type_e::vaapi || reader->vendor.find("NVIDIA") != std::string::npos)) {
+            (want_readback || type == platf::mem_type_e::vaapi || reader->vendor.find("NVIDIA") != std::string::npos)) {
           sdr_dma = std::move(reader);
+          readback = want_readback;
           gpu_attempt = true;
         } else {
           BOOST_LOG(info) << "Portal GPU frames unavailable for this encoder; using CPU frames";
@@ -450,6 +458,7 @@ namespace portal {
       }
       hdr = frame_hdr;
       gpu_frames = negotiated_gpu;
+      format_modifier = (format.flags & SPA_VIDEO_FLAG_MODIFIER) != 0;
       width = frame_width;
       height = frame_height;
       offset_x = session->x;
@@ -462,7 +471,8 @@ namespace portal {
       }
       initialized = true;
       BOOST_LOG(info) << "Portal capture ready: " << width << 'x' << height << (hdr ? " (PipeWire DMA-BUF HDR/PQ)" :
-        gpu_frames ? " (PipeWire DMA-BUF SDR, GPU frames)" : " (PipeWire SDR buffers)");
+        gpu_frames ? " (PipeWire DMA-BUF SDR, GPU frames)" : readback && format_modifier ? " (PipeWire DMA-BUF SDR, read back)" :
+        " (PipeWire SDR buffers)");
       return true;
     }
 
@@ -610,7 +620,7 @@ namespace portal {
     bool hdr = false, negotiated_hdr = false, frame_hdr = false, retry_sdr = false;
     // GPU frames: the newest DMA-BUF stays checked out (held) until a newer one replaces it; the
     // encoder imports duplicated fds. Read under mutex; PipeWire thread owns requeueing.
-    bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false, probe = false;
+    bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false, probe = false, readback = false, format_modifier = false;
     pw_buffer *held = nullptr;
     egl::surface_descriptor_t held_sd {0, 0, {-1, -1, -1, -1}, 0, 0, {}, {}};
     SS_HDR_METADATA hdr_metadata {};
@@ -658,7 +668,7 @@ namespace portal {
       allow_pq = self.dma && self.color && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) &&
         self.format.color_primaries == SPA_VIDEO_COLOR_PRIMARIES_BT2020 && self.format.transfer_function == 14u;
 #endif
-      bool gpu = false;
+      bool gpu = false;  // DMA-BUF negotiated (GPU frames, or read back for GPU HEVC)
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
       gpu = !pq && self.sdr_dma && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) &&
         std::find(self.sdr_dma->modifiers.begin(), self.sdr_dma->modifiers.end(), self.format.modifier) != self.sdr_dma->modifiers.end();
@@ -673,7 +683,7 @@ namespace portal {
       }
       {
         std::lock_guard lock(self.mutex);
-        self.negotiated_gpu = gpu;
+        self.negotiated_gpu = gpu && !self.readback;
         self.negotiated_hdr = pq;
         self.negotiated_width = w;
         self.negotiated_height = h;
@@ -709,7 +719,7 @@ namespace portal {
       const bool pq = self.format.format == SPA_VIDEO_FORMAT_xBGR_210LE;
       if (!w || !h) { self.fail(); return; }
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
-      if (!pq && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER)) {
+      if (!pq && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) && !self.readback) {
         // GPU frame: no copy. Keep this buffer checked out; requeue the one it replaces.
         if (b.n_datas > 4) { self.fail("GPU frame has more than 4 planes"); return; }
         egl::surface_descriptor_t sd {int(w), int(h), {-1, -1, -1, -1},
@@ -751,6 +761,10 @@ namespace portal {
           if (!self.dma || !self.dma->read(b, self.format, pixels)) { self.fail(); return; }
 #else
           self.fail(); return;
+#endif
+        } else if (self.readback && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER)) {
+#ifdef SUNSHINE_BUILD_PORTAL_HDR
+          if (!self.sdr_dma->read(b, self.format, pixels)) { self.fail("GPU frame read-back failed"); return; }
 #endif
         } else {
           if (!d.data || d.type != SPA_DATA_MemFd || !d.chunk->size || d.chunk->stride < static_cast<int>(w * 4) ||
@@ -934,18 +948,22 @@ namespace platf {
         (type != mem_type_e::system && type != mem_type_e::cuda && type != mem_type_e::vaapi)) return nullptr;
     const bool want_hdr = config.aurora_gpu_hevc && config.dynamicRange == 1;
     const bool gpu_frames = !config.aurora_gpu_hevc;
+    const bool readback = config.aurora_gpu_hevc;
     auto display = std::make_shared<portal::display_t>();
-    if (display->init(type, want_hdr, gpu_frames, config.width, config.height)) return display;
-    if (gpu_frames && type != mem_type_e::system) {
+    if (display->init(type, want_hdr, gpu_frames, readback, config.width, config.height)) return display;
+    if ((gpu_frames && type != mem_type_e::system) || (readback && !want_hdr)) {
       BOOST_LOG(warning) << "Portal GPU-frame capture failed; retrying with CPU frames";
       display.reset();
       display = std::make_shared<portal::display_t>();
-      if (display->init(type, false, false)) return display;
+      if (display->init(type, false, false, false)) return display;
     }
     if (!want_hdr) return nullptr;
     BOOST_LOG(warning) << "Portal HDR initialization failed; retrying SDR capture";
     display.reset();
     display = std::make_shared<portal::display_t>();
-    return display->init(type, false, false) ? display : nullptr;
+    if (display->init(type, false, false, true)) return display;
+    display.reset();
+    display = std::make_shared<portal::display_t>();
+    return display->init(type, false, false, false) ? display : nullptr;
   }
 } // namespace platf
