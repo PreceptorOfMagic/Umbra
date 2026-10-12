@@ -64,13 +64,14 @@ namespace proc {
   proc_t proc;
 
 #ifdef SUNSHINE_BUILD_PORTAL
-  static bool prepare_linux_pane(int width, int height, int milli_hz, bool coop) {
-    if (width < 64 || width > 8192 || height < 64 || height > 8192 || width % 2 || height % 2) return false;
+  static bool prepare_linux_pane(int width, int height, int milli_hz, bool coop, bool gpu_hevc) {
+    const int alignment = gpu_hevc ? 32 : 2;
+    if (width < 64 || width > 8192 || height < 64 || height > 8192 || width % alignment || height % alignment) return false;
     if (!milli_hz) milli_hz = 60000;
     if (milli_hz < 1000) milli_hz *= 1000;
     if (milli_hz < 1000 || milli_hz > 360000) return false;
     if (config::video.double_refreshrate) milli_hz *= 2;
-    const int pad = coop ? config::video.coop_pad_rows : 0;
+    const int pad = coop && !gpu_hevc ? config::video.coop_pad_rows : 0;
     if (pad > 0 && pad % 16 == 0 && 2 * pad < height / 2) height -= 2 * pad;
     return platf::portal_prepare_virtual(width, height, milli_hz);
   }
@@ -435,8 +436,7 @@ namespace proc {
 #else
 #ifdef SUNSHINE_BUILD_PORTAL
     if (launch_session->virtual_display || _app.virtual_display) {
-      if (launch_session->aurora_gpu_hevc ||
-          !prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop)) {
+      if (!prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop, launch_session->aurora_gpu_hevc)) {
         BOOST_LOG(error) << "The desktop could not create the requested virtual pane.";
         return 503;
       }
@@ -777,7 +777,7 @@ namespace proc {
     BOOST_LOG(info) << "[AURORA-GPU-HEVC] resumed virtual display verified "
       << mode.dmPelsWidth << "x" << mode.dmPelsHeight;
 #elif defined(SUNSHINE_BUILD_PORTAL)
-    if (session.aurora_gpu_hevc || !prepare_linux_pane(session.width, session.height, session.fps, session.umbra_coop)) return false;
+    if (!prepare_linux_pane(session.width, session.height, session.fps, session.umbra_coop, session.aurora_gpu_hevc)) return false;
     config::video.output_name = "portal";
     _env["SUNSHINE_CLIENT_WIDTH"] = std::to_string(session.width);
     _env["APOLLO_CLIENT_WIDTH"] = std::to_string(session.width);

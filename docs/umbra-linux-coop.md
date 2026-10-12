@@ -278,3 +278,36 @@ for the current portal path's limitation, not runtime HDR validation. Sources:
 https://github.com/KDE/kwin/blob/v6.6.6/src/plugins/screencast/outputscreencastsource.cpp
 and https://github.com/KDE/kwin/blob/v6.6.6/src/plugins/screencast/screencaststream.cpp.
 True HDR capture/conversion/metadata and valid SDR fallback remain open.
+
+## Custom encoder transport/lifecycle checkpoint — 2026-10-12 13:16
+
+Linux pane launch/resume now accepts custom sessions, requires32-pixel alignment,
+and bypasses native encoder seam padding as Windows does. Custom sessions select
+CPU capture explicitly; X11, wlroots RAM and KMS RAM capturers have adapters.
+X11 rejects unsupported pixel masks/depth/byte order. The current CPU adapter
+rejects HDR before opening an encoder, pending a real HDR capture conversion.
+Full runtime25 host build passes; X11/wlroots/KMS execution remains unqualified.
+
+Actual network tests used the installed Eclipse client protocol libraries and
+live FIFO decoding (manual C probe in Eclipse tests/coop): 75s8-bit Desktop3393
+frames;75s10-bit virtual pane2521frames, with an observed window move onto the
+pane. Both received requested recovery IDRs and Quit succeeded. Main/Main10,
+limitedBT.709, HDR=0; host and late decoded images inspected.
+
+Disconnect/Resume repeated with correct diagnostic aspect handling:75s1920x1088
+2919frames -> same app resumed75s1088x1920 3456frames; recovery in both phases;
+late images showed correct wide/tall geometry. The host's virtual output matched
+each requested size and Quit removed it, retainingDP-1. The original MJPEG preview
+kept its initial landscape size and squashed portrait output; that preview was
+ruled invalid and corrected, then the live run repeated. Host screenshot during
+first portrait transition, matched landscape screenshot in the repeat, and final
+post-Quit screenshot were inspected. Owned test processes/pipe cleanup verified.
+Audio/input, mixed-host splicing, TV, HDR and performance parity remain open.
+
+Packaging: module umbra-gpu-hevc builds two pinned PICx265 libraries and both
+OpenCL encoder libraries from source, installing kernels/licences/provenance.
+The module build passed underSDK25.08, exports only fourAGHL symbols per library,
+and those built libraries were used in the network checks above. Vendored source
+hashes identify Eclipse8c092dd6. A complete installed bundle check is still due.
+Evidence: ~/umbra-flatpak/gpu-linux/ (network-8,network-10,network-resume plus host
+logs). The previous failed geometry preview is retained separately.

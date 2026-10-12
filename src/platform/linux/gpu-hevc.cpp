@@ -31,6 +31,10 @@ namespace {
   public:
     ~device_t() override { if (session) library.close(session); }
     bool init(const video::config_t &config, bool hdr) {
+      if (hdr) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] HDR capture conversion is unavailable for the Linux CPU adapter";
+        return false;
+      }
       colorspace = video::colorspace_from_client_config(config, hdr);
       if (config.videoFormat != 1 || config.chromaSamplingType != 0 || colorspace.full_range ||
           (colorspace.colorspace != video::colorspace_e::rec709 && colorspace.colorspace != video::colorspace_e::bt2020)) {

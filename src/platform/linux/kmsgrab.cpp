@@ -19,6 +19,7 @@
 
 // local includes
 #include "cuda.h"
+#include "gpu-hevc.h"
 #include "graphics.h"
 #include "src/config.h"
 #include "src/logging.h"
@@ -1200,6 +1201,10 @@ namespace platf {
         }
 
         return capture_e::ok;
+      }
+
+      std::unique_ptr<gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
+        return gpu_hevc::make_device(config, is_hdr());
       }
 
       std::unique_ptr<avcodec_encode_device_t> make_avcodec_encode_device(pix_fmt_e pix_fmt) override {

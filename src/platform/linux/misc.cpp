@@ -37,6 +37,7 @@
 #include "graphics.h"
 #include "misc.h"
 #include "src/config.h"
+#include "src/video.h"
 #include "src/entry_handler.h"
 #include "src/logging.h"
 #include "src/platform/common.h"
@@ -975,6 +976,14 @@ std::string get_local_ip_for_gateway() {
   }
 
   std::shared_ptr<display_t> display(mem_type_e hwdevice_type, const std::string &display_name, const video::config_t &config) {
+    // The Linux custom encoder currently consumes owned CPU capture buffers.
+    // Select that capturer explicitly; never reinterpret an EGL/CUDA handle as pixels.
+    if (config.aurora_gpu_hevc) {
+      hwdevice_type = mem_type_e::system;
+#if defined(SUNSHINE_BUILD_CUDA) && defined(SUNSHINE_BUILD_X11)
+      if (sources[source::NVFBC]) return x11_display(hwdevice_type, display_name, config);
+#endif
+    }
 #ifdef SUNSHINE_BUILD_PORTAL
     if (sources[source::PORTAL] || portal_virtual_active()) return portal_display(hwdevice_type, display_name, config);
 #endif

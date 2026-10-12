@@ -7,6 +7,7 @@
 
 // local includes
 #include "cuda.h"
+#include "gpu-hevc.h"
 #include "src/logging.h"
 #include "src/platform/common.h"
 #include "src/video.h"
@@ -219,6 +220,10 @@ namespace wl {
       ctx = std::move(*ctx_opt);
 
       return 0;
+    }
+
+    std::unique_ptr<platf::gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
+      return gpu_hevc::make_device(config, is_hdr());
     }
 
     std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_encode_device(platf::pix_fmt_e pix_fmt) override {

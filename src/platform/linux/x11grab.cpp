@@ -20,6 +20,7 @@
 // local includes
 #include "cuda.h"
 #include "graphics.h"
+#include "gpu-hevc.h"
 #include "misc.h"
 #include "src/config.h"
 #include "src/globals.h"
@@ -534,6 +535,16 @@ namespace platf {
 
     std::shared_ptr<img_t> alloc_img() override {
       return std::make_shared<x11_img_t>();
+    }
+
+    std::unique_ptr<gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
+      if (xattr.depth != 24 || !xattr.visual || xattr.visual->red_mask != 0xff0000 ||
+          xattr.visual->green_mask != 0x00ff00 || xattr.visual->blue_mask != 0x0000ff ||
+          ImageByteOrder(xdisplay.get()) != LSBFirst) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] unsupported X11 pixel layout; expected little-endian BGRx8";
+        return {};
+      }
+      return gpu_hevc::make_device(config, false);
     }
 
     std::unique_ptr<avcodec_encode_device_t> make_avcodec_encode_device(pix_fmt_e pix_fmt) override {
