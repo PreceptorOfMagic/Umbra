@@ -379,6 +379,10 @@ namespace portal {
           dma = std::make_unique<dma_reader_t>();
           if (!dma->init()) { dma.reset(); umbra_portal_color_close(color); color = nullptr; }
           else {
+            // Native encoders take the 10-bit BT.2020/PQ DMA-BUF as a GPU frame (P010 via the VRAM
+            // path, as Windows feeds NVENC/AMF); GPU HEVC keeps its read-back.
+            hdr_gpu = gpu_frames_allowed && (type == platf::mem_type_e::vaapi ||
+                      (type == platf::mem_type_e::cuda && dma->vendor.find("NVIDIA") != std::string::npos));
             for (unsigned i=0;i<3;++i) {
               hdr_metadata.displayPrimaries[i].x = (output.xy[i*2]+10)/20;
               hdr_metadata.displayPrimaries[i].y = (output.xy[i*2+1]+10)/20;
@@ -510,7 +514,7 @@ namespace portal {
         env_height = std::max(env_height, monitor->viewport.offset_y + monitor->viewport.height);
       }
       initialized = true;
-      BOOST_LOG(info) << "Portal capture ready: " << width << 'x' << height << (hdr ? " (PipeWire DMA-BUF HDR/PQ)" :
+      BOOST_LOG(info) << "Portal capture ready: " << width << 'x' << height << (hdr ? (gpu_frames ? " (PipeWire DMA-BUF HDR/PQ, GPU frames)" : " (PipeWire DMA-BUF HDR/PQ)") :
         gpu_frames ? " (PipeWire DMA-BUF SDR, GPU frames)" : readback && format_modifier ? " (PipeWire DMA-BUF SDR, read back)" :
         " (PipeWire SDR buffers)");
       return true;
@@ -549,6 +553,19 @@ namespace portal {
     }
 
     std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_encode_device(platf::pix_fmt_e) override {
+      if (probe && mem_type != platf::mem_type_e::system) {
+        // Probe what streams use: the VRAM encoder fed GPU frames (incl. 10-bit P010). If it cannot be
+        // created here, fall back to CPU frames so the encoder itself is still found.
+        std::unique_ptr<platf::avcodec_encode_device_t> device;
+#ifdef SUNSHINE_BUILD_VAAPI
+        if (mem_type == platf::mem_type_e::vaapi) device = va::make_avcodec_encode_device(width, height, true);
+#endif
+#ifdef SUNSHINE_BUILD_CUDA
+        if (mem_type == platf::mem_type_e::cuda) device = cuda::make_avcodec_gl_encode_device(width, height, 0, 0);
+#endif
+        gpu_frames = device != nullptr;
+        if (device) return device;
+      }
       if (gpu_frames) {
 #ifdef SUNSHINE_BUILD_VAAPI
         if (mem_type == platf::mem_type_e::vaapi) return va::make_avcodec_encode_device(width, height, true);
@@ -661,6 +678,7 @@ namespace portal {
     // GPU frames: the newest DMA-BUF stays checked out (held) until a newer one replaces it; the
     // encoder imports duplicated fds. Read under mutex; PipeWire thread owns requeueing.
     bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false, probe = false, readback = false, format_modifier = false;
+    bool hdr_gpu = false;  // native encoder takes 10-bit PQ DMA-BUF frames directly
     pw_buffer *held = nullptr;
     egl::surface_descriptor_t held_sd {0, 0, {-1, -1, -1, -1}, 0, 0, {}, {}};
     SS_HDR_METADATA hdr_metadata {};
@@ -723,7 +741,7 @@ namespace portal {
       }
       {
         std::lock_guard lock(self.mutex);
-        self.negotiated_gpu = gpu && !self.readback;
+        self.negotiated_gpu = (gpu && !self.readback) || (pq && self.hdr_gpu);
         self.negotiated_hdr = pq;
         self.negotiated_width = w;
         self.negotiated_height = h;
@@ -759,10 +777,11 @@ namespace portal {
       const bool pq = self.format.format == SPA_VIDEO_FORMAT_xBGR_210LE;
       if (!w || !h) { self.fail(); return; }
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
-      if (!pq && (self.format.flags & SPA_VIDEO_FLAG_MODIFIER) && !self.readback) {
+      if ((self.format.flags & SPA_VIDEO_FLAG_MODIFIER) && (pq ? self.hdr_gpu : !self.readback)) {
         // GPU frame: no copy. Keep this buffer checked out; requeue the one it replaces.
         if (b.n_datas > 4) { self.fail("GPU frame has more than 4 planes"); return; }
         egl::surface_descriptor_t sd {int(w), int(h), {-1, -1, -1, -1},
+          pq ? uint32_t(DRM_FORMAT_XBGR2101010) :
           self.format.format == SPA_VIDEO_FORMAT_BGRA ? uint32_t(DRM_FORMAT_ARGB8888) : uint32_t(DRM_FORMAT_XRGB8888),
           self.format.modifier, {}, {}};
         for (uint32_t i = 0; i < b.n_datas; ++i) {
@@ -782,7 +801,7 @@ namespace portal {
           previous = self.held;
           self.held = buffer;
           self.held_sd = sd;
-          self.frame_hdr = false;
+          self.frame_hdr = pq;
           self.frame_width = w;
           self.frame_height = h;
           self.timestamp = std::chrono::steady_clock::now();
@@ -919,7 +938,44 @@ namespace platf {
     portal_restore_outputs();
   }
 
-  bool portal_prepare_virtual(int width, int height, int milli_hz) {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+  namespace {
+    // Whether this KWin can switch its virtual outputs to HDR (capability 0x8), remembered from the
+    // last virtual output so serverinfo can advertise HDR before any stream exists.
+    std::filesystem::path virtual_hdr_path() {
+      return appdata() / "kde_virtual_hdr";
+    }
+    void remember_virtual_hdr(bool capable) {
+      std::ofstream(virtual_hdr_path()) << (capable ? 1 : 0) << '\n';
+    }
+  }
+#endif
+
+  bool portal_virtual_hdr_supported() {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    std::ifstream file(virtual_hdr_path());
+    int capable = 0;
+    return file >> capable && capable == 1 && portal_kde_native_supported();
+#else
+    return false;
+#endif
+  }
+
+  // Once per host install (no remembered answer): a short-lived probe output reports whether KWin
+  // offers HDR on virtual outputs. Its distinct name keeps KWin's stored stream layout out of it.
+  void portal_probe_virtual_hdr() {
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    std::error_code ec;
+    if (std::filesystem::exists(virtual_hdr_path(), ec) || !portal_kde_native_supported()) return;
+    portal::kde_virtual_t probe;
+    if (!probe.open(64, 64, "-probe")) return;
+    const bool capable = umbra_kde_output_hdr_capable(probe.output_name.c_str());
+    remember_virtual_hdr(capable);
+    BOOST_LOG(info) << "KDE virtual displays " << (capable ? "offer" : "do not offer") << " HDR";
+#endif
+  }
+
+  bool portal_prepare_virtual(int width, int height, int milli_hz, bool hdr) {
     if (width < 64 || width > 8192 || height < 64 || height > 8192 ||
         width % 2 || height % 2 || milli_hz < 1000 || milli_hz > 360000 || !portal_coop_supported()) return false;
     std::lock_guard lock(portal::session_mutex);
@@ -955,6 +1011,18 @@ namespace platf {
         BOOST_LOG(info) << "Virtual display " << output << " is the only active display";
       } else {
         BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+      }
+      // HDR as the client asked, where this KWin can (Windows' virtual display follows the client too).
+      const bool hdr_capable = umbra_kde_output_hdr_capable(output.c_str());
+      remember_virtual_hdr(hdr_capable);
+      if (hdr_capable) {
+        if (umbra_kde_output_set_hdr(output.c_str(), hdr ? 1 : 0)) {
+          BOOST_LOG(info) << "Virtual display " << output << (hdr ? " is HDR (BT.2020/PQ)" : " is SDR");
+        } else {
+          BOOST_LOG(error) << "Could not switch the virtual display " << (hdr ? "to HDR" : "to SDR");
+        }
+      } else if (hdr) {
+        BOOST_LOG(info) << "This KWin has no HDR virtual displays; the stream stays SDR";
       }
     }
 #else
@@ -1023,32 +1091,28 @@ namespace platf {
   std::shared_ptr<display_t> portal_display(mem_type_e type, const std::string &name, const video::config_t &config) {
     if ((!name.empty() && name != "portal") ||
         (type != mem_type_e::system && type != mem_type_e::cuda && type != mem_type_e::vaapi)) return nullptr;
-    const bool want_hdr = config.aurora_gpu_hevc && config.dynamicRange == 1;
-    const bool gpu_frames = !config.aurora_gpu_hevc;
+    const bool want_hdr = config.dynamicRange == 1;
+    const bool gpu_frames = !config.aurora_gpu_hevc && type != mem_type_e::system;
     const bool readback = config.aurora_gpu_hevc;
-    auto display = std::make_shared<portal::display_t>();
-    if (display->init(type, want_hdr, gpu_frames, readback, config.width, config.height)) return display;
-    if (gpu_frames && type != mem_type_e::system) {
+    auto attempt = [&](bool hdr, bool gpu, bool back) -> std::shared_ptr<display_t> {
+      auto display = std::make_shared<portal::display_t>();
+      return display->init(type, hdr, gpu, back, config.width, config.height) ? display : nullptr;
+    };
+    if (auto display = attempt(want_hdr, gpu_frames, readback)) return display;
+    if (gpu_frames) {
       // Measured on KWin and Mutter: the first negotiation after a mode change can come back
       // linear (modifier 0, not importable here); a fresh one settles on a tiled modifier.
       BOOST_LOG(info) << "Portal GPU-frame capture: renegotiating once";
-      display.reset();
-      display = std::make_shared<portal::display_t>();
-      if (display->init(type, false, true, false, config.width, config.height)) return display;
+      if (auto display = attempt(want_hdr, true, false)) return display;
     }
-    if ((gpu_frames && type != mem_type_e::system) || (readback && !want_hdr)) {
+    if (want_hdr) {
+      BOOST_LOG(warning) << "Portal HDR initialization failed; retrying SDR capture";
+      if (auto display = attempt(false, gpu_frames, readback)) return display;
+    }
+    if (gpu_frames || readback) {
       BOOST_LOG(warning) << "Portal GPU-frame capture failed; retrying with CPU frames";
-      display.reset();
-      display = std::make_shared<portal::display_t>();
-      if (display->init(type, false, false, false)) return display;
+      if (auto display = attempt(false, false, false)) return display;
     }
-    if (!want_hdr) return nullptr;
-    BOOST_LOG(warning) << "Portal HDR initialization failed; retrying SDR capture";
-    display.reset();
-    display = std::make_shared<portal::display_t>();
-    if (display->init(type, false, false, true)) return display;
-    display.reset();
-    display = std::make_shared<portal::display_t>();
-    return display->init(type, false, false, false) ? display : nullptr;
+    return nullptr;
   }
 } // namespace platf

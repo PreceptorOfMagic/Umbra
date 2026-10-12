@@ -66,10 +66,12 @@ public:
     }
     return manager;
   }
-  bool open(int width, int height) {
+  // suffix: a distinct output (e.g. the capability probe) that KWin's stored layout for the
+  // stream's output name never applies to.
+  bool open(int width, int height, const char *suffix = "") {
     if (!available()) return false;
     const char *app = std::getenv("FLATPAK_ID");
-    const auto name = std::string("virtual-umbra-") + (app ? app : "host");
+    const auto name = std::string("virtual-umbra-") + (app ? app : "host") + suffix;
     output_name = "Virtual-" + name;
     stream = zkde_screencast_unstable_v1_stream_virtual_output(manager, name.c_str(), width, height, wl_fixed_from_int(1), 2);
     static const zkde_screencast_stream_unstable_v1_listener listener {

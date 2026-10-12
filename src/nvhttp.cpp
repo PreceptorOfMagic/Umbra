@@ -1076,7 +1076,7 @@ namespace nvhttp {
     // formats): a native 10-bit stream carries no extra picture, only cost (measured 3840x2160:
     // 88 fps Main10 vs 144 fps Main8). The flags also followed whichever display the last probe
     // used (8-bit at start, 10-bit after a stream). Offer 8-bit only. GPU HEVC negotiates its own depth.
-    else if (platf::portal_coop_supported()) {
+    else if (platf::portal_coop_supported() && !platf::portal_virtual_hdr_supported()) {
       codec_mode_flags &= ~(SCM_HEVC_MAIN10 | SCM_HEVC_REXT10_444 | SCM_AV1_MAIN10 | SCM_AV1_HIGH10_444);
     }
 #endif
@@ -1095,10 +1095,14 @@ namespace nvhttp {
       tree.put("root.UmbraCaps", caps);
     }
 #ifdef __linux__
-    // The Linux virtual-pane path currently captures SDR. Main10 support in
-    // the custom encoder does not make that capture HDR. Keep this separate
-    // from ordinary desktop HDR, which can use validated portal HDR buffers.
+    // Co-op panes are virtual displays: HDR only where they can be HDR (a KWin whose virtual
+    // outputs offer HDR, detected at runtime). Stock KWin captures them 8-bit and Mutter's virtual
+    // monitors are SDR, so those keep both panes SDR.
+  #ifdef SUNSHINE_BUILD_PORTAL_HDR
+    tree.put("root.UmbraCoopHdr", platf::portal_virtual_hdr_supported() ? 1 : 0);
+  #else
     tree.put("root.UmbraCoopHdr", 0);
+  #endif
 #endif
 
     tree.put("root.PairStatus", pair_status);

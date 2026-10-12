@@ -935,6 +935,7 @@ std::string get_local_ip_for_gateway() {
   bool portal_capture_active() { return sources[source::PORTAL]; }
   bool portal_virtual_active();
   void portal_restore_outputs();
+  void portal_probe_virtual_hdr();
   void portal_shutdown();
   std::vector<std::string> portal_display_names();
   std::shared_ptr<display_t> portal_display(mem_type_e, const std::string &, const video::config_t &);
@@ -1055,6 +1056,7 @@ std::string get_local_ip_for_gateway() {
     }
     // A previous run that died mid-stream may have left displays off for its virtual display.
     portal_restore_outputs();
+    portal_probe_virtual_hdr();
 #endif
 
 #ifdef SUNSHINE_BUILD_CUDA

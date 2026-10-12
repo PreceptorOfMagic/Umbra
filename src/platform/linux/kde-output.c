@@ -17,7 +17,7 @@
 #include "kde-output-management-v2.h"
 #include "kde-output.h"
 struct mode {struct kde_output_device_mode_v2 *obj; int w,h,hz; unsigned flags; int removed;};
-struct output {struct kde_output_device_v2 *obj; unsigned id,caps; int x,y,enabled,transform,alive; wl_fixed_t scale; char name[256]; struct mode modes[256]; int count; struct kde_output_device_mode_v2 *current;};
+struct output {struct kde_output_device_v2 *obj; unsigned id,caps,hdr; int x,y,enabled,transform,alive; wl_fixed_t scale; char name[256]; struct mode modes[256]; int count; struct kde_output_device_mode_v2 *current;};
 struct context {
  struct output outputs[32]; int count;
  struct kde_output_management_v2 *manager; unsigned version;
@@ -46,7 +46,7 @@ static void output_overscan(void *data,struct kde_output_device_v2 *obj,uint32_t
 static void output_vrr_policy(void *data,struct kde_output_device_v2 *obj,uint32_t vrr_policy) {}
 static void output_rgb_range(void *data,struct kde_output_device_v2 *obj,uint32_t rgb_range) {}
 static void output_name(void *data,struct kde_output_device_v2 *obj,const char * name) {snprintf(((struct output*)data)->name,256,"%s",name);}
-static void output_high_dynamic_range(void *data,struct kde_output_device_v2 *obj,uint32_t hdr_enabled) {}
+static void output_high_dynamic_range(void *data,struct kde_output_device_v2 *obj,uint32_t hdr_enabled) {((struct output*)data)->hdr=hdr_enabled;}
 static void output_sdr_brightness(void *data,struct kde_output_device_v2 *obj,uint32_t sdr_brightness) {}
 static void output_wide_color_gamut(void *data,struct kde_output_device_v2 *obj,uint32_t wcg_enabled) {}
 static void output_auto_rotate_policy(void *data,struct kde_output_device_v2 *obj,uint32_t policy) {}
@@ -232,6 +232,34 @@ int umbra_kde_output_restore(const char *state_path) {
   for(int j=0;j<n;j++)if(!strcmp(names[j],o->name))ok=0;
  }
  if(ok)remove(state_path);
+end:
+ cleanup(c);return ok;
+}
+/* KDE_OUTPUT_DEVICE_V2_CAPABILITY_HIGH_DYNAMIC_RANGE (0x8): the output can be switched to HDR.
+ * Stock KWin virtual outputs do not offer it; a KWin with virtual-output HDR does. */
+int umbra_kde_output_hdr_capable(const char *name) {
+ if(!umbra_output_name(name))return 0;
+ struct context *c=connect_outputs();if(!c)return 0;
+ int capable=0;
+ for(int i=0;i<c->count;i++)if(c->outputs[i].alive && !strcmp(c->outputs[i].name,name))capable=(c->outputs[i].caps&0x8)!=0;
+ cleanup(c);return capable;
+}
+/* Switch HDR (BT.2020/PQ) on or off for the Umbra output; 1 when KWin reports the requested state. */
+int umbra_kde_output_set_hdr(const char *name,int enable) {
+ if(!umbra_output_name(name))return 0;
+ struct context *c=connect_outputs();if(!c)return 0;
+ int ok=0;struct output *target=NULL;
+ if(!c->manager)goto end;
+ for(int i=0;i<c->count;i++)if(c->outputs[i].alive && !strcmp(c->outputs[i].name,name)) {
+  if(target)goto end;target=&c->outputs[i];
+ }
+ if(!target || !(target->caps&0x8))goto end;
+ if((int)target->hdr==(enable?1:0)){ok=1;goto end;}
+ struct kde_output_configuration_v2 *config=kde_output_management_v2_create_configuration(c->manager);
+ if(!config)goto end;
+ kde_output_configuration_v2_set_high_dynamic_range(config,target->obj,enable?1:0);
+ if(!apply(c,config))goto end;
+ ok=target->alive && (int)target->hdr==(enable?1:0);
 end:
  cleanup(c);return ok;
 }
