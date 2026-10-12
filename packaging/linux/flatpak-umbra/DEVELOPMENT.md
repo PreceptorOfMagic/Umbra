@@ -9,6 +9,11 @@ The intended experience is one ordinary Flatpak installation, one desktop screen
 remembered permission where supported, and clear setup for streamed input. A desktop's missing
 virtual-display controls must not prevent ordinary desktop streaming.
 
+The final release also requires the custom GPU HEVC encoder for mixed-hardware co-op with Windows
+behavioral parity, plus HDR wherever capture, encoding and presentation support it. Both are open
+implementation/validation gates, not features of this development package. See the final release
+scope and implementation order in [the Linux co-op record](../../../docs/umbra-linux-coop.md).
+
 ## Build choices
 
 - Freedesktop runtime/SDK25.08; node22 builds the web UI from its locked offline dependencies.
@@ -62,5 +67,7 @@ ICU73 dependency; rebuild dependencies rather than shipping old runtime librarie
 | wlroots Wayland | Existing capture paths retained | Real installation and regression tests; KDE-only mode control unavailable |
 
 Also validate clean install, upgrade, permission denial/revocation, restart, uninstall, Intel VAAPI,
-older NVIDIA GPUs, older Intel hardware (25.08 removed intel-vaapi-driver in favor of intel-media-driver), fractional scaling and multi-monitor input. SDR only until HDR is measured. Do not
-promise165fps or Windows-equivalent co-op based on mode labels or counters. Publication stays deferred.
+older NVIDIA GPUs, older Intel hardware (25.08 removed intel-vaapi-driver in favor of
+intel-media-driver), fractional scaling and multi-monitor input. Current evidence is SDR only;
+implementing and qualifying HDR where possible remains in the release scope. Do not promise165fps
+or Windows-equivalent co-op based on mode labels or counters. Publication stays deferred.

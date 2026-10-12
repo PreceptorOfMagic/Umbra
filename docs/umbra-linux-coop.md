@@ -4,6 +4,54 @@ Status: **portal capture and KDE virtual-pane lifecycle implemented, under valid
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 
+## Final release scope agreed 2026-10-12
+
+Finish compatibility engineering and internal validation before handing the user a final
+acceptance candidate. Intermediate builds are development artifacts. Broad installation alone
+does not satisfy the release requirement.
+
+The custom GPU HEVC encoder is required for Linux mixed-hardware co-op, with the same user-facing
+behavior and encoding contract as the Windows version. It is not a deferred feature. Qualify
+Linux/Linux and Linux/Windows sessions, both host roles and both pane orientations against the
+corresponding supported Windows combinations. Preserve the shared coding geometry, rate control,
+recovery behavior, game-resolution fitting, Disconnect/Resume and Quit behavior. Compare live
+visual quality, latency and game-load performance with the identified Windows reference build;
+compiling the OpenCL kernels is not parity evidence. Unsupported runtime/device combinations must
+be explained without silently substituting a CPU encoder or an incompatible hardware bitstream.
+
+HDR is also in scope wherever the complete path supports it, including the custom encoder's
+10-bit path. Detect capture color representation and metadata, preserve the intended transfer
+function and primaries through conversion and encoding, and verify client/display presentation.
+Ten-bit encoding by itself is not HDR evidence. Qualify ordinary streaming and co-op separately;
+co-op requires a compatible color contract across both panes. Where that is unavailable, select a
+valid SDR path with a clear explanation, retaining the required mixed-hardware encoder. Do not
+label an HDR buffer as SDR without appropriate capture negotiation or tone mapping. NVIDIA is a
+target for investigation rather than a permanent blanket exclusion; actual support remains
+dependent on the measured capture/driver/encoder path. Normal operation must stay unprivileged.
+
+### Source audit and implementation order
+
+1. Identify and pin the Windows encoder source/artifact used as the compatibility reference.
+   The core in Eclipse's `experimental/gpu-hevc` uses OpenCL and includes a Linux runtime loader,
+   but its production library currently requires D3D11 capture and its production CMake target
+   requires MSVC. Port the platform boundary while retaining the shared encoder implementation.
+2. Add Linux capture-to-OpenCL integration, source-built 8/10-bit libraries and Flatpak runtime
+   discovery/packaging. Verify the actual GPU runtime inside the sandbox, not only on the host.
+   Extend host capability discovery only when the implementation and required runtime are usable.
+3. Establish SDR mixed-hardware compatibility with live encodes and inspected client/TV images,
+   including game geometry changes, reconnects and recovery. Retain the Windows behavior as the
+   reference and avoid changing its ABI merely to introduce a Linux adapter.
+4. Extend capture and conversion for HDR. The current portal backend negotiates only BGRx/BGRA,
+   and does not implement HDR detection/metadata; the existing CUDA CPU-upload path rejects P010.
+   These require implementation, not a capability-bit change. Audit compositor-specific support
+   before selecting the HDR capture route; then validate true HDR and SDR fallback end to end.
+5. Include the encoder libraries, kernels, provenance, licenses and supported-runtime checks in
+   the final reproducible package. Publish the measured desktop/GPU/feature matrix with the
+   acceptance candidate. Source review and build results must remain distinct from runtime proof.
+
+All of these are open release gates. The evidence sections below describe earlier development
+builds and must not be read as completion of this expanded scope.
+
 ## What is established
 
 The ordinary XDG ScreenCast portal can create a virtual monitor for the sandboxed Umbra app. On
