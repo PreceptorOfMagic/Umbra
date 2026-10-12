@@ -580,10 +580,15 @@ Commits on `linux/coop`:
   against encoder deliveries every 10s.
 - `a8e846b2`: 4 PipeWire buffers when one is held. `50ab1f74`: GPU HEVC sessions take DMA-BUF and
   read it back on the capture thread. `2462bc48`: Mesa rusticl is enabled for `radeonsi,iris` unless
-  the user set `RUSTICL_ENABLE`. `2462bc48` is the final code; the recipe pins it.
+  the user set `RUSTICL_ENABLE`. `0e0c61a6`: where streams capture KDE virtual displays, native codecs are
+  advertised 8-bit only (Main10 from an 8-bit capture measured 88 fps vs 144; the mask had also changed
+  after the first stream). `0e0c61a6` is the final code; the recipe pins it.
 
-Final candidate `Umbra-0.5.1-parity-final-x86_64.flatpak`, SHA256 prefix dc11f7d3a691b6bb;
-`/app/bin/sunshine` f283f37893ac8e38…, installed on VEGA Ubuntu 26.04/KDE and Mint 22.3.
+Final candidate `Umbra-0.5.1-parity-final2-x86_64.flatpak` (= `Umbra-0.5.1-linux-candidate-x86_64.flatpak`),
+SHA256 b34709564defcf856018541de4904110c6c5e483d14fcd5fcccd7560719a9da5;
+`/app/bin/sunshine` f74389a774e49634…, installed on VEGA Ubuntu 26.04/KDE and Mint 22.3. V0-V5 ran on
+the preceding build (code 2462bc48); the final build repeated V0, V1 (3616 frames), V4 (1683) and Mint (1477) with
+codecs 0x101 before and after streams.
 
 Live checks on VEGA (RTX 2060 SUPER, 595.99.02). Each was a real-time host encode into a network
 probe and live decoder at a requested 165 fps. Source and decoded images were read.
@@ -597,6 +602,7 @@ probe and live decoder at a requested 165 fps. Source and decoded images were re
 | V4 Co-op pane GPU HEVC 1920x2176 -> Resume 2176x1920 | 1627 frames, 4 IDRs, failed 0; DMA-BUF read back; ~42 frames/s, every frame encoded; GPU HEVC 17-25 ms/frame |
 | V5 SIGKILL mid-stream | KWin re-enabled DP-1 within 3s on its own; restarted host: no prompt |
 | Mint 22.3 X11, Automatic 3840x2160 | 1484/25s (60 Hz physical X11 output); X11 has no virtual displays |
+| V6 Main10 Automatic after a warm-up stream (2462bc48) | Worked as 10-bit SDR but 88 fps; fixed by 0e0c61a6 (8-bit only on KDE virtual displays) |
 
 Eclipse's Automatic co-op plan uses each host's native encoder for NVIDIA+NVIDIA or unknown-vendor
 pairs, and GPU HEVC only for mixed vendors (`coop_stream_plan_choose`). A PC1 (RTX 4070) + VEGA
@@ -623,3 +629,4 @@ Not yet done:
 - AMD has not been run with this candidate (VEGA holds the RTX 2060 SUPER). This covers the VA-API
   GPU-frame path, rusticl OpenCL for GPU HEVC and AMD+NVIDIA mixed co-op.
 - `BUILD_VERSION` still reads `v0.5.1-gpu-test`.
+- AMD's VA-API 10-bit and AV1 are not offered on KDE virtual displays either (same 8-bit rule).
