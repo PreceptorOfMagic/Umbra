@@ -24,13 +24,19 @@ class Writer {
 public:
     std::vector<uint8_t> parameterSets;
     std::vector<uint16_t> mvCosts;
-    Writer(uint32_t width,uint32_t height,uint32_t depth,bool hdr,bool adaptiveQp=false,bool deblock=false,bool isolatedIntra=false) {
+    Writer(uint32_t width,uint32_t height,uint32_t depth,bool hdr,bool adaptiveQp=false,bool deblock=false,bool isolatedIntra=false, uint32_t visibleWidth=0, uint32_t visibleHeight=0) {
         if(depth!=X265_DEPTH || width<64 || height<64 || width>8192 || height>8192 || width%32 || height%32 || (hdr && depth!=10))
             throw std::runtime_error("Unsupported x265 header configuration");
+        if(!visibleWidth)visibleWidth=width;
+        if(!visibleHeight)visibleHeight=height;
+        if(visibleWidth<64 || visibleHeight<64 || visibleWidth>width || visibleHeight>height ||
+           visibleWidth%2 || visibleHeight%2 || width-visibleWidth>=32 || height-visibleHeight>=32)
+            throw std::runtime_error("Unsupported visible picture dimensions");
         try {
             param=x265_param_alloc();if(!param)throw std::runtime_error("x265 parameter allocation failed");
             if(x265_param_default_preset(param,"ultrafast","zerolatency"))throw std::runtime_error("x265 preset unavailable");
-            param->sourceWidth=width;param->sourceHeight=height;param->internalBitDepth=X265_DEPTH;param->internalCsp=X265_CSP_I420;
+            param->sourceWidth=visibleWidth;param->sourceHeight=visibleHeight;
+            param->confWinRightOffset=width-visibleWidth;param->confWinBottomOffset=height-visibleHeight;param->internalBitDepth=X265_DEPTH;param->internalCsp=X265_CSP_I420;
             // Shared syntax timing, not a pacing loop or a limit on submissions.
             param->fpsNum=120;param->fpsDenom=1;param->maxCUSize=32;param->minCUSize=16;param->maxTUSize=32;
             param->tuQTMaxInterDepth=1;param->tuQTMaxIntraDepth=1;param->bEnableWavefront=0;param->frameNumThreads=1;memcpy(param->numaPools,"none",5);

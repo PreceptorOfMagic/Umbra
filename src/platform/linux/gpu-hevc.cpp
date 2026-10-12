@@ -55,9 +55,17 @@ namespace {
         return false;
       }
       colorspace = video::colorspace_from_client_config(config, hdr);
+      // The custom SDR conversion and VUI are Rec.709. A client may request
+      // Rec.2020 for its HDR-capable display even when capture falls back to SDR.
+      if (!hdr && colorspace.colorspace == video::colorspace_e::bt2020sdr) {
+        BOOST_LOG(info) << "[AURORA-GPU-HEVC] SDR capture uses Rec.709 instead of requested Rec.2020 SDR";
+        colorspace.colorspace = video::colorspace_e::rec709;
+      }
       if (config.videoFormat != 1 || config.chromaSamplingType != 0 || colorspace.full_range ||
           (colorspace.colorspace != video::colorspace_e::rec709 && colorspace.colorspace != video::colorspace_e::bt2020)) {
-        BOOST_LOG(error) << "[AURORA-GPU-HEVC] unsupported Linux geometry/colour contract; no fallback";
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] unsupported Linux colour contract: codec=" << config.videoFormat
+          << " chroma=" << config.chromaSamplingType << " full_range=" << colorspace.full_range
+          << " csc=" << config.encoderCscMode << "; no fallback";
         return false;
       }
       if (!library.load(colorspace.bit_depth)) {

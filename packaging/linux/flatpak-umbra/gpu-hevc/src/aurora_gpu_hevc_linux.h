@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 typedef struct aghl_session aghl_session;
+// width/height are even visible dimensions; coded padding is cropped by SPS.
 typedef struct aghl_config {
     uint32_t size,abi_version,width,height,bit_depth,hdr;
     const char* kernel_directory;

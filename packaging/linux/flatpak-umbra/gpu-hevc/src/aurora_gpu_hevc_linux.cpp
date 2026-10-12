@@ -58,7 +58,7 @@ struct LinuxCL:OpenCL {
 };
 aghl_config checked(const aghl_config* c) {
     if(!c || c->size!=sizeof *c || c->abi_version!=AGHL_ABI_VERSION || !c->kernel_directory || !*c->kernel_directory ||
-       c->width<64 || c->height<64 || c->width>8192 || c->height>8192 || c->width%32 || c->height%32 ||
+       c->width<64 || c->height<64 || c->width>8192 || c->height>8192 || c->width%2 || c->height%2 ||
        c->bit_depth!=X265_DEPTH || c->hdr>1 || (c->hdr && c->bit_depth!=10) || !c->bitrate_kbps || !c->framerate)
         throw std::runtime_error("Unsupported Linux GPU HEVC configuration or ABI");
     return *c;
@@ -76,6 +76,7 @@ struct Image {
 }
 struct aghl_session {
     aghl_config config;
+    const uint32_t codedWidth,codedHeight;
     std::filesystem::path directory;
     LinuxCL cl;
     Device device;
@@ -90,14 +91,14 @@ struct aghl_session {
     uint64_t lastFrame=0;
     std::chrono::steady_clock::time_point lastSubmission;
     std::vector<uint8_t> packet;
-    explicit aghl_session(const aghl_config* c):config(checked(c)),directory(config.kernel_directory),cl(config.device_selector),
+    explicit aghl_session(const aghl_config* c):config(checked(c)),codedWidth((config.width+31)&~31u),codedHeight((config.height+31)&~31u),directory(config.kernel_directory),cl(config.device_selector),
         device(cl,cl.id,pictureProgram(directory),true),
-        headers(config.width,config.height,config.bit_depth,config.hdr!=0,true,true,true),
+        headers(codedWidth,codedHeight,config.bit_depth,config.hdr!=0,true,true,true,config.width,config.height),
         rate(config.bitrate_kbps,config.framerate),dispatch(device,1,1),conversionError(device,4) {
         initPictureKernels(device,cl.id,directory,config.bit_depth);
         addProgram(device,cl.id,readFile(directory/"capture.cl"),"-cl-std=CL1.2",{{"capture_yuv","capture_yuv"}});
         addProgram(device,cl.id,readFile(directory/"linux_capture.cl"),"-cl-std=CL1.2",{{"capture_fit","capture_fit"},{"capture_unpack_pq","capture_unpack_pq"}});
-        PictureConfig p;p.width=config.width;p.height=config.height;p.depth=config.bit_depth;p.mvCosts=headers.mvCosts;
+        PictureConfig p;p.width=codedWidth;p.height=codedHeight;p.depth=config.bit_depth;p.mvCosts=headers.mvCosts;
         p.adaptiveQp=p.deblock=p.isolatedIntra=p.originalMotion=true;
         encoder=std::make_unique<GpuPictureEncoder>(device,p);
     }
@@ -125,16 +126,16 @@ struct aghl_session {
         check(cl.writeImage(device.queue,pq?packed->mem:input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
         if(pq)dispatch.call("capture_unpack_pq",size_t(f->width)*f->height,256,nullptr,packed->mem,input->mem,f->width,f->height);
         cl_mem source=input->mem;
-        if(f->width!=config.width || f->height!=config.height) {
-            if(!fitted)fitted=std::make_unique<Image>(cl,device,config.width,config.height,CL_RGBA,
+        if(f->width!=codedWidth || f->height!=codedHeight || config.width!=codedWidth || config.height!=codedHeight) {
+            if(!fitted)fitted=std::make_unique<Image>(cl,device,codedWidth,codedHeight,CL_RGBA,
                 linear?CL_HALF_FLOAT:CL_UNORM_INT8);
-            dispatch.call("capture_fit",size_t(config.width)*config.height,256,nullptr,input->mem,fitted->mem,config.width,config.height);
+            dispatch.call("capture_fit",size_t(codedWidth)*codedHeight,256,nullptr,input->mem,fitted->mem,codedWidth,codedHeight,config.width,config.height);
             source=fitted->mem;
         }
         bool intra=!haveFrame || requestedIdr;if(intra)poc=0;
         dispatch.zero(conversionError,4,nullptr);
         cl_uint mode=config.hdr?2:f->format==AGHL_SCRGB16F?1:0;
-        dispatch.call("capture_yuv",size_t(config.width)*config.height,256,nullptr,source,config.width,config.height,config.bit_depth,mode,
+        dispatch.call("capture_yuv",size_t(codedWidth)*codedHeight,256,nullptr,source,codedWidth,codedHeight,config.bit_depth,mode,
             encoder->planes[0]->input.mem,encoder->planes[1]->input.mem,encoder->planes[2]->input.mem,conversionError.mem);
         double elapsed=haveFrame?std::chrono::duration<double>(start-lastSubmission).count():1.0/config.framerate;
         auto result=encodePicture(*encoder,headers,rate,poc,intra,elapsed);
