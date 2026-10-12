@@ -683,7 +683,7 @@ namespace portal {
       spa_pod_builder b = SPA_POD_BUILDER_INIT(storage, sizeof storage);
       const spa_pod *params[] = {
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
-          SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(3, 2, 4),
+          SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(gpu ? 4 : 3, 2, 4),  // GPU frames keep one checked out
           SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1), SPA_PARAM_BUFFERS_size, SPA_POD_Int(w * h * 4),
           SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << (pq || gpu ? SPA_DATA_DmaBuf : SPA_DATA_MemFd)))),
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
