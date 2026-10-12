@@ -384,3 +384,27 @@ desktop/gears colors, geometry and changed gear positions. All owned processes
 stopped after completion. Evidence:~/umbra-flatpak/gpu-linux/network-selection/.
 Earlier HDR runtime evidence applies to ABI2; the algorithm is unchanged inABI3,
 but HDR3, AMD and physical multi-GPU still require runtime coverage.
+
+## Mint X11 startup and live stream — 2026-10-12 15:58
+
+Linux Mint22.3/Cinnamon6.6.2, signed kernel7.0.0-38, NVIDIA580.178.04,
+Secure Boot enabled, headless1920x1080. Steam retained the transferred login and
+native Children of Morta reached its title screen; no save was selected.
+
+The packaged host hung twice during X11 display enumeration, including with the
+game closed. A live backtrace showed the tray thread inside GTK initialization
+waiting in XSetErrorHandler while the main thread waited for an XOpenDisplay
+connection reply. Other X11 clients also stalled; stopping Umbra released them.
+Linux tray startup now finishes (success or failure) before platform probing
+continues. GTK remains on its original tray thread. The updated full host passed
+three subsequent startup/HTTP/desktop-response checks, plus a live Main10 SDR
+custom-encoder stream:4291frames over75s,2IDRs,requested recovery1,launch/Quit0,
+failed0. Explicit renderD128 selected RTX2060SUPER pci:0000:01:00.0. Source and
+received desktop/game-loading images were inspected. This was the rebuilt binary
+inside the installed Flatpak runtime, not yet a newly exported final package.
+Evidence: private ~/umbra-flatpak/vega/dual-distro/network-mint and startup logs.
+
+This closes the measured Mint startup deadlock. The earlier WSL/Xvfb heap abort
+has not yet been rerun and is not established as the same defect. Native input
+permissions, controller gameplay, decoded audio, TV presentation, AMD and X11
+virtual panes remain unqualified. This is a one-host smoke, not co-op acceptance.

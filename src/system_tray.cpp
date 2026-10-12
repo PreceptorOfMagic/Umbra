@@ -35,6 +35,7 @@
 
   // standard includes
   #include <csignal>
+  #include <future>
   #include <string>
 
   // lib includes
@@ -50,6 +51,7 @@
   #include "platform/common.h"
   #include "process.h"
   #include "network.h"
+  #include "utility.h"
   #include "src/entry_handler.h"
 
 using namespace std::literals;
@@ -131,7 +133,12 @@ namespace system_tray {
     .allIconPaths = {TRAY_ICON, TRAY_ICON_LOCKED, TRAY_ICON_PLAYING, TRAY_ICON_PAUSING},
   };
 
-  int system_tray() {
+  int system_tray(std::promise<void> *startup = nullptr) {
+    auto startup_guard = util::fail_guard([startup]() {
+      if (startup) {
+        startup->set_value();
+      }
+    });
   #ifdef _WIN32
     // If we're running as SYSTEM, Explorer.exe will not have permission to open our thread handle
     // to monitor for thread termination. If Explorer fails to open our thread, our tray icon
@@ -202,6 +209,11 @@ namespace system_tray {
     }
 
     tray_initialized = true;
+    // Release startup on success as well as on an initialization failure.
+    if (startup) {
+      startup->set_value();
+    }
+    startup_guard.disable();
     while (tray_loop(1) == 0) {
       BOOST_LOG(debug) << "System tray loop"sv;
     }
@@ -235,8 +247,23 @@ namespace system_tray {
       tray.menu[1].text = nullptr;
     }
 
-    std::thread tray_thread(system_tray);
+  #ifdef __linux__
+    // GTK's X11 initialization grabs the server while changing the global Xlib
+    // error handler. Concurrent XOpenDisplay in platform probing can hold the
+    // Xlib lock while waiting for that grab, deadlocking both and the desktop.
+    // Keep GTK on its tray thread, but finish initialization before probing.
+    std::promise<void> startup;
+    auto startup_done = startup.get_future();
+    std::thread tray_thread([startup = std::move(startup)]() mutable {
+      system_tray(&startup);
+    });
+  #else
+    std::thread tray_thread([]() { system_tray(); });
+  #endif
     tray_thread.detach();
+  #ifdef __linux__
+    startup_done.wait();
+  #endif
   #endif
   }
 
