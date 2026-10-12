@@ -320,9 +320,28 @@ namespace portal {
 
     // gpu_frames_allowed: a native GPU encoder (NVENC/VA-API) will consume this capture, so frames
     // may stay in GPU memory as on Windows. Never for GPU HEVC sessions, which take CPU pixels.
-    bool init(platf::mem_type_e type, bool allow_hdr, bool gpu_frames_allowed) {
+    bool init(platf::mem_type_e type, bool allow_hdr, bool gpu_frames_allowed, int probe_width = 1920, int probe_height = 1080) {
       retry_sdr = allow_hdr;
       mem_type = type;
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+      // Where every stream gets its own native virtual display, a display requested while none
+      // exists is the encoder probe (startup, or after a stream): it only encodes blank test
+      // images, so it needs no capture and must never open the desktop's screen-sharing prompt.
+      bool idle;
+      {
+        std::lock_guard lock(session_mutex);
+        idle = !active_session;
+      }
+      if (idle && platf::portal_coop_supported()) {
+        probe = true;
+        width = negotiated_width = probe_width > 0 ? probe_width : 1920;
+        height = negotiated_height = probe_height > 0 ? probe_height : 1080;
+        latest.assign(size_t(width) * height * 4, 0);
+        initialized = true;
+        BOOST_LOG(info) << "Portal encoder probe display " << width << 'x' << height << " (no capture, no prompt)";
+        return true;
+      }
+#endif
       session = get_session();
       if (!session) return false;
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
@@ -510,6 +529,7 @@ namespace portal {
     }
 
     platf::capture_e capture(const push_captured_image_cb_t &push, const pull_free_image_cb_t &pull, bool *) override {
+      if (probe) return platf::capture_e::error;  // probe displays only serve dummy images
       uint64_t consumed = 0;
       for (;;) {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
@@ -568,7 +588,7 @@ namespace portal {
     bool hdr = false, negotiated_hdr = false, frame_hdr = false, retry_sdr = false;
     // GPU frames: the newest DMA-BUF stays checked out (held) until a newer one replaces it; the
     // encoder imports duplicated fds. Read under mutex; PipeWire thread owns requeueing.
-    bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false;
+    bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false, probe = false;
     pw_buffer *held = nullptr;
     egl::surface_descriptor_t held_sd {0, 0, {-1, -1, -1, -1}, 0, 0, {}, {}};
     SS_HDR_METADATA hdr_metadata {};
@@ -893,7 +913,7 @@ namespace platf {
     const bool want_hdr = config.aurora_gpu_hevc && config.dynamicRange == 1;
     const bool gpu_frames = !config.aurora_gpu_hevc;
     auto display = std::make_shared<portal::display_t>();
-    if (display->init(type, want_hdr, gpu_frames)) return display;
+    if (display->init(type, want_hdr, gpu_frames, config.width, config.height)) return display;
     if (gpu_frames && type != mem_type_e::system) {
       BOOST_LOG(warning) << "Portal GPU-frame capture failed; retrying with CPU frames";
       display.reset();
