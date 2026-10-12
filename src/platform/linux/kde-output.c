@@ -151,14 +151,14 @@ int umbra_kde_output_supported(void) {
 }
 int umbra_kde_output_resize(const char *name,int w,int h,int hz,int *x,int *y) {
  /* Name comes from the fixed Umbra app identity, never an arbitrary display preference. */
- if(!name || strncmp(name,"Virtual-virtual-xdp-kde-",24) || w<64 || w>8192 || h<64 || h>8192 || hz<1000 || hz>360000)return 0;
+ if(!name || (strncmp(name,"Virtual-virtual-xdp-kde-",24) && strncmp(name,"Virtual-virtual-umbra-",22)) || w<64 || w>8192 || h<64 || h>8192 || hz<1000 || hz>360000)return 0;
  struct context *c=connect_outputs();if(!c)return 0;
  int ok=0;struct output *target=NULL;
  if(!c->manager)goto end;
  for(int i=0;i<c->count;i++)if(c->outputs[i].alive && !strcmp(c->outputs[i].name,name)) {
   if(target)goto end;target=&c->outputs[i];
  }
- if(!target || !(target->caps&0x2000))goto end;
+ if(!target || !(target->caps&0x2000)){fprintf(stderr,"KDE virtual output unavailable for mode control: %s (found=%d)\n",name,target!=NULL);goto end;}
  struct mode *chosen=NULL;
  for(int pass=0;pass<2;pass++) {
   for(int i=0;i<target->count;i++) {
