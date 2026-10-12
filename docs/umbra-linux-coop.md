@@ -619,14 +619,52 @@ Hard Linux limits measured or read from upstream source (for the website, later)
   capturing an HDR-mode physical monitor.
 - X11 (Mint/Cinnamon) has no per-client virtual display. Streams run at the physical output's mode.
 
-Not yet done:
+Superseded open items: see the GNOME section below (GNOME virtual displays done, version label
+fixed, co-op zero-copy measured as an NVIDIA driver limit; AMD still unmeasured).
 
-- GNOME per-client virtual displays (Mutter `RecordVirtual` works for SDR, measured). GNOME still
-  captures the physical monitor through the portal.
-- The GPU HEVC co-op encoder still receives CPU pixels: two copies Windows avoids through D3D11
-  interop. Its per-frame cost is the shared encoder's (Windows records: 4.7-5.3 ms RTX 4070,
-  10.2-11.7 ms RX Vega).
-- AMD has not been run with this candidate (VEGA holds the RTX 2060 SUPER). This covers the VA-API
-  GPU-frame path, rusticl OpenCL for GPU HEVC and AMD+NVIDIA mixed co-op.
-- `BUILD_VERSION` still reads `v0.5.1-gpu-test`.
-- AMD's VA-API 10-bit and AV1 are not offered on KDE virtual displays either (same 8-bit rule).
+## GNOME per-client virtual displays and final candidate — 2026-10-13 06:50
+
+GNOME now gets the same per-client exclusive virtual display as KDE, with no prompt. Mutter
+ScreenCast `RecordVirtual` (interface v4) creates it. A short PipeWire negotiation sets the
+client's WxH and max-framerate, and the result is verified and made exclusive through a temporary
+`DisplayConfig.ApplyMonitorsConfig` (method 1). Mutter ends the session with the host's bus
+connection, so a crash restores the physical layout. The Flatpak gained
+`--talk-name=org.gnome.Mutter.ScreenCast` and `--talk-name=org.gnome.Mutter.DisplayConfig`.
+
+Commits: `03bc7f1d` (GNOME backend, KDE-only rules split out, `BUILD_VERSION v0.5.1-linux-parity`);
+`74403bd0` (PipeWire init before the first sizing stream); `ec62f67d` (one GPU-frame renegotiation
+before the CPU fallback). The first negotiation after a mode change can return a linear DMA-BUF on
+both KWin and Mutter, and this NVIDIA driver cannot import it.
+
+HDR on GNOME, capability-driven: Mutter virtual monitors are SDR (colour modes [0]). The host
+advertises Main10 and takes the existing physical-monitor HDR route only while a physical monitor
+is in HDR mode. Otherwise GNOME streams use 8-bit per-client virtual displays, like KDE.
+
+Final candidate `Umbra-0.5.1-gnome-3-x86_64.flatpak` (= `Umbra-0.5.1-linux-candidate-x86_64.flatpak`),
+SHA256 d5f0a14e2039d7fa76d55be093d85735d8f599a46956b4dd8e1c6cc0a4244e2b; `/app/bin/sunshine` ce36deb03675d845…; version 0.5.1-linux-parity.
+
+Live checks on VEGA (RTX 2060 SUPER). Each was a real-time encode into a network probe and live
+decoder with images read.
+
+| Check | Result |
+|---|---|
+| GNOME 50.1 G1 Desktop 3840x2160@165 Automatic | Meta-0 3840x2160@165.000 only active display; GPU frames -> hevc_nvenc; Mutter delivered 1645/10s; client 4076/25s (163 fps); DP-1 back after Quit; top bar + gears decoded correctly |
+| G2 1920x1080 -> Resume 1080x1920 | 4093 + 4100 frames; the resize renegotiated once (linear) then ran on GPU frames at 165/s |
+| G3 co-op pane NVENC 1920x2160 / GPU HEVC 1920x2176 -> 2176x1920 | 4107 frames / 1669 frames (~34 fps, encoder-bound) |
+| G4 SIGKILL mid-stream | DP-1 restored within 3s by Mutter; restart: no prompt |
+| G5 DP-1 in HDR mode, Automatic HDR request | Advertised 0x301; physical capture DMA-BUF HDR/PQ -> GPU HEVC 10-bit HDR=1; client HDR on, valid metadata; DP-1 returned to SDR afterwards |
+| KDE regression (same build) | V1 3571 frames exclusive; resume to 1080x1920 on GPU frames; co-op GPU HEVC resume 1617 frames |
+| Mint 22.3 X11 | 1469 frames; X11 unchanged (UmbraCaps 2) |
+
+Co-op encoder zero-copy, measured on VEGA (NVIDIA 595.99.02, OpenCL 3.0): no
+`cl_khr_external_memory_dma_buf`, and `clCreateContext` sharing an EGL GL context returns -59. A
+DMA-BUF therefore cannot reach the OpenCL encoder without a CPU copy on NVIDIA. The adapter's
+remaining copy is required: the encode loop re-encodes the last converted frame when no new
+frame arrives (`video.cpp` `frame_captured`), after the capture image may have returned to its pool.
+
+Hard Linux limits (for the website, later): HDR co-op panes (KWin screencast 8-bit; Mutter
+virtual monitors SDR-only). KDE ordinary streams are SDR. X11 has no per-client virtual display.
+NVIDIA OpenCL cannot take DMA-BUF zero-copy.
+
+Unmeasured: anything AMD (VA-API GPU frames, rusticl OpenCL for GPU HEVC, AMD+NVIDIA co-op). This
+needs the RX Vega back in VEGA.
