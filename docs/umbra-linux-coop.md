@@ -361,3 +361,26 @@ HDR games, controller/audio, mixed-host splicing, GNOME virtual-pane HDR, AMD,
 or Windows visual/performance parity. Throughput remains below60fps. KWin and
 other capture backends need their own runtime qualification; do not advertise
 universal compositor HDR from these tests.
+
+## GPU selection checkpoint — 2026-10-12 15:22
+
+Linux ABI3 adds explicit GPU selection through the existing Graphics Adapter
+setting. Empty selects the only eligible GPU or the single non-unified-memory
+GPU in a hybrid system; this is a topology policy, not a performance ranking.
+DRM nodes are resolved through their character-device sysfs identity and matched
+against cl_khr_pci_bus_info. Unique exact OpenCL names work without that extension.
+Unknown/ambiguous choices fail with available identities; no silent replacement.
+Both availability discovery and encoder creation use the same selection.
+
+SDK25 builds passed. Both8/10bit libraries passed real Flatpak GPU probe/open
+checks for auto/name/PCI and rejection of missing devices. Policy fixtures cover
+hybrid ordering, duplicate names/PCI, unavailable choices and single integrated
+GPU. This is not physical dual-GPU qualification.
+
+Packaged live network10bitSDR check on Plasma/NVIDIA, adapter_name=/dev/dri/renderD128:
+3365frames/75s,2IDRs, requested recovery, start/cancel/errors0. Host reported RTX2060SUPER
+pci:0000:01:00.0. Main10 limitedBT709. Source and two decoded images showed correct
+desktop/gears colors, geometry and changed gear positions. All owned processes
+stopped after completion. Evidence:~/umbra-flatpak/gpu-linux/network-selection/.
+Earlier HDR runtime evidence applies to ABI2; the algorithm is unchanged inABI3,
+but HDR3, AMD and physical multi-GPU still require runtime coverage.

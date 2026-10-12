@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "aurora_gpu_hevc_linux.h"
 #include "frame_encoder.h"
+#include "linux_device_selection.h"
+#include <CL/cl_ext.h>
 #include <cstdio>
 #include <limits>
 
@@ -13,14 +15,15 @@ struct LinuxCL:OpenCL {
     decltype(&::clEnqueueWriteImage) writeImage=nullptr;
     cl_device_id id=nullptr;
     std::string name;
-    LinuxCL() {
+    explicit LinuxCL(const char* selector=nullptr) {
         createImage=reinterpret_cast<decltype(createImage)>(dlsym(module,"clCreateImage"));
         writeImage=reinterpret_cast<decltype(writeImage)>(dlsym(module,"clEnqueueWriteImage"));
         if(!createImage || !writeImage)throw std::runtime_error("OpenCL 1.2 image API unavailable");
         cl_uint count=0;check(clGetPlatformIDs(0,nullptr,&count),"platform count");
         std::vector<cl_platform_id> platforms(count);
         if(count)check(clGetPlatformIDs(count,platforms.data(),nullptr),"platforms");
-        unsigned found=0;
+        std::vector<cl_device_id> eligible;
+        std::vector<aghl::DeviceChoice> choices;
         for(auto p:platforms) {
             cl_uint n=0;auto e=clGetDeviceIDs(p,CL_DEVICE_TYPE_GPU,0,nullptr,&n);
             if(e==CL_DEVICE_NOT_FOUND)continue;
@@ -31,11 +34,26 @@ struct LinuxCL:OpenCL {
                 check(clGetDeviceInfo(candidate,CL_DEVICE_AVAILABLE,sizeof available,&available,nullptr),"GPU availability");
                 check(clGetDeviceInfo(candidate,CL_DEVICE_IMAGE_SUPPORT,sizeof images,&images,nullptr),"GPU images");
                 check(clGetDeviceInfo(candidate,CL_DEVICE_COMPILER_AVAILABLE,sizeof compiler,&compiler,nullptr),"GPU compiler");
-                if(available && images && compiler){id=candidate;found++;}
+                if(!available || !images || !compiler)continue;
+                cl_bool unified=CL_FALSE;
+                check(clGetDeviceInfo(candidate,CL_DEVICE_HOST_UNIFIED_MEMORY,sizeof unified,&unified,nullptr),"GPU memory topology");
+                aghl::DeviceChoice choice{info(candidate,CL_DEVICE_NAME),{},unified!=CL_FALSE};
+                const auto extensions=" "+info(candidate,CL_DEVICE_EXTENSIONS)+" ";
+                if(extensions.find(" cl_khr_pci_bus_info ")!=std::string::npos) {
+                    cl_device_pci_bus_info_khr pci{};
+                    if(clGetDeviceInfo(candidate,CL_DEVICE_PCI_BUS_INFO_KHR,sizeof pci,&pci,nullptr)==CL_SUCCESS &&
+                       pci.pci_domain<=0xffff && pci.pci_bus<=0xff && pci.pci_device<=0x1f && pci.pci_function<=7) {
+                        char address[32];
+                        std::snprintf(address,sizeof address,"%04x:%02x:%02x.%x",pci.pci_domain,pci.pci_bus,pci.pci_device,pci.pci_function);
+                        choice.pci=address;
+                    }
+                }
+                eligible.push_back(candidate);choices.push_back(std::move(choice));
             }
         }
-        if(found!=1)throw std::runtime_error(found?"Multiple OpenCL GPUs; explicit device selection required":"No usable OpenCL GPU; no CPU fallback");
-        name=info(id,CL_DEVICE_NAME);
+        auto selected=aghl::selectDevice(choices,selector?selector:"");
+        id=eligible[selected];name=choices[selected].name;
+        if(!choices[selected].pci.empty())name+=" pci:"+choices[selected].pci;
     }
 };
 aghl_config checked(const aghl_config* c) {
@@ -72,7 +90,7 @@ struct aghl_session {
     uint64_t lastFrame=0;
     std::chrono::steady_clock::time_point lastSubmission;
     std::vector<uint8_t> packet;
-    explicit aghl_session(const aghl_config* c):config(checked(c)),directory(config.kernel_directory),
+    explicit aghl_session(const aghl_config* c):config(checked(c)),directory(config.kernel_directory),cl(config.device_selector),
         device(cl,cl.id,pictureProgram(directory),true),
         headers(config.width,config.height,config.bit_depth,config.hdr!=0,true,true,true),
         rate(config.bitrate_kbps,config.framerate),dispatch(device,1,1),conversionError(device,4) {
@@ -133,8 +151,11 @@ struct aghl_session {
     }
 };
 extern "C" AGHL_API int aghl_probe(char* name,size_t n,char* error,size_t capacity) {
+    return aghl_probe_device(nullptr,name,n,error,capacity);
+}
+extern "C" AGHL_API int aghl_probe_device(const char* selector,char* name,size_t n,char* error,size_t capacity) {
     message(error,capacity,"");message(name,n,"");
-    try{LinuxCL cl;message(name,n,cl.name.c_str());return 0;}
+    try{LinuxCL cl(selector);message(name,n,cl.name.c_str());return 0;}
     catch(const std::exception& e){message(error,capacity,e.what());}catch(...){message(error,capacity,"Unknown OpenCL probe failure");}return -1;
 }
 extern "C" AGHL_API aghl_session* aghl_open(const aghl_config* config,char* error,size_t capacity) {

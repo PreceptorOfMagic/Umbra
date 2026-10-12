@@ -3,16 +3,16 @@
 The Linux OpenCL adapter shares the Windows v12b picture encoder, rate controller,
 HEVC headers and eight existing kernels. Before this port, all nine source files
 matched the v12 build source and all eight kernel hashes matched the release's
-BUILD-PROVENANCE.json. Linux has a separate ABI (AGHL version2; the earlier installed gpu-test uses1); Windows ABI3 is
+BUILD-PROVENANCE.json. Linux has a separate ABI (AGHL version3; earlier gpu-test/HDR checkpoints use1/2); Windows ABI3 is
 unchanged. The shared RPS reset now uses its constructor, which initializes every
 field, instead of memset, to compile with GCC's class-memaccess warning enabled.
 A Windows rebuild/regression check remains due.
 
 The Linux adapter uploads CPU capture pixels to a GPU image. Conversion, aspect
 fitting and picture encoding run through OpenCL. There is no CPU picture-encoder
-fallback. Exactly one usable OpenCL GPU is currently required; selecting between
-multiple GPUs is unfinished. The output libraries export only the four AGHL
-entry points; their private x265 symbols cannot interpose with each other or the
+fallback. Automatic selection uses the only eligible GPU, or the single GPU without
+unified host/device memory in a hybrid system. Otherwise explicit selection is
+required. The output libraries export only the five AGHL entry points; their private x265 symbols cannot interpose with each other or the
 host's x265 dependency.
 
 ## Build
@@ -230,3 +230,26 @@ must match the portal-selected output, track changes and feed client metadata.
 No host integration, network HDR notification, TV, HDR game, mixed-host or AMD
 result is implied by this component checkpoint. All owned harnesses stopped;
 temporary HDR output changes reverted to SDR.
+
+## GPU selection — 2026-10-12
+
+ABI3 adds an optional exact OpenCL device name or `pci:dddd:bb:dd.f` selector to
+aghl_config and aghl_probe_device. Existing aghl_probe remains an auto wrapper;
+ABI1/2 session opens are rejected. Explicit unavailable or duplicate matches never
+fall back. The host uses its existing Graphics Adapter setting, converting DRM
+character-device identity through /sys/dev/char to a PCI address, and uses the
+same selector for capability discovery and session opening. Restart after changes.
+
+Auto preference uses CL_DEVICE_HOST_UNIFIED_MEMORY as a topology heuristic, not
+a speed measurement. Multiple separate-memory GPUs remain ambiguous; set an
+exact device. PCI matching requires per-device cl_khr_pci_bus_info; drivers
+without it can still use unique names. Duplicate names require a unique PCI
+identity; duplicate ICD identities fail explicitly. These policies do not qualify
+Intel/AMD or a physical multi-GPU system.
+
+SDK25 builds of both depths and selection-policy fixtures passed. In the actual
+VEGA NVIDIA Flatpak sandbox, both depths probed/opened successfully by auto, exact
+name and PCI, while unknown name/address were rejected. ABI1/2, wrong HDR pixel
+formats and short buffers were rejected before frame encoding. Tests opened GPU
+resources but encoded no synthetic frames. Live selected-device network check is
+still required for this checkpoint. Evidence: gpu-linux/selection-sandbox-checks.log.

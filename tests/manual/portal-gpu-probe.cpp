@@ -6,7 +6,7 @@
 #include <iostream>
 #include <sys/stat.h>
 boost::log::sources::severity_logger<int> verbose, debug, info, warning, error, fatal;
-namespace config { sunshine_t sunshine {}; }
+namespace config { sunshine_t sunshine {}; video_t video {}; }
 namespace mail { safe::mail_t man; }
 namespace platf { std::filesystem::path appdata() { return std::filesystem::current_path(); } }
 static volatile std::sig_atomic_t stopped = 0;

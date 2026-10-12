@@ -13,10 +13,14 @@ int main(int argc,char**argv) {
     void(*close_session)(aghl_session*)=(void*)dlsym(lib,"aghl_close");
     if(!open_session||!encode||!close_session)return 1;
     char error[1024];
-    aghl_config config={sizeof config,1,64,64,10,1,argv[2],1000,60};
+    aghl_config config={sizeof config,1,64,64,10,1,argv[2],1000,60,NULL};
     aghl_session*s=open_session(&config,error,sizeof error);
     if(s){close_session(s);return 1;}
     printf("ABI1 rejected: %s\n",error);
+    config.abi_version=2;
+    s=open_session(&config,error,sizeof error);
+    if(s){close_session(s);return 1;}
+    printf("ABI2 rejected: %s\n",error);
     config.abi_version=AGHL_ABI_VERSION;
     unsigned char data[64*64*4]={0};
     for(unsigned test=0;test<3;test++) {

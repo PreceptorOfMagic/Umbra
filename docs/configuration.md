@@ -836,6 +836,16 @@ editing the `conf` file in a text editor. Use the examples as reference.
             @tip{To find the appropriate values follow these instructions.
             <br>
             <br>
+            **Linux custom GPU HEVC:**
+            <br>
+            Leave empty to use the only eligible OpenCL GPU, or the single GPU with separate
+            memory on a hybrid system. To select another GPU, enter its DRM render node
+            (for example `/dev/dri/renderD128`) or exact OpenCL device name. A DRM path
+            requires the driver's `cl_khr_pci_bus_info` extension. Multiple matching GPUs
+            require a unique selection; unavailable choices do not silently fall back.
+            Restart Umbra after changing this setting. The host log identifies the selected GPU.
+            <br>
+            <br>
             **Linux + VA-API:**
             <br>
             Unlike with *amdvce* and *nvenc*, it doesn't matter if video encoding is done on a different GPU.

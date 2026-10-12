@@ -2,20 +2,38 @@
 #include "gpu-hevc.h"
 #include "aurora_gpu_hevc_linux.h"
 #include "src/video.h"
+#include "src/config.h"
 #include <dlfcn.h>
 #include <cstring>
 #include <filesystem>
 #include <vector>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <regex>
 
 namespace gpu_hevc {
 namespace {
   const std::filesystem::path directory {SUNSHINE_GPU_HEVC_DIR};
+  std::string device_selector() {
+    const auto &configured = config::video.adapter_name;
+    if (configured.empty() || configured.front() != '/') return configured;
+    struct stat node {};
+    if (stat(configured.c_str(), &node) || !S_ISCHR(node.st_mode))
+      throw std::runtime_error("Graphics Adapter is not an accessible DRM device: " + configured);
+    std::error_code ec;
+    const auto device = std::filesystem::canonical(std::filesystem::path("/sys/dev/char") /
+      (std::to_string(major(node.st_rdev)) + ":" + std::to_string(minor(node.st_rdev))) / "device", ec);
+    const auto pci = device.filename().string();
+    if (ec || !std::regex_match(pci, std::regex("[0-9a-f]{4}:[0-9a-f]{2}:[0-1][0-9a-f]\\.[0-7]")))
+      throw std::runtime_error("Graphics Adapter PCI identity is unavailable: " + configured);
+    return "pci:" + pci;
+  }
   struct library_t {
     void *module = nullptr;
     decltype(&aghl_open) open = nullptr;
     decltype(&aghl_encode) encode = nullptr;
     decltype(&aghl_close) close = nullptr;
-    decltype(&aghl_probe) probe = nullptr;
+    decltype(&aghl_probe_device) probe = nullptr;
     ~library_t() { if (module) dlclose(module); }
     bool load(unsigned depth) {
       module = dlopen((directory / ("libaurora_gpu_hevc" + std::to_string(depth) + ".so")).c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -23,7 +41,7 @@ namespace {
       open = reinterpret_cast<decltype(open)>(dlsym(module, "aghl_open"));
       encode = reinterpret_cast<decltype(encode)>(dlsym(module, "aghl_encode"));
       close = reinterpret_cast<decltype(close)>(dlsym(module, "aghl_close"));
-      probe = reinterpret_cast<decltype(probe)>(dlsym(module, "aghl_probe"));
+      probe = reinterpret_cast<decltype(probe)>(dlsym(module, "aghl_probe_device"));
       return open && encode && close && probe;
     }
   };
@@ -47,10 +65,17 @@ namespace {
         return false;
       }
       kernels = (directory / "kernels").string();
+      try { selector = device_selector(); }
+      catch (const std::exception &failure) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] " << failure.what(); return false;
+      }
+      char selected[512] {}, detail[1024] {};
+      if (library.probe(selector.c_str(), selected, sizeof selected, detail, sizeof detail)) {
+        BOOST_LOG(error) << "[AURORA-GPU-HEVC] GPU selection failed: " << detail; return false;
+      }
       aghl_config args {sizeof(aghl_config), AGHL_ABI_VERSION, uint32_t(config.width), uint32_t(config.height),
         colorspace.bit_depth, video::colorspace_is_hdr(colorspace) ? 1u : 0u, kernels.c_str(),
-        uint32_t(config.bitrate), uint32_t(config.framerate)};
-      char detail[1024] {};
+        uint32_t(config.bitrate), uint32_t(config.framerate), selector.c_str()};
       session = library.open(&args, detail, sizeof detail);
       if (!session) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] Linux open failed: " << detail;
@@ -58,7 +83,7 @@ namespace {
       }
       BOOST_LOG(info) << "[AURORA-GPU-HEVC] Linux opened " << config.width << 'x' << config.height
         << " depth=" << colorspace.bit_depth << " HDR=" << args.hdr << " bitrate_kbps=" << args.bitrate_kbps
-        << " rate_control=bitrate capture_upload=cpu experimental=1";
+        << " GPU=" << selected << " rate_control=bitrate capture_upload=cpu experimental=1";
       return true;
     }
     int convert(platf::img_t &img) override {
@@ -96,7 +121,7 @@ namespace {
   private:
     library_t library;
     aghl_session *session = nullptr;
-    std::string kernels;
+    std::string kernels, selector;
     std::vector<uint8_t> pixels;
     aghl_frame frame {};
     capture_format_e capture_format = capture_format_e::bgra8;
@@ -107,6 +132,11 @@ namespace {
     // Hardware/driver changes require restarting the host. Discovery never
     // opens a screen-sharing prompt or starts a synthetic encode.
     static const bool usable = [] {
+      std::string selector;
+      try { selector = device_selector(); }
+      catch (const std::exception &failure) {
+        BOOST_LOG(warning) << "[AURORA-GPU-HEVC] " << failure.what(); return false;
+      }
       std::error_code ec;
       for (const char *name : {"cabac.cl", "cabac_parallel.cl", "capture.cl", "coefficients.cl", "motion.cl",
                               "picture.cl", "prediction.cl", "residual.cl", "linux_capture.cl"})
@@ -115,7 +145,7 @@ namespace {
         library_t lib;
         if (!lib.load(depth)) return false;
         char name[512] {}, error[1024] {};
-        if (lib.probe(name, sizeof name, error, sizeof error)) {
+        if (lib.probe(selector.c_str(), name, sizeof name, error, sizeof error)) {
           BOOST_LOG(warning) << "[AURORA-GPU-HEVC] unavailable: " << error;
           return false;
         }
