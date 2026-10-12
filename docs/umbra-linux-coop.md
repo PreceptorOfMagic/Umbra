@@ -527,6 +527,25 @@ were opened and read.
 All runs reported launch, cancel and failure counts of 0. Evidence:
 `~/umbra-flatpak/gpu-linux/acceptance-*` and `~/umbra-flatpak/vega/gnome/network-fixed-hdr-4k`.
 These are one-host checks, not TV presentation. They are not verdicts on mixed-host co-op, 165fps,
-latency or calibrated HDR. Linux virtual co-op is SDR. Mint 22.3 has not had the corrected
-candidate installed. TV, co-op, game, pad, audio, AMD/multi-GPU and Windows-parity acceptance are
+latency or calibrated HDR. Linux virtual co-op is SDR. TV, co-op, game, pad, audio, AMD/multi-GPU and Windows-parity acceptance are
 still outstanding.
+
+### Mint 22.3 / Cinnamon X11 — 2026-10-12 21:23
+
+The same bundle was installed as `master` on Mint 22.3 (NVIDIA 580.178.04, same RTX 2060 SUPER).
+Installed commit a8259f093ce2 and `/app/bin/sunshine` SHA256 3b3cc843… match Ubuntu. The X11
+NVIDIA capture path is NV12-only, so on Mint the host advertises H.264 and HEVC Main8 but not
+Main10 (`server_codecs=0x101`). An automatic Main10 request is therefore refused before connect.
+The custom GPU encoder still provides Main10.
+
+| Run | Frames | Result |
+|---|---:|---|
+| Automatic HEVC Main8 3840x2160, Rec2020 request on SDR desktop | 1473 | hevc_nvenc; host logged the stock "BT.2020 SDR expects 10-bit, falling back to Rec. 709"; decoded BT709 at exact size; 2 IDRs, recovery 1 |
+| Custom GPU HEVC Main10 3840x2160, SDR | 1145 | `[AURORA-GPU-HEVC] Linux opened 3840x2160 depth=10 HDR=0` on the RTX 2060 SUPER, CPU capture upload; decoded Main 10 BT709; 2 IDRs, recovery 1 |
+
+Both runs reported launch, cancel and failure counts of 0. Source screenshots and decoded frames
+were read: the Mint desktop at correct 16:9 proportions, with moving gears and correct primaries.
+Each run had its own bounded host and gears harness, torn down afterwards. Evidence:
+`~/umbra-flatpak/gpu-linux/network-mint-accept-*`; host logs are in VEGA's Mint home as
+`umbra-coop-probe/mint-accept-{auto-sdr2020-8,sdr-10}-host.log`. The automatic run does not exercise the
+custom converter fix; the TV's Rec2020 case on KDE is covered by the Ubuntu rows above.
