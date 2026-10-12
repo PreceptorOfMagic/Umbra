@@ -98,7 +98,6 @@ modules:
       - type: git
         # Development commit; publish only after the compatibility matrix passes.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        branch: "linux/coop"
         commit: "c270ba3e2fa859302fdaed17729c440c4be8cbd5"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
