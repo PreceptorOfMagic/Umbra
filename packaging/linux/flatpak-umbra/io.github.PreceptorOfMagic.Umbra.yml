@@ -62,7 +62,7 @@ modules:
       env:
         BUILD_VERSION: "v0.5.1-gpu-test"
         BRANCH: "linux/coop"
-        COMMIT: "c270ba3e2fa859302fdaed17729c440c4be8cbd5"
+        COMMIT: "4648e1e7659e5282e5f457be3c2c4bc5397d006a"
         XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
         npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
         npm_config_nodedir: /usr/lib/sdk/node22
@@ -98,7 +98,7 @@ modules:
       - type: git
         # Development commit; publish only after the compatibility matrix passes.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        commit: "c270ba3e2fa859302fdaed17729c440c4be8cbd5"
+        commit: "4648e1e7659e5282e5f457be3c2c4bc5397d006a"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
         disable-submodules: true
