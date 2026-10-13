@@ -4,21 +4,35 @@
 #include "linux_device_selection.h"
 #include <CL/cl_ext.h>
 #include <cstdio>
+#include <fcntl.h>
 #include <limits>
+#include <unistd.h>
 
 namespace {
 void message(char* out,size_t capacity,const char* text) {
     if(out && capacity)std::snprintf(out,capacity,"%s",text);
 }
+// An external frame this runtime cannot import. The session stays usable: aghl_encode returns
+// AGHL_EXTERNAL_UNAVAILABLE and the caller resubmits the same frame with host pixels.
+struct ExternalUnavailable:std::runtime_error{using std::runtime_error::runtime_error;};
 struct LinuxCL:OpenCL {
     decltype(&::clCreateImage) createImage=nullptr;
     decltype(&::clEnqueueWriteImage) writeImage=nullptr;
+    decltype(&::clEnqueueCopyBufferToImage) copyBufferToImage=nullptr;
+    // OpenCL 3.0 external memory; absent on older runtimes (external frames then fail clearly).
+    using create_with_properties_t=cl_mem(CL_API_CALL*)(cl_context,const cl_mem_properties*,cl_mem_flags,size_t,void*,cl_int*);
+    create_with_properties_t createBufferWithProperties=nullptr;
+    // cl_khr_external_memory acquire/release; required around every use of an imported object.
+    using external_objects_t=cl_int(CL_API_CALL*)(cl_command_queue,cl_uint,const cl_mem*,cl_uint,const cl_event*,cl_event*);
+    external_objects_t acquireExternal=nullptr,releaseExternal=nullptr;
     cl_device_id id=nullptr;
     std::string name;
     explicit LinuxCL(const char* selector=nullptr) {
         createImage=reinterpret_cast<decltype(createImage)>(dlsym(module,"clCreateImage"));
         writeImage=reinterpret_cast<decltype(writeImage)>(dlsym(module,"clEnqueueWriteImage"));
         if(!createImage || !writeImage)throw std::runtime_error("OpenCL 1.2 image API unavailable");
+        copyBufferToImage=reinterpret_cast<decltype(copyBufferToImage)>(dlsym(module,"clEnqueueCopyBufferToImage"));
+        createBufferWithProperties=reinterpret_cast<create_with_properties_t>(dlsym(module,"clCreateBufferWithProperties"));
         cl_uint count=0;check(clGetPlatformIDs(0,nullptr,&count),"platform count");
         std::vector<cl_platform_id> platforms(count);
         if(count)check(clGetPlatformIDs(count,platforms.data(),nullptr),"platforms");
@@ -87,6 +101,41 @@ struct aghl_session {
     Buffer conversionError;
     std::unique_ptr<Image> input,fitted,packed;
     uint32_t inputWidth=0,inputHeight=0,inputFormat=0,poc=0;
+    // Imported external allocation, cached by the caller's (fd, bytes); the caller keeps its fd open
+    // and the allocation stable for the session. A successful import transfers fd ownership to
+    // OpenCL (cl_khr_external_memory), so a duplicate is imported and the caller's fd stays its own.
+    cl_mem external=nullptr;
+    int32_t externalFd=-1;
+    size_t externalBytes=0;
+    cl_mem importExternal(int32_t fd,size_t bytes) {
+        if(external && fd==externalFd && bytes==externalBytes)return external;
+        if(external){cl.clReleaseMemObject(external);external=nullptr;externalFd=-1;externalBytes=0;}
+        if(!cl.createBufferWithProperties || !cl.copyBufferToImage)
+            throw ExternalUnavailable("OpenCL external memory unavailable (needs OpenCL 3.0 + cl_khr_external_memory_opaque_fd)");
+        if(!cl.acquireExternal) {
+            cl_platform_id platform=nullptr;
+            using address_t=void*(CL_API_CALL*)(cl_platform_id,const char*);
+            auto address=reinterpret_cast<address_t>(dlsym(cl.module,"clGetExtensionFunctionAddressForPlatform"));
+            if(address && cl.clGetDeviceInfo(cl.id,CL_DEVICE_PLATFORM,sizeof platform,&platform,nullptr)==CL_SUCCESS) {
+                cl.acquireExternal=reinterpret_cast<LinuxCL::external_objects_t>(address(platform,"clEnqueueAcquireExternalMemObjectsKHR"));
+                cl.releaseExternal=reinterpret_cast<LinuxCL::external_objects_t>(address(platform,"clEnqueueReleaseExternalMemObjectsKHR"));
+            }
+            if(!cl.acquireExternal || !cl.releaseExternal)
+                throw ExternalUnavailable("OpenCL external memory acquire/release unavailable");
+        }
+        const int copy=fcntl(fd,F_DUPFD_CLOEXEC,0);
+        if(copy<0)throw ExternalUnavailable("external frame fd cannot be duplicated");
+        const cl_mem_properties props[]={CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_FD_KHR,cl_mem_properties(copy),0};
+        cl_int e=CL_SUCCESS;
+        external=cl.createBufferWithProperties(device.context,props,CL_MEM_READ_ONLY,bytes,nullptr,&e);
+        if(e!=CL_SUCCESS || !external) {
+            external=nullptr;close(copy);  // ownership transfers only on success
+            throw ExternalUnavailable("external frame import failed (OpenCL error "+std::to_string(e)+")");
+        }
+        externalFd=fd;externalBytes=bytes;
+        return external;
+    }
+    ~aghl_session(){if(external)cl.clReleaseMemObject(external);}
     bool haveFrame=false,failed=false;
     uint64_t lastFrame=0;
     std::chrono::steady_clock::time_point lastSubmission;
@@ -104,14 +153,17 @@ struct aghl_session {
     }
     void encode(const aghl_frame* f,uint64_t frame,bool requestedIdr,agh_packet& out) {
         if(failed)throw std::runtime_error("GPU encoder failed earlier; close and recreate the session");
-        if(!f || f->size!=sizeof *f || !f->data || !f->width || !f->height || f->width>8192 || f->height>8192 ||
+        const bool externalFrame=f && f->size>=sizeof *f && (f->flags&AGHL_FRAME_EXTERNAL);
+        if(!f || (f->size!=sizeof *f && f->size!=AGHL_FRAME_BASE_SIZE) || (!externalFrame && !f->data) ||
+           (externalFrame && f->external_fd<0) || !f->width || !f->height || f->width>8192 || f->height>8192 ||
            f->format<AGHL_BGRA8 || f->format>AGHL_XBGR2101010_PQ ||
            (config.hdr && f->format!=AGHL_SCRGB16F && f->format!=AGHL_XBGR2101010_PQ) ||
            (!config.hdr && f->format==AGHL_XBGR2101010_PQ) ||
            (haveFrame && frame<=lastFrame))throw std::runtime_error("Invalid Linux capture or frame identity");
         const size_t pixel=f->format==AGHL_SCRGB16F?8:4,row=size_t(f->width)*pixel;
         if(f->row_pitch<row || f->row_pitch>std::numeric_limits<size_t>::max()/f->height ||
-           f->bytes<f->row_pitch*(f->height-1)+row)throw std::runtime_error("Capture buffer pitch/size mismatch");
+           f->bytes<f->row_pitch*(f->height-1)+row || (externalFrame && f->row_pitch!=row))
+            throw std::runtime_error("Capture buffer pitch/size mismatch");
         const bool pq=f->format==AGHL_XBGR2101010_PQ;
         const bool linear=f->format==AGHL_SCRGB16F || pq;
         auto start=std::chrono::steady_clock::now();
@@ -123,7 +175,16 @@ struct aghl_session {
             inputWidth=f->width;inputHeight=f->height;inputFormat=f->format;
         }
         const size_t origin[3]={0,0,0},region[3]={f->width,f->height,1};
-        check(cl.writeImage(device.queue,pq?packed->mem:input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
+        if(externalFrame) {
+            // GPU to GPU: the frame never visits host memory. The producer finished writing before
+            // this call (its own synchronisation); acquire/release order OpenCL's use of it.
+            cl_mem source=importExternal(f->external_fd,f->bytes);
+            check(cl.acquireExternal(device.queue,1,&source,0,nullptr,nullptr),"external frame acquire");
+            check(cl.copyBufferToImage(device.queue,source,pq?packed->mem:input->mem,0,origin,region,0,nullptr,nullptr),"external frame copy");
+            check(cl.releaseExternal(device.queue,1,&source,0,nullptr,nullptr),"external frame release");
+        } else {
+            check(cl.writeImage(device.queue,pq?packed->mem:input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
+        }
         if(pq)dispatch.call("capture_unpack_pq",size_t(f->width)*f->height,256,nullptr,packed->mem,input->mem,f->width,f->height);
         cl_mem source=input->mem;
         if(f->width!=codedWidth || f->height!=codedHeight || config.width!=codedWidth || config.height!=codedHeight) {
@@ -168,7 +229,9 @@ extern "C" AGHL_API int aghl_encode(aghl_session* session,const aghl_frame* fram
     message(error,capacity,"");
     if(!session || !out || out->size!=sizeof *out || force>1){message(error,capacity,"Invalid Linux GPU call");return -1;}
     out->data=nullptr;out->bytes=0;
-    try{session->encode(frame,id,force!=0,*out);return 0;}catch(const std::exception& e){message(error,capacity,e.what());}
+    try{session->encode(frame,id,force!=0,*out);return 0;}
+    catch(const ExternalUnavailable& e){message(error,capacity,e.what());return AGHL_EXTERNAL_UNAVAILABLE;}
+    catch(const std::exception& e){message(error,capacity,e.what());}
     catch(...){message(error,capacity,"Unknown Linux GPU encode failure");}session->failed=true;return -1;
 }
 extern "C" AGHL_API void aghl_close(aghl_session* session){delete session;}

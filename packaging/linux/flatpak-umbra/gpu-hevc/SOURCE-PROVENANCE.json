@@ -23,8 +23,8 @@
     "kernels/residual.cl": "9cb6a5701b208c159cb750be61b2c0efbf177a1b5639d29d79d4e82df920bc80",
     "src/aurora_gpu_hevc.cpp": "9b36afd6688db42d9764ff44fde25269731331e59a260f09d94b4dbb33260266",
     "src/aurora_gpu_hevc.h": "ceb36fedf20fcafb88b9fe5cd6c46a598299919c6cfa0a2e9a60b7a8e9f6825c",
-    "src/aurora_gpu_hevc_linux.cpp": "c1c8505d98e86e63900a076de33786ef94df5594111da6501804ef775608962e",
-    "src/aurora_gpu_hevc_linux.h": "d12482ef7fa3034c68540b933417eb44eedff761df2c3f9ae6920b56d442f88b",
+    "src/aurora_gpu_hevc_linux.cpp": "8c1c29306794d0b0578b3880fbd44e1250a60528a1d060a904aedde90cec4698",
+    "src/aurora_gpu_hevc_linux.h": "2f5f55254aa3f633aabb4942a955a824ac83378c99f359b781fed6f332cc7636",
     "src/cabac_backend.h": "b07c18c43ae2319e42049388888147a35e9755d18ef77e924e572752cc7eec38",
     "src/d3d11_interop.h": "09cd0e337efa6700f200ea199b8d153b08567ee8bb6c8519e470368c1eda8d67",
     "src/frame_encoder.h": "f9cae9dedcd39d6d9e067e4748352e964cd1f7a0d5064f5478121e1c27f49aad",
@@ -73,7 +73,7 @@
     "src/linux_device_selection.h": "de9432c27b294312a71327858fac73f30d627a55b8c83b7b9831fdb26b0a75bc",
     "tests/linux_device_selection.cpp": "71d9d202ef5ace6e2ebc846009b3deca28012b19e98b14699e19718e3103f852"
   },
-  "downstream_changes": "Umbra Linux visible-size padding/cropping and Linux capture fit, 2026-10-12; upstream Windows default header behavior retained.",
+  "downstream_changes": "Umbra Linux visible-size padding/cropping and Linux capture fit, 2026-10-12; upstream Windows default header behavior retained; Umbra Linux external GPU frames (AGHL_FRAME_EXTERNAL: opaque-fd import with acquire/release, AGHL_EXTERNAL_UNAVAILABLE keeps the session), 2026-10-13.",
   "upstream_files": {
     "ALGORITHM.md": "5dc375dca3765ef956a93802f82850ae4ee93ba0e0dc698775173a02dece6189",
     "CMakeLists.txt": "f67054f8d18602e80250e69c619b18a195686f047d4e6a86ce2ef61596fa6e2c",
