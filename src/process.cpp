@@ -442,7 +442,8 @@ namespace proc {
     // HDR on GNOME: resolve_desktop_hdr_encoder chose the physical HDR monitor (virtual displays
     // there are SDR). Every other session gets its per-client virtual display.
     const bool physical_hdr = launch_session->aurora_gpu_hevc && launch_session->enable_hdr &&
-                              !launch_session->umbra_coop && !launch_session->virtual_display && !_app.virtual_display;
+                              !launch_session->umbra_coop && !launch_session->virtual_display && !_app.virtual_display &&
+                              !platf::portal_virtual_hdr_supported();  // KDE with HDR virtual outputs: no monitor needed
     platf::portal_physical_capture(physical_hdr);
     if (launch_session->virtual_display || _app.virtual_display || (!physical_hdr && platf::portal_coop_supported())) {
       if (!prepare_linux_pane(render_width, render_height, launch_session->fps, launch_session->umbra_coop, launch_session->aurora_gpu_hevc, launch_session->enable_hdr)) {

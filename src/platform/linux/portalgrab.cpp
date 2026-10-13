@@ -211,6 +211,10 @@ namespace portal {
 
     int x = 0, y = 0, width = 0, height = 0, milli_hz = 60000;
     bool has_position = false;
+    // Umbra switched this KWin virtual output to HDR and KWin confirmed it. KWin describes HDR
+    // outputs to clients by their blending space (BT.2020 + gamma 2.2 over an extended range) and
+    // keeps the PQ encoding internal, so the colour query alone cannot see it.
+    bool virtual_hdr = false;
     uint32_t node = PW_ID_ANY, source_type = 1;
     std::unique_ptr<gnome_virtual_t> gnome;  // GNOME per-client virtual display
 
@@ -375,7 +379,10 @@ namespace portal {
       if (allow_hdr && session->has_position) {
         umbra_portal_hdr output {};
         color = umbra_portal_color_open(session->x, session->y, &output);
-        if (color && output.hdr) {
+        // KDE virtual HDR: KWin reports the blending space, not PQ (see session_t::virtual_hdr);
+        // the mastering primaries and luminances it reports are still the output's.
+        const bool kde_virtual_hdr = color && session->virtual_hdr && output.max_luminance;
+        if (color && (output.hdr || kde_virtual_hdr)) {
           dma = std::make_unique<dma_reader_t>();
           if (!dma->init()) { dma.reset(); umbra_portal_color_close(color); color = nullptr; }
           else {
@@ -1017,8 +1024,10 @@ namespace platf {
       remember_virtual_hdr(hdr_capable);
       if (hdr_capable) {
         if (umbra_kde_output_set_hdr(output.c_str(), hdr ? 1 : 0)) {
+          session->virtual_hdr = hdr;
           BOOST_LOG(info) << "Virtual display " << output << (hdr ? " is HDR (BT.2020/PQ)" : " is SDR");
         } else {
+          session->virtual_hdr = false;
           BOOST_LOG(error) << "Could not switch the virtual display " << (hdr ? "to HDR" : "to SDR");
         }
       } else if (hdr) {
