@@ -445,6 +445,16 @@ namespace portal {
       uint8_t storage[8192];
       spa_pod_builder builder = SPA_POD_BUILDER_INIT(storage, sizeof storage);
       std::vector<const spa_pod *> params;
+      // GNOME's virtual display takes its mode from the consumer's format: pin it to the session's (HDR and SDR offers
+      // alike; KWin ignores it).
+      auto pinned_size = SPA_RECTANGLE(uint32_t(session->width), uint32_t(session->height));
+      auto zero_rate = SPA_FRACTION(0, 1), max_rate = SPA_FRACTION(uint32_t(session->milli_hz), 1000u), low_rate = SPA_FRACTION(1, 1);
+      auto add_mode = [&](spa_pod_builder *b) {
+        if (!session->gnome) return;
+        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&pinned_size),
+          SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&zero_rate),
+          SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction(&max_rate, &low_rate, &max_rate), 0);
+      };
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
       if (dma) {
         spa_pod_frame object, choice;
@@ -454,6 +464,7 @@ namespace portal {
           SPA_FORMAT_VIDEO_format, SPA_POD_Id(SPA_VIDEO_FORMAT_xBGR_210LE),
           SPA_FORMAT_VIDEO_colorPrimaries, SPA_POD_Id(SPA_VIDEO_COLOR_PRIMARIES_BT2020),
           SPA_FORMAT_VIDEO_transferFunction, SPA_POD_Id(14u /* SMPTE2084, PipeWire1.6 */), 0);
+        add_mode(&builder);
         spa_pod_builder_prop(&builder, SPA_FORMAT_VIDEO_modifier, SPA_POD_PROP_FLAG_MANDATORY | SPA_POD_PROP_FLAG_DONT_FIXATE);
         spa_pod_builder_push_choice(&builder, &choice, SPA_CHOICE_Enum, 0);
         spa_pod_builder_long(&builder, dma->modifiers.front());
@@ -462,15 +473,6 @@ namespace portal {
         params.push_back(static_cast<const spa_pod *>(spa_pod_builder_pop(&builder, &object)));
       }
 #endif
-      // GNOME's virtual display takes its mode from the consumer's format: pin it to the session's.
-      auto pinned_size = SPA_RECTANGLE(uint32_t(session->width), uint32_t(session->height));
-      auto zero_rate = SPA_FRACTION(0, 1), max_rate = SPA_FRACTION(uint32_t(session->milli_hz), 1000u), low_rate = SPA_FRACTION(1, 1);
-      auto add_mode = [&](spa_pod_builder *b) {
-        if (!session->gnome) return;
-        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&pinned_size),
-          SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&zero_rate),
-          SPA_FORMAT_VIDEO_maxFramerate, SPA_POD_CHOICE_RANGE_Fraction(&max_rate, &low_rate, &max_rate), 0);
-      };
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
       if (sdr_dma) {
         spa_pod_frame object, choice;
