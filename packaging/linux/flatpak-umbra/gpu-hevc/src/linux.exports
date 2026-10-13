@@ -1,4 +1,4 @@
 {
-  global: aghl_probe; aghl_probe_device; aghl_open; aghl_encode; aghl_close;
+  global: aghl_probe; aghl_probe_device; aghl_open; aghl_encode; aghl_close; aghl_gl_sharing;
   local: *;
 };

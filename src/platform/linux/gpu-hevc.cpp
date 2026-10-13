@@ -36,6 +36,7 @@ namespace {
     decltype(&aghl_encode) encode = nullptr;
     decltype(&aghl_close) close = nullptr;
     decltype(&aghl_probe_device) probe = nullptr;
+    decltype(&aghl_gl_sharing) gl_sharing = nullptr;  // optional: libraries before GL-shared frames lack it
     ~library_t() { if (module) dlclose(module); }
     bool load(unsigned depth) {
       module = dlopen((directory / ("libaurora_gpu_hevc" + std::to_string(depth) + ".so")).c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -44,6 +45,7 @@ namespace {
       encode = reinterpret_cast<decltype(encode)>(dlsym(module, "aghl_encode"));
       close = reinterpret_cast<decltype(close)>(dlsym(module, "aghl_close"));
       probe = reinterpret_cast<decltype(probe)>(dlsym(module, "aghl_probe_device"));
+      gl_sharing = reinterpret_cast<decltype(gl_sharing)>(dlsym(module, "aghl_gl_sharing"));
       return open && encode && close && probe;
     }
   };
@@ -87,13 +89,29 @@ namespace {
       // "<name> pci:dddd:bb:dd.f" where OpenCL reports it (cl_khr_pci_bus_info): the GPU-frame
       // hand-off must reach the same GPU. Without it GPU frames are read back.
       if (const char *at = std::strstr(selected, " pci:")) pci = at + 5;
+      // GPU frames: the stage exists before the encoder session so that, where CUDA does not hand
+      // frames over, the session's OpenCL context can share the stage's EGL context. A stage that
+      // cannot be created leaves `frames` empty: convert() fails and the capture reinitialises to
+      // read-back (gpu_frames_possible() is false by then).
+      void *egl_display = nullptr, *egl_context = nullptr;
+      if (gpu_frames && gpu_frames_possible()) {
+        frames = gpu_frames_t::create(config.width, config.height, capture_format == capture_format_e::bt2020_pq_xbgr2101010, pci);
+        if (frames && std::strcmp(frames->hand_off(), "cuda") && library.gl_sharing) {
+          egl_display = frames->egl_display();
+          egl_context = frames->egl_context();
+        }
+      }
       aghl_config args {sizeof(aghl_config), AGHL_ABI_VERSION, uint32_t(config.width), uint32_t(config.height),
         colorspace.bit_depth, video::colorspace_is_hdr(colorspace) ? 1u : 0u, kernels.c_str(),
-        uint32_t(config.bitrate), uint32_t(config.framerate), selector.c_str()};
+        uint32_t(config.bitrate), uint32_t(config.framerate), selector.c_str(), egl_display, egl_context};
       session = library.open(&args, detail, sizeof detail);
       if (!session) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] Linux open failed: " << detail;
         return false;
+      }
+      if (egl_context) {
+        if (library.gl_sharing(session)) frames->use_gl_sharing();
+        else BOOST_LOG(info) << "[AURORA-GPU-HEVC] the encoder's OpenCL does not share the stage's GL context; GPU frames are read back";
       }
       BOOST_LOG(info) << "[AURORA-GPU-HEVC] Linux opened " << config.width << 'x' << config.height
         << " depth=" << colorspace.bit_depth << " HDR=" << args.hdr << " bitrate_kbps=" << args.bitrate_kbps
@@ -113,7 +131,7 @@ namespace {
       pixels.resize(row * img.height);
       for (int y = 0; y < img.height; ++y)
         std::memcpy(pixels.data() + y * row, img.data + size_t(y) * img.row_pitch, row);
-      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), (capture_format == capture_format_e::bt2020_pq_xbgr2101010 ? AGHL_XBGR2101010_PQ : AGHL_BGRA8), row, pixels.size(), pixels.data(), 0, -1};
+      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), (capture_format == capture_format_e::bt2020_pq_xbgr2101010 ? AGHL_XBGR2101010_PQ : AGHL_BGRA8), row, pixels.size(), pixels.data(), 0, -1, 0, 0};
       ready = true;
       return 0;
     }
@@ -122,22 +140,20 @@ namespace {
       auto descriptor = dynamic_cast<egl::img_descriptor_t *>(&img);
       if (!descriptor || img.width < 1 || img.height < 1) return -1;
       const bool pq = capture_format == capture_format_e::bt2020_pq_xbgr2101010;
-      if (!frames || frames_width != img.width || frames_height != img.height) {
-        // A failed stage is final for this process: the capture reinitialises to read-back.
-        if (!gpu_frames_possible()) return -1;
-        frames.reset();
-        frames = gpu_frames_t::create(img.width, img.height, pq, pci);
-        if (!frames) return -1;
-        frames_width = img.width;
-        frames_height = img.height;
-      }
+      // No stage (it failed when the device opened): the capture reinitialises to read-back.
+      if (!frames) return -1;
+      if ((frames->frame_width() != img.width || frames->frame_height() != img.height) && !frames->resize(img.width, img.height)) return -1;
       if (descriptor->sequence != 0 && (descriptor->sd.width != img.width || descriptor->sd.height != img.height)) return -1;
       if (!frames->stage(descriptor->sequence == 0 ? nullptr : &descriptor->sd)) return -1;
       const size_t row = size_t(img.width) * 4;
-      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), pq ? AGHL_XBGR2101010_PQ : AGHL_BGRA8, row, frames->bytes(), nullptr, 0, -1};
+      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), pq ? AGHL_XBGR2101010_PQ : AGHL_BGRA8, row,
+        frames->bytes(), nullptr, 0, -1, 0, frames->serial()};
       if (frames->external_fd() >= 0) {
         frame.flags = AGHL_FRAME_EXTERNAL;
         frame.external_fd = frames->external_fd();
+      } else if (frames->gl_texture()) {
+        frame.flags = AGHL_FRAME_GL_TEXTURE;
+        frame.gl_texture = frames->gl_texture();
       } else if (!(frame.data = frames->host_pixels())) {
         return -1;
       }
@@ -155,6 +171,7 @@ namespace {
         frames->drop_external();
         frame.flags = 0;
         frame.external_fd = -1;
+        frame.gl_texture = 0;
         if (!(frame.data = frames->host_pixels())) return false;
         packet = {}; packet.size = sizeof packet;
         result = library.encode(session, &frame, index, force_idr ? 1u : 0u, &packet, detail, sizeof detail);
@@ -180,8 +197,7 @@ namespace {
     bool ready = false;
     bool gpu_frames = false;  // the display hands over DMA-BUF descriptors (gpu-hevc-frames.h)
     std::string pci;
-    std::unique_ptr<gpu_frames_t> frames;
-    int frames_width = 0, frames_height = 0;
+    std::unique_ptr<gpu_frames_t> frames;  // destroyed after the session (~device_t closes it first)
   };
 }
   bool available() {

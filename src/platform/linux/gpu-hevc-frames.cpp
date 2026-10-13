@@ -8,6 +8,7 @@
 #include "src/utility.h"
 
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <drm_fourcc.h>
@@ -19,7 +20,10 @@
 
 namespace gpu_hevc {
 namespace {
-  std::atomic<bool> stage_broken {false}, external_broken {false};
+  std::atomic<bool> stage_broken {false}, external_broken {false}, gl_sharing_broken {false};
+  // Identifies each packed texture / CUDA export, so the encoder never matches a recycled texture
+  // name or fd number to an old import (aghl_frame.external_serial).
+  std::atomic<uint64_t> next_serial {1};
 
   // CUDA virtual memory management (driver API since CUDA 10.2), declared here because the
   // dynlink headers stop short of it; layouts and values are those of the toolkit's cuda.h.
@@ -157,20 +161,52 @@ namespace {
       if (!create_image || !destroy_image) return fail("EGLImage entry points missing");
       if (auto renderer = gl.GetString(GL_RENDERER)) gpu = reinterpret_cast<const char *>(renderer);
 
-      gl.GenTextures(1, &packed);
-      gl.BindTexture(GL_TEXTURE_2D, packed);
-      gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_R32UI, width, height);
-      gl.GenFramebuffers(1, &framebuffer);
-      gl.BindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-      gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, packed, 0);
-      if (gl.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return fail("packed framebuffer incomplete");
       program = link(pq ? pack_pq_source : pack_bgra8_source);
       if (!program) return false;
       gl.GenVertexArrays(1, &vao);
+      gl.GenFramebuffers(1, &framebuffer);
+      if (!create_target()) return false;
+      cuda_pci = pci;
+      // UMBRA_GPU_FRAMES_CUDA=0 (diagnostic): skip the CUDA hand-off, e.g. to exercise GL sharing / read-back on NVIDIA.
+      const char *cuda_switch = std::getenv("UMBRA_GPU_FRAMES_CUDA");
+      if (cuda_switch && !std::strcmp(cuda_switch, "0")) handoff_detail = "CUDA hand-off disabled by UMBRA_GPU_FRAMES_CUDA=0";
+      else if (!cuda_pci.empty() && !external_broken) start_cuda(cuda_pci);
+      log_hand_off();
+      return true;
+    }
+
+    // The packed texture the draw writes, at the current size; a new serial every time.
+    bool create_target() {
+      if (packed) gl.DeleteTextures(1, &packed);
+      gl.GenTextures(1, &packed);
+      gl.BindTexture(GL_TEXTURE_2D, packed);
+      gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_R32UI, width, height);
+      gl.BindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+      gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, packed, 0);
+      if (gl.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return fail("packed framebuffer incomplete");
       if (gl.GetError() != GL_NO_ERROR) return fail("OpenGL setup error");
-      if (!pci.empty() && !external_broken) start_cuda(pci);
+      pixels.resize(bytes());
+      host_valid = false;
+      current_serial = next_serial++;
+      return true;
+    }
+
+    void log_hand_off() {
       BOOST_LOG(info) << "[AURORA-GPU-HEVC] GPU frames " << width << 'x' << height << (pq ? " PQ" : " BGRA8")
         << " on " << gpu << ", hand-off=" << hand_off() << (handoff_detail.empty() ? "" : " (" + handoff_detail + ')');
+    }
+
+    bool resize(int w, int h) override {
+      if (w < 1 || h < 1 || w > 8192 || h > 8192) return false;
+      if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context)) return fail("context not current");
+      auto release = util::fail_guard([&] { eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT); });
+      const bool had_cuda = resource != nullptr;
+      drop_cuda();
+      width = w;
+      height = h;
+      if (!create_target()) return false;
+      if (had_cuda) start_cuda(cuda_pci);
+      log_hand_off();
       return true;
     }
 
@@ -207,11 +243,26 @@ namespace {
         BOOST_LOG(warning) << "[AURORA-GPU-HEVC] CUDA hand-off failed (" << handoff_detail << "); reading back instead";
         drop_external();
       }
-      if (!resource) gl.Flush();
+      // cl_khr_gl_sharing: GL work on a shared object must be complete before OpenCL acquires it.
+      if (gl_shared) gl.Finish();
+      else if (!resource) gl.Flush();
       return true;
     }
 
     int external_fd() const override { return resource ? export_fd : -1; }
+    unsigned gl_texture() const override { return gl_shared ? packed : 0; }
+    uint64_t serial() const override { return current_serial; }
+    int frame_width() const override { return width; }
+    int frame_height() const override { return height; }
+    void *egl_display() const override { return display; }
+    void *egl_context() const override { return context; }
+
+    void use_gl_sharing() override {
+      if (resource || gl_sharing_broken) return;
+      gl_shared = true;
+      handoff_detail.clear();
+      log_hand_off();
+    }
     size_t bytes() const override { return size_t(width) * height * 4; }
 
     const uint8_t *host_pixels() override {
@@ -227,12 +278,17 @@ namespace {
     }
 
     void drop_external() override {
+      if (gl_shared) {
+        gl_sharing_broken = true;
+        gl_shared = false;
+        return;
+      }
       external_broken = true;
       if (!resource) return;
       if (eglGetCurrentContext() == context || eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context)) drop_cuda();
     }
 
-    const char *hand_off() const override { return resource ? "cuda" : "readback"; }
+    const char *hand_off() const override { return resource ? "cuda" : gl_shared ? "gl-sharing" : "readback"; }
 
   private:
     bool fail(const std::string &what) {
@@ -334,6 +390,7 @@ namespace {
         resource = nullptr;
         return failed("GL interop (encoder GPU " + pci + " is not the compositor's?)", r);
       }
+      current_serial = next_serial++;  // a new export: the encoder must import it afresh
       return {};
     }
 
@@ -379,8 +436,9 @@ namespace {
     }
 
     int width = 0, height = 0;
-    bool pq = false, host_valid = false;
-    std::string gpu, handoff_detail;
+    bool pq = false, host_valid = false, gl_shared = false;
+    uint64_t current_serial = 0;
+    std::string gpu, handoff_detail, cuda_pci;
     std::vector<uint8_t> pixels;
     wl_display *wayland = nullptr;
     EGLDisplay display = EGL_NO_DISPLAY;
