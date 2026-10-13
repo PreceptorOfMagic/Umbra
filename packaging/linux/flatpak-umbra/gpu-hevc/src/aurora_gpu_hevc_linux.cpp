@@ -20,7 +20,8 @@ struct LinuxCL:OpenCL {
     decltype(&::clEnqueueWriteImage) writeImage=nullptr;
     decltype(&::clEnqueueCopyBufferToImage) copyBufferToImage=nullptr;
     // OpenCL 3.0 external memory; absent on older runtimes (external frames then fail clearly).
-    using create_with_properties_t=cl_mem(CL_API_CALL*)(cl_context,const cl_mem_properties*,cl_mem_flags,size_t,void*,cl_int*);
+    // cl_mem_properties is cl_ulong (OpenCL 3.0 typedef; this library targets an earlier version).
+    using create_with_properties_t=cl_mem(CL_API_CALL*)(cl_context,const cl_ulong*,cl_mem_flags,size_t,void*,cl_int*);
     create_with_properties_t createBufferWithProperties=nullptr;
     // cl_khr_external_memory acquire/release; required around every use of an imported object.
     using external_objects_t=cl_int(CL_API_CALL*)(cl_command_queue,cl_uint,const cl_mem*,cl_uint,const cl_event*,cl_event*);
@@ -125,7 +126,7 @@ struct aghl_session {
         }
         const int copy=fcntl(fd,F_DUPFD_CLOEXEC,0);
         if(copy<0)throw ExternalUnavailable("external frame fd cannot be duplicated");
-        const cl_mem_properties props[]={CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_FD_KHR,cl_mem_properties(copy),0};
+        const cl_ulong props[]={CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_FD_KHR,cl_ulong(copy),0};
         cl_int e=CL_SUCCESS;
         external=cl.createBufferWithProperties(device.context,props,CL_MEM_READ_ONLY,bytes,nullptr,&e);
         if(e!=CL_SUCCESS || !external) {
