@@ -593,6 +593,20 @@ namespace portal {
       return std::make_unique<platf::avcodec_encode_device_t>();
     }
 
+    // Umbra: the native NVENC encoder (nvenc_base), as Windows Umbra encodes. Its device takes GPU
+    // and CPU frames alike, so it needs no fallback here; the probe marks GPU frames as the VRAM
+    // path above does, so its dummy images are descriptors.
+    std::unique_ptr<platf::nvenc_encode_device_t> make_nvenc_encode_device(platf::pix_fmt_e pix_fmt) override {
+#ifdef SUNSHINE_BUILD_CUDA
+      if (mem_type == platf::mem_type_e::cuda) {
+        auto device = cuda::make_nvenc_gl_encode_device(width, height, 0, 0, pix_fmt);
+        if (probe && device) gpu_frames = true;
+        return device;
+      }
+#endif
+      return nullptr;
+    }
+
     std::unique_ptr<platf::gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
       if (gpu_frames && !gpu_hevc_frames) return nullptr;  // GPU frames negotiated for a native encoder
       return gpu_hevc::make_device(config, is_hdr(), capture_format(), gpu_frames);

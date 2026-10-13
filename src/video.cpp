@@ -529,8 +529,16 @@ namespace video {
     PARALLEL_ENCODING | REF_FRAMES_INVALIDATION | YUV444_SUPPORT | ASYNC_TEARDOWN  // flags
   };
 #elif !defined(__APPLE__)
+  #if defined(__linux__) && defined(SUNSHINE_BUILD_CUDA)
+  // Umbra: FFmpeg's NVENC, kept as the fallback behind the native encoder below (Vibepollo's
+  // naming). It cannot match Windows for co-op: FFmpeg never sets the per-picture
+  // constrainedFrame flag and ignores the client's intra-refresh request.
+  encoder_t nvenc_legacy {
+    "nvenc_legacy"sv,
+  #else
   encoder_t nvenc {
     "nvenc"sv,
+  #endif
     std::make_unique<encoder_platform_formats_avcodec>(
   #ifdef _WIN32
       AV_HWDEVICE_TYPE_D3D11VA,
@@ -622,6 +630,51 @@ namespace video {
       "h264_nvenc"s,
     },
     PARALLEL_ENCODING
+  };
+#endif
+
+#if defined(__linux__) && defined(SUNSHINE_BUILD_CUDA)
+  // Umbra: the encoder Windows Umbra uses (nvenc_base), fed CUDA NV12/P010 by
+  // platform/linux/cuda.cpp. A co-op pane gets what it gets on Windows -- constrained pictures,
+  // the client's intra refresh, one reference frame -- so a Linux pane splices beside a Windows
+  // one. No ASYNC_TEARDOWN: the device's GL and CUDA state belong to the encoding thread.
+  encoder_t nvenc {
+    "nvenc"sv,
+    std::make_unique<encoder_platform_formats_nvenc>(
+      platf::mem_type_e::cuda,
+      platf::pix_fmt_e::nv12,
+      platf::pix_fmt_e::p010,
+      platf::pix_fmt_e::unknown,
+      platf::pix_fmt_e::unknown
+    ),
+    {
+      {},  // Common options
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      "av1_nvenc"s,
+    },
+    {
+      {},  // Common options
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      "hevc_nvenc"s,
+    },
+    {
+      {},  // Common options
+      {},  // SDR-specific options
+      {},  // HDR-specific options
+      {},  // YUV444 SDR-specific options
+      {},  // YUV444 HDR-specific options
+      {},  // Fallback options
+      "h264_nvenc"s,
+    },
+    PARALLEL_ENCODING | REF_FRAMES_INVALIDATION  // flags
   };
 #endif
 
@@ -1074,6 +1127,9 @@ namespace video {
   static const std::vector<encoder_t *> encoders {
 #ifndef __APPLE__
     &nvenc,
+#endif
+#if defined(__linux__) && defined(SUNSHINE_BUILD_CUDA)
+    &nvenc_legacy,  // Umbra: only if the native encoder above cannot run
 #endif
 #ifdef _WIN32
     &quicksync,
@@ -1880,7 +1936,7 @@ namespace video {
           }
 
 #ifndef __APPLE__
-          if (encoder.name == "nvenc" && config::video.nv_legacy.vbv_percentage_increase > 0) {
+          if ((encoder.name == "nvenc" || encoder.name == "nvenc_legacy") && config::video.nv_legacy.vbv_percentage_increase > 0) {
             ctx->rc_buffer_size += ctx->rc_buffer_size * config::video.nv_legacy.vbv_percentage_increase / 100;
           }
 #endif

@@ -21,7 +21,10 @@ extern "C" {
 // local includes
 #include "cuda.h"
 #include "graphics.h"
+#include "src/config.h"
 #include "src/logging.h"
+#include "src/nvenc/nvenc_cuda.h"
+#include "src/nvenc/nvenc_utils.h"
 #include "src/utility.h"
 #include "src/video.h"
 #include "wayland.h"
@@ -458,6 +461,215 @@ namespace cuda {
     int offset_x, offset_y;
   };
 
+  /**
+   * @brief Umbra: GL->CUDA device for the native NVENC encoder (nvenc_base, as on Windows).
+   *
+   * The same GL colour conversion as gl_cuda_vram_t, copied into the encoder's own CUDA surface
+   * instead of an FFmpeg frame. It takes CPU frames too (sws_t::load_ram), so a capture that fell
+   * back from GPU frames still encodes with the encoder the probe chose.
+   */
+  class gl_cuda_nvenc_t: public platf::nvenc_encode_device_t {
+  public:
+    ~gl_cuda_nvenc_t() override {
+      // The NVENC session holds the registered surface: it goes before the stream and context.
+      nvenc = nullptr;
+      native.reset();
+
+      if (cuda_context && !check(cdf->cuCtxPushCurrent(cuda_context), "Couldn't make the NVENC CUDA context current: "sv)) {
+        y_res.reset();
+        uv_res.reset();
+        if (stream) {
+          CU_CHECK_IGNORE(cdf->cuStreamDestroy(stream), "Couldn't destroy NVENC CUDA stream");
+        }
+        CUcontext popped;
+        cdf->cuCtxPopCurrent(&popped);
+      }
+      if (cuda_context) {
+        CU_CHECK_IGNORE(cdf->cuDevicePrimaryCtxRelease(cuda_device), "Couldn't release NVENC CUDA context");
+      }
+    }
+
+    int init(int in_width, int in_height, int in_offset_x, int in_offset_y, platf::pix_fmt_e pix_fmt) {
+      buffer_format = nvenc::nvenc_format_from_sunshine_format(pix_fmt);
+      if (buffer_format == NV_ENC_BUFFER_FORMAT_NV12) {
+        sw_format = AV_PIX_FMT_NV12;
+      } else if (buffer_format == NV_ENC_BUFFER_FORMAT_YUV420_10BIT) {
+        sw_format = AV_PIX_FMT_P010;
+      } else {
+        BOOST_LOG(error) << "NvEnc: unsupported pixel format for the CUDA device: "sv << platf::from_pix_fmt(pix_fmt);
+        return -1;
+      }
+
+      // TODO: Support more than one CUDA device
+      file = std::move(open_drm_fd_for_cuda_device(0));
+      if (file.el < 0) {
+        char string[1024];
+        BOOST_LOG(error) << "Couldn't open DRM FD for CUDA device: "sv << strerror_r(errno, string, sizeof(string));
+        return -1;
+      }
+
+      gbm.reset(gbm::create_device(file.el));
+      if (!gbm) {
+        BOOST_LOG(error) << "Couldn't create GBM device: ["sv << util::hex(eglGetError()).to_string_view() << ']';
+        return -1;
+      }
+
+      display = egl::make_display(gbm.get());
+      if (!display) {
+        return -1;
+      }
+
+      auto ctx_opt = egl::make_ctx(display.get());
+      if (!ctx_opt) {
+        return -1;
+      }
+
+      ctx = std::move(*ctx_opt);
+
+      CU_CHECK(cdf->cuDeviceGet(&cuda_device, 0), "Couldn't get CUDA device");
+      CU_CHECK(cdf->cuDevicePrimaryCtxRetain(&cuda_context, cuda_device), "Couldn't retain CUDA context");
+      CU_CHECK(cdf->cuCtxPushCurrent(cuda_context), "Couldn't make the NVENC CUDA context current");
+      auto result = cdf->cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING);
+      CUcontext popped;
+      cdf->cuCtxPopCurrent(&popped);
+      CU_CHECK(result, "Couldn't create NVENC CUDA stream");
+
+      width = in_width;
+      height = in_height;
+      offset_x = in_offset_x;
+      offset_y = in_offset_y;
+      sequence = 0;
+
+      return 0;
+    }
+
+    bool init_encoder(const ::video::config_t &client_config, const ::video::sunshine_colorspace_t &colorspace) override {
+      native = std::make_unique<nvenc::nvenc_cuda>(cuda_context, cdf.get(), stream);
+      if (!native->create_encoder(config::video.nv, client_config, nvenc::nvenc_colorspace_from_sunshine_colorspace(colorspace), buffer_format)) {
+        native.reset();
+        return false;
+      }
+      nvenc = native.get();
+
+      out_width = client_config.width;
+      out_height = client_config.height;
+
+      auto nv12_opt = egl::create_target(out_width, out_height, sw_format);
+      if (!nv12_opt) {
+        return false;
+      }
+
+      auto sws_opt = egl::sws_t::make(width, height, out_width, out_height, sw_format);
+      if (!sws_opt) {
+        return false;
+      }
+
+      sws = std::move(*sws_opt);
+      nv12 = std::move(*nv12_opt);
+      sws.apply_colorspace(colorspace);
+
+      if (check(cdf->cuCtxPushCurrent(cuda_context), "Couldn't make the NVENC CUDA context current: "sv)) {
+        return false;
+      }
+      auto registered = !check(cdf->cuGraphicsGLRegisterImage(&y_res, nv12->tex[0], GL_TEXTURE_2D, CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY), "Couldn't register Y plane texture: "sv) &&
+                        !check(cdf->cuGraphicsGLRegisterImage(&uv_res, nv12->tex[1], GL_TEXTURE_2D, CU_GRAPHICS_REGISTER_FLAGS_READ_ONLY), "Couldn't register UV plane texture: "sv);
+      CUcontext popped;
+      cdf->cuCtxPopCurrent(&popped);
+
+      return registered;
+    }
+
+    int convert(platf::img_t &img) override {
+      if (!native) {
+        return -1;
+      }
+
+      if (auto descriptor = dynamic_cast<egl::img_descriptor_t *>(&img)) {
+        if (descriptor->sequence == 0) {
+          // For dummy images, use a blank RGB texture instead of importing a DMA-BUF
+          rgb = egl::create_blank(img);
+        } else if (descriptor->sequence > sequence) {
+          sequence = descriptor->sequence;
+
+          rgb = egl::rgb_t {};
+
+          auto rgb_opt = egl::import_source(display.get(), descriptor->sd);
+          if (!rgb_opt) {
+            return -1;
+          }
+
+          rgb = std::move(*rgb_opt);
+        }
+
+        sws.load_vram(*descriptor, offset_x, offset_y, rgb->tex[0]);
+      } else {
+        sws.load_ram(img);
+      }
+
+      // Perform the color conversion and scaling in GL
+      sws.convert(nv12->buf);
+
+      auto fmt_desc = av_pix_fmt_desc_get(sw_format);
+
+      CU_CHECK(cdf->cuCtxPushCurrent(cuda_context), "Couldn't make the NVENC CUDA context current");
+      auto pop = util::fail_guard([]() {
+        CUcontext popped;
+        cdf->cuCtxPopCurrent(&popped);
+      });
+
+      // Map the GL textures to read for CUDA
+      CUgraphicsResource resources[2] = {y_res.get(), uv_res.get()};
+      CU_CHECK(cdf->cuGraphicsMapResources(2, resources, stream), "Couldn't map GL textures in CUDA");
+
+      // Copy from the GL textures into the encoder's surface: luma, then chroma at pitch * height
+      const auto pitch = native->input_pitch();
+      for (int i = 0; i < 2; i++) {
+        CUDA_MEMCPY2D cpy = {};
+        cpy.srcMemoryType = CU_MEMORYTYPE_ARRAY;
+        CU_CHECK(cdf->cuGraphicsSubResourceGetMappedArray(&cpy.srcArray, resources[i], 0, 0), "Couldn't get mapped plane array");
+
+        cpy.dstMemoryType = CU_MEMORYTYPE_DEVICE;
+        cpy.dstDevice = native->input_buffer() + (i ? pitch * out_height : 0);
+        cpy.dstPitch = pitch;
+        cpy.WidthInBytes = (out_width * fmt_desc->comp[i].step) >> (i ? fmt_desc->log2_chroma_w : 0);
+        cpy.Height = out_height >> (i ? fmt_desc->log2_chroma_h : 0);
+
+        CU_CHECK_IGNORE(cdf->cuMemcpy2DAsync(&cpy, stream), "Couldn't copy texture to the NVENC surface");
+      }
+
+      // Unmap the textures to allow modification from GL again
+      CU_CHECK(cdf->cuGraphicsUnmapResources(2, resources, stream), "Couldn't unmap GL textures from CUDA");
+      return 0;
+    }
+
+    file_t file;
+    gbm::gbm_t gbm;
+    egl::display_t display;
+    egl::ctx_t ctx;
+
+    CUdevice cuda_device {};
+    CUcontext cuda_context {};
+    CUstream stream {};
+
+    egl::sws_t sws;
+    egl::nv12_t nv12;
+    AVPixelFormat sw_format;
+    NV_ENC_BUFFER_FORMAT buffer_format;
+
+    int width, height;
+    int out_width, out_height;
+    int offset_x, offset_y;
+
+    std::uint64_t sequence;
+    egl::rgb_t rgb;
+
+    registered_resource_t y_res;
+    registered_resource_t uv_res;
+
+    // Destroyed first (the destructor also resets it explicitly)
+    std::unique_ptr<nvenc::nvenc_cuda> native;
+  };
+
   std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_encode_device(int width, int height, bool vram) {
     if (init()) {
       return nullptr;
@@ -494,6 +706,20 @@ namespace cuda {
     auto cuda = std::make_unique<gl_cuda_vram_t>();
 
     if (cuda->init(width, height, offset_x, offset_y)) {
+      return nullptr;
+    }
+
+    return cuda;
+  }
+
+  std::unique_ptr<platf::nvenc_encode_device_t> make_nvenc_gl_encode_device(int width, int height, int offset_x, int offset_y, platf::pix_fmt_e pix_fmt) {
+    if (init()) {
+      return nullptr;
+    }
+
+    auto cuda = std::make_unique<gl_cuda_nvenc_t>();
+
+    if (cuda->init(width, height, offset_x, offset_y, pix_fmt)) {
       return nullptr;
     }
 

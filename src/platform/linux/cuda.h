@@ -17,7 +17,9 @@
 
 namespace platf {
   class avcodec_encode_device_t;
+  struct nvenc_encode_device_t;
   class img_t;
+  enum class pix_fmt_e;
 }  // namespace platf
 
 namespace cuda {
@@ -37,6 +39,12 @@ namespace cuda {
    * @return FFmpeg encoding device context.
    */
   std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_gl_encode_device(int width, int height, int offset_x, int offset_y);
+
+  /**
+   * @brief Umbra: GL->CUDA device for the native NVENC encoder (nvenc_base, the encoder Windows uses).
+   * Takes GPU frames (dmabuf descriptors) and CPU frames.
+   */
+  std::unique_ptr<platf::nvenc_encode_device_t> make_nvenc_gl_encode_device(int width, int height, int offset_x, int offset_y, platf::pix_fmt_e pix_fmt);
 
   int init();
 }  // namespace cuda
