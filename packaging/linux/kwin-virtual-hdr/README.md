@@ -57,10 +57,9 @@ KWin reports an HDR output to clients by its blending space (`wayland-info`: BT.
 `tf_named: gamma22`, max 1000, reference 200), not PQ. Umbra therefore trusts its own HDR switch
 for its virtual output rather than the colour-management query.
 
-## Leg tests in this directory
+## Leg test in this directory
 
-- `bridge-probe.c`: DMA-BUF -> CUDA routes for the co-op GPU-frame hand-off (see
-  `src/platform/linux/gpu-hevc-frames.h`). Only the GL draw into an owned texture works on NVIDIA.
+- GPU-frame hand-off probes moved to `../gpu-frames-probes/`.
 - `alloc10-probe.c`: KWin's per-buffer allocation path (GBM with one modifier, EGL import, FBO)
   for every importable modifier of 10-bit and 8-bit formats.
 

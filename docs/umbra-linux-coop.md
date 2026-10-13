@@ -695,3 +695,17 @@ capture if the GL stage fails.
 
 Not measured: AMD (no AMD GPU fitted). On AMD the GL stage and read-back hand-off apply; a
 zero-copy AMD hand-off (Mesa rusticl/ROCm import) is still to be written.
+
+## AMD GPU-frame path (rusticl GL sharing) — 2026-10-13 15:45
+
+Candidate `build25-hdr6`, Umbra `1f63fa11`. Mesa rusticl (AMD/Intel OpenCL in the Flatpak runtime)
+has `cl_khr_gl_sharing` but no external-memory import, so AMD cannot use the NVIDIA CUDA hand-off.
+Where CUDA does not hand frames over, the encoder session's OpenCL context now shares the GPU-frame
+stage's EGL context and reads the packed texture directly (`AGHL_FRAME_GL_TEXTURE`); otherwise frames
+are read back. Measured without an AMD card (details and probes: `packaging/linux/gpu-frames-probes/`):
+the GPU HEVC encoder runs on rusticl (zink over the RTX 2060 SUPER) and decodes within 2/255 of its
+source; the rusticl GL-sharing sequence is bit-exact; an import failure returns
+`AGHL_EXTERNAL_UNAVAILABLE` and the resubmit is byte-identical. Live on NVIDIA with
+`UMBRA_GPU_FRAMES_CUDA=0`: GL sharing is negotiated, NVIDIA refuses it, read-back hand-off ~46 fps
+(old capture read-back ~32). CUDA path after the change: co-op 8-bit 3563 frames, 10-bit HDR 3493.
+Owed: one run on an AMD GPU (radeonsi exporting the texture to rusticl).
