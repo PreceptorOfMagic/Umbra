@@ -26,6 +26,7 @@
 #include "src/globals.h"
 #include "portal.h"
 #include "gpu-hevc.h"
+#include "gpu-hevc-frames.h"
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
 #include "portal-color.h"
 #include "portal-dmabuf.h"
@@ -347,11 +348,12 @@ namespace portal {
 #endif
     }
 
-    // gpu_frames_allowed: a native GPU encoder (NVENC/VA-API) will consume this capture, so frames
-    // may stay in GPU memory as on Windows. Never for GPU HEVC sessions, which take CPU pixels.
+    // gpu_frames_allowed: a GPU encoder will consume this capture, so frames may stay in GPU memory
+    // as on Windows: NVENC/VA-API, or GPU HEVC when gpu_hevc_frames (its GL stage imports on any GPU).
     // readback_allowed: GPU HEVC session; take DMA-BUF and read it back here instead of the compositor's MemFd copy.
     bool init(platf::mem_type_e type, bool allow_hdr, bool gpu_frames_allowed, bool readback_allowed = false,
-              int probe_width = 1920, int probe_height = 1080) {
+              int probe_width = 1920, int probe_height = 1080, bool gpu_hevc_gpu_frames = false) {
+      gpu_hevc_frames = gpu_hevc_gpu_frames && gpu_frames_allowed;
       retry_sdr = allow_hdr;
       mem_type = type;
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
@@ -388,7 +390,7 @@ namespace portal {
           else {
             // Native encoders take the 10-bit BT.2020/PQ DMA-BUF as a GPU frame (P010 via the VRAM
             // path, as Windows feeds NVENC/AMF); GPU HEVC keeps its read-back.
-            hdr_gpu = gpu_frames_allowed && (type == platf::mem_type_e::vaapi ||
+            hdr_gpu = gpu_frames_allowed && (gpu_hevc_frames || type == platf::mem_type_e::vaapi ||
                       (type == platf::mem_type_e::cuda && dma->vendor.find("NVIDIA") != std::string::npos));
             for (unsigned i=0;i<3;++i) {
               hdr_metadata.displayPrimaries[i].x = (output.xy[i*2]+10)/20;
@@ -412,12 +414,12 @@ namespace portal {
       // GPU HEVC sessions take CPU pixels, but the compositor's own GPU-to-memory copy (MemFd) is
       // slow and stalls its compositing (measured ~39 fps at 1920x2176 on KWin). They also take
       // DMA-BUF and read it back here, on this capture's thread. Vendor-neutral: EGL + GL only.
-      const bool want_gpu_frames = gpu_frames_allowed && (type == platf::mem_type_e::vaapi || type == platf::mem_type_e::cuda);
+      const bool want_gpu_frames = gpu_frames_allowed && (gpu_hevc_frames || type == platf::mem_type_e::vaapi || type == platf::mem_type_e::cuda);
       const bool want_readback = readback_allowed && !gpu_frames_allowed;
       if (!dma && (want_gpu_frames || want_readback)) {
         auto reader = std::make_unique<dma_reader_t>();
         if (reader->init(DRM_FORMAT_XRGB8888) &&
-            (want_readback || type == platf::mem_type_e::vaapi || reader->vendor.find("NVIDIA") != std::string::npos)) {
+            (want_readback || gpu_hevc_frames || type == platf::mem_type_e::vaapi || reader->vendor.find("NVIDIA") != std::string::npos)) {
           sdr_dma = std::move(reader);
           readback = want_readback;
           gpu_attempt = true;
@@ -592,8 +594,8 @@ namespace portal {
     }
 
     std::unique_ptr<platf::gpu_hevc_encode_device_t> make_gpu_hevc_encode_device(const video::config_t &config) override {
-      if (gpu_frames) return nullptr;  // GPU HEVC reads CPU pixels; portal_display never offers it GPU frames
-      return gpu_hevc::make_device(config, is_hdr(), capture_format());
+      if (gpu_frames && !gpu_hevc_frames) return nullptr;  // GPU frames negotiated for a native encoder
+      return gpu_hevc::make_device(config, is_hdr(), capture_format(), gpu_frames);
     }
 
     bool is_hdr() override { return hdr; }
@@ -629,6 +631,8 @@ namespace portal {
 #ifdef SUNSHINE_BUILD_PORTAL_HDR
         if (color && !umbra_portal_color_current(color)) return platf::capture_e::reinit;
 #endif
+        // The GPU HEVC stage failed (gpu-hevc-frames.h): a new display reads back instead.
+        if (gpu_hevc_frames && !gpu_hevc::gpu_frames_possible()) return platf::capture_e::reinit;
         std::unique_lock lock(mutex);
         changed.wait_for(lock, 100ms, [&] { return failed || sequence != consumed; });
         if (failed) {
@@ -685,7 +689,8 @@ namespace portal {
     // GPU frames: the newest DMA-BUF stays checked out (held) until a newer one replaces it; the
     // encoder imports duplicated fds. Read under mutex; PipeWire thread owns requeueing.
     bool gpu_frames = false, negotiated_gpu = false, gpu_attempt = false, probe = false, readback = false, format_modifier = false;
-    bool hdr_gpu = false;  // native encoder takes 10-bit PQ DMA-BUF frames directly
+    bool hdr_gpu = false;  // the GPU encoder takes 10-bit PQ DMA-BUF frames directly
+    bool gpu_hevc_frames = false;  // GPU frames go to GPU HEVC (gpu-hevc-frames.h), not NVENC/VA-API
     pw_buffer *held = nullptr;
     egl::surface_descriptor_t held_sd {0, 0, {-1, -1, -1, -1}, 0, 0, {}, {}};
     SS_HDR_METADATA hdr_metadata {};
@@ -1101,11 +1106,14 @@ namespace platf {
     if ((!name.empty() && name != "portal") ||
         (type != mem_type_e::system && type != mem_type_e::cuda && type != mem_type_e::vaapi)) return nullptr;
     const bool want_hdr = config.dynamicRange == 1;
-    const bool gpu_frames = !config.aurora_gpu_hevc && type != mem_type_e::system;
+    // GPU HEVC takes GPU frames as Windows' does (staged on the GPU, handed over without a host
+    // copy where the driver allows), unless that stage already failed in this process.
+    const bool gpu_hevc_frames = config.aurora_gpu_hevc && gpu_hevc::gpu_frames_possible();
+    const bool gpu_frames = (!config.aurora_gpu_hevc && type != mem_type_e::system) || gpu_hevc_frames;
     const bool readback = config.aurora_gpu_hevc;
     auto attempt = [&](bool hdr, bool gpu, bool back) -> std::shared_ptr<display_t> {
       auto display = std::make_shared<portal::display_t>();
-      return display->init(type, hdr, gpu, back, config.width, config.height) ? display : nullptr;
+      return display->init(type, hdr, gpu, back, config.width, config.height, gpu_hevc_frames) ? display : nullptr;
     };
     if (auto display = attempt(want_hdr, gpu_frames, readback)) return display;
     if (gpu_frames) {
@@ -1113,6 +1121,10 @@ namespace platf {
       // linear (modifier 0, not importable here); a fresh one settles on a tiled modifier.
       BOOST_LOG(info) << "Portal GPU-frame capture: renegotiating once";
       if (auto display = attempt(want_hdr, true, false)) return display;
+    }
+    if (gpu_hevc_frames) {
+      BOOST_LOG(warning) << "Portal GPU frames for GPU HEVC failed; reading back in the capture";
+      if (auto display = attempt(want_hdr, false, true)) return display;
     }
     if (want_hdr) {
       BOOST_LOG(warning) << "Portal HDR initialization failed; retrying SDR capture";

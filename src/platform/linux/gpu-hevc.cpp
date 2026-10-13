@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "gpu-hevc.h"
 #include "aurora_gpu_hevc_linux.h"
+#include "gpu-hevc-frames.h"
+#include "graphics.h"
 #include "src/video.h"
 #include "src/config.h"
 #include <dlfcn.h>
@@ -48,8 +50,9 @@ namespace {
   class device_t final: public platf::gpu_hevc_encode_device_t {
   public:
     ~device_t() override { if (session) library.close(session); }
-    bool init(const video::config_t &config, bool hdr, capture_format_e format) {
+    bool init(const video::config_t &config, bool hdr, capture_format_e format, bool frames_from_gpu) {
       capture_format = format;
+      gpu_frames = frames_from_gpu;
       if (hdr != (format == capture_format_e::bt2020_pq_xbgr2101010)) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] capture color format does not match HDR state";
         return false;
@@ -81,6 +84,9 @@ namespace {
       if (library.probe(selector.c_str(), selected, sizeof selected, detail, sizeof detail)) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] GPU selection failed: " << detail; return false;
       }
+      // "<name> pci:dddd:bb:dd.f" where OpenCL reports it (cl_khr_pci_bus_info): the GPU-frame
+      // hand-off must reach the same GPU. Without it GPU frames are read back.
+      if (const char *at = std::strstr(selected, " pci:")) pci = at + 5;
       aghl_config args {sizeof(aghl_config), AGHL_ABI_VERSION, uint32_t(config.width), uint32_t(config.height),
         colorspace.bit_depth, video::colorspace_is_hdr(colorspace) ? 1u : 0u, kernels.c_str(),
         uint32_t(config.bitrate), uint32_t(config.framerate), selector.c_str()};
@@ -91,11 +97,12 @@ namespace {
       }
       BOOST_LOG(info) << "[AURORA-GPU-HEVC] Linux opened " << config.width << 'x' << config.height
         << " depth=" << colorspace.bit_depth << " HDR=" << args.hdr << " bitrate_kbps=" << args.bitrate_kbps
-        << " GPU=" << selected << " rate_control=bitrate capture_upload=cpu experimental=1";
+        << " GPU=" << selected << " rate_control=bitrate capture_upload=" << (gpu_frames ? "gpu-frames" : "cpu") << " experimental=1";
       return true;
     }
     int convert(platf::img_t &img) override {
       ready = false;
+      if (gpu_frames) return convert_gpu(img);
       // Only an explicitly typed portal image can carry PQ. Other CPU
       // capturers retain their existing BGRA contract.
       auto typed = dynamic_cast<cpu_image_t *>(&img);
@@ -106,7 +113,34 @@ namespace {
       pixels.resize(row * img.height);
       for (int y = 0; y < img.height; ++y)
         std::memcpy(pixels.data() + y * row, img.data + size_t(y) * img.row_pitch, row);
-      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), (capture_format == capture_format_e::bt2020_pq_xbgr2101010 ? AGHL_XBGR2101010_PQ : AGHL_BGRA8), row, pixels.size(), pixels.data()};
+      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), (capture_format == capture_format_e::bt2020_pq_xbgr2101010 ? AGHL_XBGR2101010_PQ : AGHL_BGRA8), row, pixels.size(), pixels.data(), 0, -1};
+      ready = true;
+      return 0;
+    }
+    // A captured DMA-BUF (egl::img_descriptor_t; sequence 0 = the dummy before the first capture).
+    int convert_gpu(platf::img_t &img) {
+      auto descriptor = dynamic_cast<egl::img_descriptor_t *>(&img);
+      if (!descriptor || img.width < 1 || img.height < 1) return -1;
+      const bool pq = capture_format == capture_format_e::bt2020_pq_xbgr2101010;
+      if (!frames || frames_width != img.width || frames_height != img.height) {
+        // A failed stage is final for this process: the capture reinitialises to read-back.
+        if (!gpu_frames_possible()) return -1;
+        frames.reset();
+        frames = gpu_frames_t::create(img.width, img.height, pq, pci);
+        if (!frames) return -1;
+        frames_width = img.width;
+        frames_height = img.height;
+      }
+      if (descriptor->sequence != 0 && (descriptor->sd.width != img.width || descriptor->sd.height != img.height)) return -1;
+      if (!frames->stage(descriptor->sequence == 0 ? nullptr : &descriptor->sd)) return -1;
+      const size_t row = size_t(img.width) * 4;
+      frame = {sizeof(aghl_frame), uint32_t(img.width), uint32_t(img.height), pq ? AGHL_XBGR2101010_PQ : AGHL_BGRA8, row, frames->bytes(), nullptr, 0, -1};
+      if (frames->external_fd() >= 0) {
+        frame.flags = AGHL_FRAME_EXTERNAL;
+        frame.external_fd = frames->external_fd();
+      } else if (!(frame.data = frames->host_pixels())) {
+        return -1;
+      }
       ready = true;
       return 0;
     }
@@ -114,8 +148,18 @@ namespace {
       if (!session || !ready) return false;
       agh_packet packet {}; packet.size = sizeof packet;
       char detail[1024] {};
-      if (library.encode(session, &frame, index, force_idr ? 1u : 0u, &packet, detail, sizeof detail) ||
-          packet.frame_id != index || !packet.data || !packet.bytes) {
+      int result = library.encode(session, &frame, index, force_idr ? 1u : 0u, &packet, detail, sizeof detail);
+      if (result == AGHL_EXTERNAL_UNAVAILABLE && frames) {
+        // Nothing was encoded and the session is intact: the same frame again from host memory.
+        BOOST_LOG(warning) << "[AURORA-GPU-HEVC] encoder cannot import GPU frames (" << detail << "); reading back";
+        frames->drop_external();
+        frame.flags = 0;
+        frame.external_fd = -1;
+        if (!(frame.data = frames->host_pixels())) return false;
+        packet = {}; packet.size = sizeof packet;
+        result = library.encode(session, &frame, index, force_idr ? 1u : 0u, &packet, detail, sizeof detail);
+      }
+      if (result || packet.frame_id != index || !packet.data || !packet.bytes) {
         BOOST_LOG(error) << "[AURORA-GPU-HEVC] Linux encode failed: " << detail;
         return false;
       }
@@ -134,6 +178,10 @@ namespace {
     aghl_frame frame {};
     capture_format_e capture_format = capture_format_e::bgra8;
     bool ready = false;
+    bool gpu_frames = false;  // the display hands over DMA-BUF descriptors (gpu-hevc-frames.h)
+    std::string pci;
+    std::unique_ptr<gpu_frames_t> frames;
+    int frames_width = 0, frames_height = 0;
   };
 }
   bool available() {
@@ -162,9 +210,9 @@ namespace {
     }();
     return usable;
   }
-  std::unique_ptr<platf::gpu_hevc_encode_device_t> make_device(const video::config_t &config, bool hdr, capture_format_e format) {
+  std::unique_ptr<platf::gpu_hevc_encode_device_t> make_device(const video::config_t &config, bool hdr, capture_format_e format, bool gpu_frames) {
     auto device = std::make_unique<device_t>();
-    if (!device->init(config, hdr, format)) return {};
+    if (!device->init(config, hdr, format, gpu_frames)) return {};
     return device;
   }
 }

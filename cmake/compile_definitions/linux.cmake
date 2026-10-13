@@ -274,6 +274,7 @@ endif ()
 
 list(APPEND PLATFORM_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/platform/linux/gpu-hevc.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/linux/gpu-hevc-frames.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/publish.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/graphics.h"
         "${CMAKE_SOURCE_DIR}/src/platform/linux/graphics.cpp"
