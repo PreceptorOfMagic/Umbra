@@ -87,7 +87,10 @@ namespace nvhttp {
            video::active_hevc_mode >= 2 &&
            platf::portal_capture_active() && proc::gpu_hevc_encoder_installed() &&
            !platf::portal_kde_native_supported() &&
-           // GNOME: only while a physical monitor is in HDR mode (its virtual displays are SDR).
+           // GNOME with HDR virtual monitors (patched Mutter) streams HDR from the per-client virtual
+           // display through the native encoder, as KDE does; stock GNOME only while a physical
+           // monitor is in HDR mode (its virtual displays are SDR).
+           !platf::portal_virtual_hdr_supported() &&
            (!platf::portal_coop_supported() || platf::portal_physical_hdr_active());
 #else
     return false;

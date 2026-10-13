@@ -47,7 +47,8 @@ class gnome_virtual_t {
     std::string connector, vendor, mode_id;
     int width = 0, height = 0;
     double refresh = 0;
-    unsigned color_mode = 0;
+    unsigned color_mode = 0;   // 0 default (SDR), 1 BT.2100 (HDR)
+    bool hdr_capable = false;  // BT.2100 among supported-color-modes (stock Mutter: physical HDR monitors only)
   };
   struct layout_t {
     guint32 serial = 0;
@@ -73,6 +74,12 @@ class gnome_virtual_t {
       m.connector = connector;
       m.vendor = vendor;
       g_variant_lookup(monitor_props, "color-mode", "u", &m.color_mode);
+      if (GVariant *modes_supported = g_variant_lookup_value(monitor_props, "supported-color-modes", G_VARIANT_TYPE("au"))) {
+        gsize n = 0;
+        auto values = static_cast<const guint32 *>(g_variant_get_fixed_array(modes_supported, &n, sizeof(guint32)));
+        for (gsize i = 0; i < n; ++i) m.hdr_capable |= values[i] == 1;
+        g_variant_unref(modes_supported);
+      }
       GVariant *mode;
       while ((mode = g_variant_iter_next_value(modes))) {
         const char *id;
@@ -304,9 +311,27 @@ public:
   // Resize for a resumed session (same Mutter session; a new negotiation resizes the monitor).
   bool resize(int w, int h, int milli_hz) { return negotiate(w, h, milli_hz); }
 
+  // Whether Mutter offers BT.2100 on this virtual monitor (patched Mutter; see
+  // packaging/linux/mutter-virtual-hdr). Stock Mutter keeps virtual monitors SDR.
+  bool hdr_capable() {
+    layout_t layout;
+    if (!state(bus, layout)) return false;
+    for (auto &m : layout.monitors) if (m.connector == connector) return m.hdr_capable;
+    return false;
+  }
+
+  // The virtual monitor's current colour mode (1 = BT.2100), or -1 if it cannot be read.
+  int color_mode() {
+    layout_t layout;
+    if (!state(bus, layout)) return -1;
+    for (auto &m : layout.monitors) if (m.connector == connector) return int(m.color_mode);
+    return -1;
+  }
+
   // Windows' exclusive layout: only this virtual monitor, at 0,0, primary. Temporary (method 1):
   // never written to monitors.xml; Mutter restores the stored layout when the monitor goes away.
-  bool exclusive() {
+  // color_mode >= 0 also sets the monitor's colour mode in the same configuration (0 SDR, 1 HDR).
+  bool exclusive(int color_mode = -1) {
     layout_t layout;
     if (!state(bus, layout)) return false;
     const monitor_t *self = nullptr;
@@ -315,6 +340,7 @@ public:
     GVariantBuilder logical, members, props, none;
     g_variant_builder_init(&members, G_VARIANT_TYPE("a(ssa{sv})"));
     g_variant_builder_init(&none, G_VARIANT_TYPE("a{sv}"));
+    if (color_mode >= 0) g_variant_builder_add(&none, "{sv}", "color-mode", g_variant_new_uint32(guint32(color_mode)));
     g_variant_builder_add(&members, "(ssa{sv})", self->connector.c_str(), self->mode_id.c_str(), &none);
     g_variant_builder_init(&logical, G_VARIANT_TYPE("a(iiduba(ssa{sv}))"));
     g_variant_builder_add(&logical, "(iiduba(ssa{sv}))", 0, 0, 1.0, 0u, TRUE, &members);

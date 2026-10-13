@@ -964,41 +964,46 @@ namespace platf {
     portal_restore_outputs();
   }
 
-#ifdef SUNSHINE_BUILD_KDE_OUTPUT
   namespace {
-    // Whether this KWin can switch its virtual outputs to HDR (capability 0x8), remembered from the
-    // last virtual output so serverinfo can advertise HDR before any stream exists.
+    // Whether this desktop can switch its virtual displays to HDR (KWin capability 0x8; Mutter's
+    // BT.2100 colour mode), remembered from the last virtual display so serverinfo can advertise
+    // HDR before any stream exists. One answer per desktop: a host can run KDE and GNOME sessions.
     std::filesystem::path virtual_hdr_path() {
-      return appdata() / "kde_virtual_hdr";
+      return appdata() / (portal_kde_native_supported() ? "kde_virtual_hdr" : "gnome_virtual_hdr");
     }
     void remember_virtual_hdr(bool capable) {
       std::ofstream(virtual_hdr_path()) << (capable ? 1 : 0) << '\n';
     }
   }
-#endif
 
   bool portal_virtual_hdr_supported() {
-#ifdef SUNSHINE_BUILD_KDE_OUTPUT
     std::ifstream file(virtual_hdr_path());
     int capable = 0;
-    return file >> capable && capable == 1 && portal_kde_native_supported();
-#else
-    return false;
-#endif
+    return file >> capable && capable == 1 && portal_coop_supported();
   }
 
   // Once per host install (no remembered answer): a short-lived probe output reports whether KWin
   // offers HDR on virtual outputs. Its distinct name keeps KWin's stored stream layout out of it.
   void portal_probe_virtual_hdr() {
-#ifdef SUNSHINE_BUILD_KDE_OUTPUT
     std::error_code ec;
-    if (std::filesystem::exists(virtual_hdr_path(), ec) || !portal_kde_native_supported()) return;
-    portal::kde_virtual_t probe;
-    if (!probe.open(64, 64, "-probe")) return;
-    const bool capable = umbra_kde_output_hdr_capable(probe.output_name.c_str());
-    remember_virtual_hdr(capable);
-    BOOST_LOG(info) << "KDE virtual displays " << (capable ? "offer" : "do not offer") << " HDR";
+    if (std::filesystem::exists(virtual_hdr_path(), ec)) return;
+#ifdef SUNSHINE_BUILD_KDE_OUTPUT
+    if (portal_kde_native_supported()) {
+      portal::kde_virtual_t probe;
+      if (!probe.open(64, 64, "-probe")) return;
+      const bool capable = umbra_kde_output_hdr_capable(probe.output_name.c_str());
+      remember_virtual_hdr(capable);
+      BOOST_LOG(info) << "KDE virtual displays " << (capable ? "offer" : "do not offer") << " HDR";
+      return;
+    }
 #endif
+    if (portal::gnome_virtual_t::available()) {
+      portal::gnome_virtual_t probe;
+      if (!probe.open(64, 64, 60000)) return;
+      const bool capable = probe.hdr_capable();
+      remember_virtual_hdr(capable);
+      BOOST_LOG(info) << "GNOME virtual displays " << (capable ? "offer" : "do not offer") << " HDR";
+    }
   }
 
   bool portal_prepare_virtual(int width, int height, int milli_hz, bool hdr) {
@@ -1014,13 +1019,25 @@ namespace platf {
       return false;
     }
     if (session->gnome) {
+      // HDR as the client asked, where this Mutter offers BT.2100 on virtual monitors; set in the
+      // same configuration as the exclusive layout below (KDE does both further down).
+      const bool hdr_capable = session->gnome->hdr_capable();
+      remember_virtual_hdr(hdr_capable);
       // Windows Umbra's default layout (virtual_display_layout=exclusive), as on KDE below.
-      if (session->gnome->exclusive()) {
+      if (session->gnome->exclusive(hdr_capable ? (hdr ? 1 : 0) : -1)) {
         session->x = 0;
         session->y = 0;
         BOOST_LOG(info) << "Virtual display " << session->gnome->connector << " is the only active display";
       } else {
         BOOST_LOG(error) << "Could not make the virtual display the only active display; other displays stay on";
+      }
+      if (hdr_capable) {
+        const int mode = session->gnome->color_mode();
+        session->virtual_hdr = hdr && mode == 1;
+        if (hdr && mode != 1) BOOST_LOG(error) << "Could not switch the virtual display to HDR";
+        else BOOST_LOG(info) << "Virtual display " << session->gnome->connector << (session->virtual_hdr ? " is HDR (BT.2020/PQ)" : " is SDR");
+      } else if (hdr) {
+        BOOST_LOG(info) << "This Mutter has no HDR virtual displays; the stream stays SDR";
       }
     }
 #ifdef SUNSHINE_BUILD_KDE_OUTPUT
