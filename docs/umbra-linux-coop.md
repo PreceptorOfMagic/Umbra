@@ -668,3 +668,30 @@ NVIDIA OpenCL cannot take DMA-BUF zero-copy.
 
 Unmeasured: anything AMD (VA-API GPU frames, rusticl OpenCL for GPU HEVC, AMD+NVIDIA co-op). This
 needs the RX Vega back in VEGA.
+
+## KDE HDR and GPU-frame co-op — 2026-10-13 15:20
+
+Host candidate: Flatpak `build25-hdr5`, Umbra `d162fd63` (`v0.5.1-linux-parity`), on VEGA
+Ubuntu 26.04 KDE with KWin `4:6.6.6-0ubuntu0.1+umbrahdr4` (`packaging/linux/kwin-virtual-hdr/`).
+
+**KDE HDR.** Each stream's virtual output is switched to HDR when the client asks for HDR and
+KWin offers it (capability 0x8, detected; stock KWin keeps SDR). KWin reports an HDR output by
+its blending space (BT.2020 + gamma 2.2), so Umbra trusts its own confirmed switch
+(`session_t::virtual_hdr`) and captures 10-bit PQ. Measured: Automatic HDR 3840x2160@165 ->
+NVENC Main10, client HDR on with BT.2020/PQ metadata, ~161 fps; co-op pane 10-bit HDR ~157 fps.
+A custom-encoder HDR desktop stream now keeps its virtual display instead of the GNOME
+physical-monitor rule (which waited on a screen-sharing prompt).
+
+**GPU frames for GPU HEVC (co-op).** As Windows hands the encoder its D3D11 texture, the co-op
+encoder now takes the capture's DMA-BUF (`src/platform/linux/gpu-hevc-frames.{h,cpp}`): one GL
+draw packs it into the encoder's input words and, on NVIDIA, CUDA copies it into a VMM allocation
+the OpenCL encoder imports by opaque fd (`AGHL_FRAME_EXTERNAL`). No host copy. Measured co-op pane
+1920x2176@165: KDE 3574 frames per probe window (~160 fps; read-back gave 791, ~32 fps), GNOME
+4062 (165 fps); encoder submit-to-packet ~5 ms (was ~17-18 ms with read-back and upload). Resume
+at a new size (1920x2176 -> 2176x1920) passes; colours and orientation verified against the
+desktop on KDE and GNOME. Fallbacks, all logged: read-back of the packed texture (no CUDA, another
+GPU, a failed copy), host pixels for one frame if the encoder cannot import, and the old read-back
+capture if the GL stage fails.
+
+Not measured: AMD (no AMD GPU fitted). On AMD the GL stage and read-back hand-off apply; a
+zero-copy AMD hand-off (Mesa rusticl/ROCm import) is still to be written.
