@@ -1,5 +1,5 @@
 diff --git a/src/backends/meta-screen-cast-virtual-stream-src.c b/src/backends/meta-screen-cast-virtual-stream-src.c
-index 4d70801..1172404 100644
+index 4d70801..f34b3dc 100644
 --- a/src/backends/meta-screen-cast-virtual-stream-src.c
 +++ b/src/backends/meta-screen-cast-virtual-stream-src.c
 @@ -27,6 +27,9 @@
@@ -20,7 +20,7 @@ index 4d70801..1172404 100644
  
  enum
  {
-@@ -80,6 +84,12 @@ struct _MetaScreenCastVirtualStreamSrc
+@@ -80,11 +84,20 @@ struct _MetaScreenCastVirtualStreamSrc
    gulong cursor_changed_handler_id;
  
    gulong monitors_changed_handler_id;
@@ -33,7 +33,15 @@ index 4d70801..1172404 100644
  
    MetaScreenCastFrameClockDriver *driver;
  };
-@@ -157,6 +167,33 @@ stage_from_src (MetaScreenCastStreamSrc *src)
+ 
+ static void init_initable_iface (GInitableIface *iface);
++static void on_device_color_state_changed (MetaColorManager               *color_manager,
++                                           MetaColorDevice                *color_device,
++                                           MetaScreenCastVirtualStreamSrc *virtual_src);
+ 
+ static GInitableIface *initable_parent_iface;
+ 
+@@ -157,6 +170,33 @@ stage_from_src (MetaScreenCastStreamSrc *src)
    return CLUTTER_STAGE (meta_backend_get_stage (backend_from_src (src)));
  }
  
@@ -67,7 +75,7 @@ index 4d70801..1172404 100644
  ClutterStageView *
  meta_screen_cast_virtual_stream_src_get_view (MetaScreenCastVirtualStreamSrc *virtual_src)
  {
-@@ -426,6 +463,7 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
+@@ -426,6 +466,7 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
    ClutterStageView *view;
    MtkRectangle view_rect;
    float scale;
@@ -75,7 +83,7 @@ index 4d70801..1172404 100644
  
    stream = meta_screen_cast_stream_src_get_stream (src);
    view = view_from_src (src);
-@@ -444,13 +482,15 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
+@@ -444,13 +485,15 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
        break;
      }
  
@@ -92,7 +100,7 @@ index 4d70801..1172404 100644
                                        paint_flags,
                                        error))
      return FALSE;
-@@ -458,16 +498,177 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
+@@ -458,16 +501,177 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc
    return TRUE;
  }
  
@@ -270,7 +278,7 @@ index 4d70801..1172404 100644
    view_framebuffer = clutter_stage_view_get_framebuffer (view);
    if (!cogl_framebuffer_blit (view_framebuffer,
                                framebuffer,
-@@ -894,6 +1095,11 @@ meta_screen_cast_virtual_stream_src_initable_init (GInitable     *initable,
+@@ -894,6 +1098,11 @@ meta_screen_cast_virtual_stream_src_initable_init (GInitable     *initable,
      g_signal_connect (monitor_manager, "monitors-changed-internal",
                        G_CALLBACK (on_monitors_changed),
                        virtual_src);
@@ -282,7 +290,7 @@ index 4d70801..1172404 100644
  
    return initable_parent_iface->init (initable, cancellable, error);
  }
-@@ -963,6 +1169,11 @@ meta_screen_cast_virtual_stream_src_dispose (GObject *object)
+@@ -963,6 +1172,11 @@ meta_screen_cast_virtual_stream_src_dispose (GObject *object)
  
    g_clear_signal_handler (&virtual_src->monitors_changed_handler_id,
                            monitor_manager);
@@ -294,7 +302,7 @@ index 4d70801..1172404 100644
  
    parent_class->dispose (object);
  
-@@ -971,6 +1182,106 @@ meta_screen_cast_virtual_stream_src_dispose (GObject *object)
+@@ -971,6 +1185,106 @@ meta_screen_cast_virtual_stream_src_dispose (GObject *object)
                  (GDestroyNotify) meta_virtual_mode_info_free);
  }
  
@@ -401,7 +409,7 @@ index 4d70801..1172404 100644
  static void
  meta_screen_cast_virtual_stream_src_init (MetaScreenCastVirtualStreamSrc *virtual_src)
  {
-@@ -995,6 +1306,7 @@ meta_screen_cast_virtual_stream_src_class_init (MetaScreenCastVirtualStreamSrcCl
+@@ -995,6 +1309,7 @@ meta_screen_cast_virtual_stream_src_class_init (MetaScreenCastVirtualStreamSrcCl
      meta_screen_cast_virtual_stream_src_record_to_buffer;
    src_class->record_to_framebuffer =
      meta_screen_cast_virtual_stream_src_record_to_framebuffer;
