@@ -777,11 +777,20 @@ namespace portal {
       }
       uint8_t storage[1024];
       spa_pod_builder b = SPA_POD_BUILDER_INIT(storage, sizeof storage);
-      const spa_pod *params[] = {
+      // DMA-BUF: the producer sets the plane count and layout from the modifier (KWin 6.6 announces blocks =
+      // planeCount with no size/stride). AMD's DCC modifiers have 2-3 planes, so one fixed block made PipeWire's
+      // buffer allocation fail on amdgpu ("error alloc buffers: Invalid argument"); NVIDIA's are single-plane.
+      const spa_pod *buffers = pq || gpu ?
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
           SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(gpu ? 4 : 3, 2, 4),  // GPU frames keep one checked out
+          SPA_PARAM_BUFFERS_blocks, SPA_POD_CHOICE_RANGE_Int(1, 1, 4),
+          SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << SPA_DATA_DmaBuf))) :
+        static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
+          SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(3, 2, 4),
           SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1), SPA_PARAM_BUFFERS_size, SPA_POD_Int(w * h * 4),
-          SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << (pq || gpu ? SPA_DATA_DmaBuf : SPA_DATA_MemFd)))),
+          SPA_PARAM_BUFFERS_stride, SPA_POD_Int(w * 4), SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << SPA_DATA_MemFd)));
+      const spa_pod *params[] = {
+        buffers,
         static_cast<const spa_pod *>(spa_pod_builder_add_object(&b, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
           SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Header), SPA_PARAM_META_size, SPA_POD_Int(sizeof(spa_meta_header))))};
       if (pw_stream_update_params(self.stream, params, 2) < 0) self.fail("buffer parameters rejected");
