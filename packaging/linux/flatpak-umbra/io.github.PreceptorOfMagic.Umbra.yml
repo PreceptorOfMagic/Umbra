@@ -65,7 +65,7 @@ modules:
       env:
         BUILD_VERSION: "v0.5.2"
         BRANCH: "release/umbra-linux-0.5"
-        COMMIT: "b05af9334c8996527f3cd81b7b4d20a92e606437"
+        COMMIT: "62ea2d0580dec0b82b12835a8e7f7907c2131ae8"
         XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
         npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
         npm_config_nodedir: /usr/lib/sdk/node22
@@ -102,7 +102,7 @@ modules:
         # Umbra for Linux: the code commit. The release tag (umbra-linux-vX.Y.Z) is the packaging
         # commit after it, which pins this one.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        commit: "b05af9334c8996527f3cd81b7b4d20a92e606437"
+        commit: "62ea2d0580dec0b82b12835a8e7f7907c2131ae8"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
         disable-submodules: true
