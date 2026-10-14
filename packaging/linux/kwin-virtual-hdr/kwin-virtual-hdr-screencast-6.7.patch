@@ -1,0 +1,512 @@
+diff --git a/src/backends/drm/drm_virtual_output.cpp b/src/backends/drm/drm_virtual_output.cpp
+index fc60ae8a6d..4ce73cfb83 100644
+--- a/src/backends/drm/drm_virtual_output.cpp
++++ b/src/backends/drm/drm_virtual_output.cpp
+@@ -9,6 +9,7 @@
+ */
+ #include "drm_virtual_output.h"
+ 
++#include "core/colorspace.h"
+ #include "core/outputconfiguration.h"
+ #include "core/renderbackend.h"
+ #include "drm_backend.h"
+@@ -33,7 +34,8 @@ DrmVirtualOutput::DrmVirtualOutput(DrmBackend *backend, const QString &name, con
+         .name = QStringLiteral("Virtual-") + name,
+         .model = description,
+         .physicalSize = size,
+-        .capabilities = Capability::CustomModes,
++        // HDR is a colour-space choice on a virtual output (no panel): BT.2020/PQ when enabled.
++        .capabilities = Capability::CustomModes | Capability::HighDynamicRange,
+     });
+ 
+     setState(State{
+@@ -130,6 +132,38 @@ void DrmVirtualOutput::applyChanges(const OutputConfiguration &config)
+         next.currentMode->setRemoved();
+     }
+ 
++    next.highDynamicRange = props->highDynamicRange.value_or(m_state.highDynamicRange);
++    next.referenceLuminance = props->referenceLuminance.value_or(m_state.referenceLuminance);
++    next.maxPeakBrightnessOverride = props->maxPeakBrightnessOverride.value_or(m_state.maxPeakBrightnessOverride);
++    next.maxAverageBrightnessOverride = props->maxAverageBrightnessOverride.value_or(m_state.maxAverageBrightnessOverride);
++    next.minBrightnessOverride = props->minBrightnessOverride.value_or(m_state.minBrightnessOverride);
++    next.sdrGamutWideness = props->sdrGamutWideness.value_or(m_state.sdrGamutWideness);
++    if (next.highDynamicRange) {
++        // No EDID: the overrides (or 1000 nits) describe the HDR target clients and captures see.
++        const TransferFunction pq{TransferFunction::PerceptualQuantizer};
++        const double peak = next.maxPeakBrightnessOverride.value_or(1000);
++        const double average = next.maxAverageBrightnessOverride.value_or(peak);
++        next.originalColorDescription = std::make_shared<ColorDescription>(ColorDescription{
++            Colorimetry::BT2020,
++            pq,
++            double(next.referenceLuminance),
++            next.minBrightnessOverride.value_or(pq.minLuminance),
++            average,
++            peak,
++            Colorimetry::BT2020,
++            Colorimetry::BT709.interpolateGamutTo(Colorimetry::BT2020, next.sdrGamutWideness),
++        });
++        next.colorDescription = next.originalColorDescription;
++        const double maxLuminance = next.colorDescription->maxHdrLuminance().value_or(next.colorDescription->referenceLuminance());
++        next.blendingColor = next.colorDescription->withTransferFunction(TransferFunction(TransferFunction::gamma22, 0, maxLuminance));
++        next.layerBlendingColor = next.colorDescription;
++    } else {
++        next.originalColorDescription = ColorDescription::sRGB;
++        next.colorDescription = ColorDescription::sRGB;
++        next.blendingColor = ColorDescription::sRGB;
++        next.layerBlendingColor = ColorDescription::sRGB;
++    }
++
+     setState(next);
+     m_renderLoop->setRefreshRate(next.currentMode->refreshRate());
+     m_vsyncMonitor->setRefreshRate(next.currentMode->refreshRate());
+diff --git a/src/plugins/screencast/outputscreencastsource.cpp b/src/plugins/screencast/outputscreencastsource.cpp
+index 5a44c3f7f5..7a593d0163 100644
+--- a/src/plugins/screencast/outputscreencastsource.cpp
++++ b/src/plugins/screencast/outputscreencastsource.cpp
+@@ -5,6 +5,8 @@
+ */
+ 
+ #include "outputscreencastsource.h"
++#include "core/backendoutput.h"
++#include "core/colorspace.h"
+ #include "filteredsceneview.h"
+ #include "screencastlayer.h"
+ #include "screencastutils.h"
+@@ -36,6 +38,8 @@ OutputScreenCastSource::OutputScreenCastSource(LogicalOutput *output, std::optio
+             Q_EMIT closed();
+         }
+     });
++    // HDR switched on or off: the stream re-offers its formats (10-bit only while HDR).
++    connect(output->backendOutput(), &BackendOutput::colorDescriptionChanged, this, &ScreenCastSource::formatsChanged);
+ }
+ 
+ OutputScreenCastSource::~OutputScreenCastSource()
+@@ -48,6 +52,20 @@ quint32 OutputScreenCastSource::drmFormat() const
+     return DRM_FORMAT_ARGB8888;
+ }
+ 
++quint32 OutputScreenCastSource::hdrDrmFormat() const
++{
++    if (!m_output) {
++        return 0;
++    }
++    const auto &color = m_output->backendOutput()->colorDescription();
++    return color->transferFunction().type == TransferFunction::PerceptualQuantizer ? DRM_FORMAT_ABGR2101010 : 0;
++}
++
++void OutputScreenCastSource::setHdrTarget(bool hdr)
++{
++    m_hdrTarget = hdr;
++}
++
+ QSize OutputScreenCastSource::textureSize() const
+ {
+     return m_output->pixelSize();
+@@ -81,6 +99,8 @@ Region OutputScreenCastSource::render(QImage *target, const Region &bufferRepair
+ Region OutputScreenCastSource::render(GLFramebuffer *target, const Region &bufferRepair)
+ {
+     m_layer->setFramebuffer(target, bufferRepair & Rect(QPoint(), target->size()));
++    // A 10-bit consumer gets the output's own HDR encoding (BT.2020/PQ); everyone else sRGB as before.
++    m_layer->setColorDescription(m_hdrTarget && hdrDrmFormat() ? m_output->backendOutput()->colorDescription() : ColorDescription::sRGB);
+     if (!m_layer->preparePresentationTest()) {
+         return Region{};
+     }
+diff --git a/src/plugins/screencast/outputscreencastsource.h b/src/plugins/screencast/outputscreencastsource.h
+index 7c3142b179..2e15c54207 100644
+--- a/src/plugins/screencast/outputscreencastsource.h
++++ b/src/plugins/screencast/outputscreencastsource.h
+@@ -30,6 +30,8 @@ public:
+     QSize textureSize() const override;
+     qreal devicePixelRatio() const override;
+     quint32 drmFormat() const override;
++    quint32 hdrDrmFormat() const override;
++    void setHdrTarget(bool hdr) override;
+ 
+     void setRenderCursor(bool enable) override;
+     Region render(GLFramebuffer *target, const Region &bufferRepair) override;
+@@ -52,6 +54,7 @@ private:
+     std::unique_ptr<ItemTreeView> m_cursorView;
+     bool m_active = false;
+     bool m_renderCursor = false;
++    bool m_hdrTarget = false;
+ };
+ 
+ } // namespace KWin
+diff --git a/src/plugins/screencast/screencastbuffer.cpp b/src/plugins/screencast/screencastbuffer.cpp
+index dc5dcc35ea..b9846008f8 100644
+--- a/src/plugins/screencast/screencastbuffer.cpp
++++ b/src/plugins/screencast/screencastbuffer.cpp
+@@ -10,6 +10,8 @@
+ #include "core/shmgraphicsbufferallocator.h"
+ #include "opengl/eglbackend.h"
+ #include "opengl/glframebuffer.h"
++#include "kwinscreencast_logging.h"
++#include "core/drm_formats.h"
+ 
+ namespace KWin
+ {
+@@ -41,6 +43,7 @@ DmaBufScreenCastBuffer *DmaBufScreenCastBuffer::create(pw_buffer *pwBuffer, cons
+ 
+     GraphicsBuffer *buffer = backend->drmDevice()->allocator()->allocate(options);
+     if (!buffer) {
++        qCWarning(KWIN_SCREENCAST) << "DMA-BUF allocation failed:" << FormatInfo::drmFormatName(options.format) << options.size << Qt::hex << options.modifiers;
+         return nullptr;
+     }
+ 
+@@ -52,6 +55,7 @@ DmaBufScreenCastBuffer *DmaBufScreenCastBuffer::create(pw_buffer *pwBuffer, cons
+ 
+     const void *syncTimelineMeta = spa_buffer_find_meta_data(pwBuffer->buffer, SPA_META_SyncTimeline, sizeof(spa_meta_sync_timeline));
+     if (pwBuffer->buffer->n_datas != uint32_t(attrs->planeCount + (syncTimelineMeta ? 2 : 0))) {
++        qCWarning(KWIN_SCREENCAST) << "DMA-BUF plane count mismatch:" << pwBuffer->buffer->n_datas << attrs->planeCount << (syncTimelineMeta != nullptr);
+         buffer->drop();
+         return nullptr;
+     }
+@@ -63,12 +67,14 @@ DmaBufScreenCastBuffer *DmaBufScreenCastBuffer::create(pw_buffer *pwBuffer, cons
+ 
+     auto texture = backend->importDmaBufAsTexture(*attrs);
+     if (!texture) {
++        qCWarning(KWIN_SCREENCAST) << "DMA-BUF import failed:" << FormatInfo::drmFormatName(attrs->format) << Qt::hex << attrs->modifier;
+         buffer->drop();
+         return nullptr;
+     }
+ 
+     auto framebuffer = std::make_unique<GLFramebuffer>(texture.get());
+     if (!framebuffer->valid()) {
++        qCWarning(KWIN_SCREENCAST) << "DMA-BUF framebuffer invalid:" << FormatInfo::drmFormatName(attrs->format) << Qt::hex << attrs->modifier;
+         buffer->drop();
+         return nullptr;
+     }
+diff --git a/src/plugins/screencast/screencastlayer.cpp b/src/plugins/screencast/screencastlayer.cpp
+index 2260ee635e..4c85dd55b0 100644
+--- a/src/plugins/screencast/screencastlayer.cpp
++++ b/src/plugins/screencast/screencastlayer.cpp
+@@ -33,10 +33,15 @@ FormatModifierMap ScreencastLayer::supportedDrmFormats() const
+     return m_formats;
+ }
+ 
++void ScreencastLayer::setColorDescription(const std::shared_ptr<ColorDescription> &colorDescription)
++{
++    m_colorDescription = colorDescription;
++}
++
+ std::optional<OutputLayerBeginFrameInfo> ScreencastLayer::doBeginFrame()
+ {
+     return OutputLayerBeginFrameInfo{
+-        .renderTarget = RenderTarget(m_buffer),
++        .renderTarget = RenderTarget(m_buffer, m_colorDescription),
+         .repaint = m_bufferDamage,
+     };
+ }
+diff --git a/src/plugins/screencast/screencastlayer.h b/src/plugins/screencast/screencastlayer.h
+index e8696d8657..734c462d73 100644
+--- a/src/plugins/screencast/screencastlayer.h
++++ b/src/plugins/screencast/screencastlayer.h
+@@ -4,6 +4,7 @@
+     SPDX-License-Identifier: GPL-2.0-or-later
+ */
+ #pragma once
++#include "core/colorspace.h"
+ #include "core/outputlayer.h"
+ 
+ namespace KWin
+@@ -15,6 +16,7 @@ public:
+     explicit ScreencastLayer(LogicalOutput *output, const FormatModifierMap &formats);
+ 
+     void setFramebuffer(GLFramebuffer *buffer, const Region &bufferDamage);
++    void setColorDescription(const std::shared_ptr<ColorDescription> &colorDescription);
+ 
+     DrmDevice *scanoutDevice() const override;
+     FormatModifierMap supportedDrmFormats() const override;
+@@ -26,6 +28,7 @@ private:
+ 
+     const FormatModifierMap m_formats;
+     GLFramebuffer *m_buffer = nullptr;
++    std::shared_ptr<ColorDescription> m_colorDescription = ColorDescription::sRGB;
+     Region m_bufferDamage;
+ };
+ 
+diff --git a/src/plugins/screencast/screencastsource.h b/src/plugins/screencast/screencastsource.h
+index c15f81259b..d52a932f84 100644
+--- a/src/plugins/screencast/screencastsource.h
++++ b/src/plugins/screencast/screencastsource.h
+@@ -41,12 +41,25 @@ public:
+ 
+     virtual bool includesCursor(Cursor *cursor) const = 0;
+ 
++    // Optional 10-bit HDR capture (BT.2020/PQ), offered alongside the 8-bit drmFormat().
++    // hdrDrmFormat() is 0 while the source is not HDR; setHdrTarget() selects the colour
++    // space of the next render() to match the negotiated buffer format.
++    virtual quint32 hdrDrmFormat() const
++    {
++        return 0;
++    }
++    virtual void setHdrTarget(bool hdr)
++    {
++        Q_UNUSED(hdr);
++    }
++
+     virtual QPointF mapFromGlobal(const QPointF &point) const = 0;
+     virtual RectF mapFromGlobal(const RectF &rect) const = 0;
+ 
+ Q_SIGNALS:
+     void frame();
+     void closed();
++    void formatsChanged();
+ };
+ 
+ } // namespace KWin
+diff --git a/src/plugins/screencast/screencaststream.cpp b/src/plugins/screencast/screencaststream.cpp
+index 022e9658cc..ea9982a544 100644
+--- a/src/plugins/screencast/screencaststream.cpp
++++ b/src/plugins/screencast/screencaststream.cpp
+@@ -79,6 +79,22 @@ static const struct
+         .drmFormat = DRM_FORMAT_NV12,
+         .spaFormat = SPA_VIDEO_FORMAT_NV12,
+     },
++    {
++        .drmFormat = DRM_FORMAT_ABGR2101010,
++        .spaFormat = SPA_VIDEO_FORMAT_ABGR_210LE,
++    },
++    {
++        .drmFormat = DRM_FORMAT_XBGR2101010,
++        .spaFormat = SPA_VIDEO_FORMAT_xBGR_210LE,
++    },
++    {
++        .drmFormat = DRM_FORMAT_ARGB2101010,
++        .spaFormat = SPA_VIDEO_FORMAT_ARGB_210LE,
++    },
++    {
++        .drmFormat = DRM_FORMAT_XRGB2101010,
++        .spaFormat = SPA_VIDEO_FORMAT_xRGB_210LE,
++    },
+     {
+         .drmFormat = DRM_FORMAT_RGB888,
+         .spaFormat = SPA_VIDEO_FORMAT_BGR,
+@@ -234,7 +250,12 @@ void ScreenCastStream::onStreamParamChanged(uint32_t id, const struct spa_pod *f
+     }
+ 
+     spa_format_video_raw_parse(format, &m_videoFormat);
++    const quint32 negotiatedDrmFormat = spaVideoFormatToDrmFormat(m_videoFormat.format);
++    m_hdrNegotiated = isHdrFormat(negotiatedDrmFormat);
+     auto modifierProperty = spa_pod_find_prop(format, nullptr, SPA_FORMAT_VIDEO_modifier);
++    qCDebug(KWIN_SCREENCAST) << objectName() << "negotiated" << FormatInfo::drmFormatName(negotiatedDrmFormat) << "hdr" << m_hdrNegotiated
++                             << "modifier property" << (modifierProperty != nullptr) << "modifier" << Qt::hex << m_videoFormat.modifier
++                             << "offering hdr" << FormatInfo::drmFormatName(m_hdrDrmFormat) << "params" << (m_dmabufParams ? FormatInfo::drmFormatName(m_dmabufParams->format) : QString());
+     if (modifierProperty) {
+         const uint32_t valueCount = SPA_POD_CHOICE_N_VALUES(&modifierProperty->value);
+         const uint64_t *values = (uint64_t *)SPA_POD_CHOICE_VALUES(&modifierProperty->value); // values[0] is the preferred choice
+@@ -246,25 +267,28 @@ void ScreenCastStream::onStreamParamChanged(uint32_t id, const struct spa_pod *f
+             receivedModifiers.insert(values[i]);
+         }
+ 
+-        if (!m_dmabufParams || m_dmabufParams->width != m_resolution.width() || m_dmabufParams->height != m_resolution.height() || !receivedModifiers.contains(m_dmabufParams->modifier)) {
++        // The stream outlives its consumers: params tested for another format (an 8-bit consumer
++        // before a 10-bit one) must be re-tested and re-fixated, or buffers get an unfixated modifier.
++        const quint32 wantedFormat = m_hdrNegotiated ? negotiatedDrmFormat : m_drmFormat;
++        if (!m_dmabufParams || m_dmabufParams->width != m_resolution.width() || m_dmabufParams->height != m_resolution.height() || m_dmabufParams->format != wantedFormat || !receivedModifiers.contains(m_dmabufParams->modifier)) {
+             // DRM_MOD_INVALID should be used as a last option. Do not just remove it it's the only
+             // item on the list
+             if (receivedModifiers.size() > 1) {
+                 receivedModifiers.erase(DRM_FORMAT_MOD_INVALID);
+             }
+-            m_dmabufParams = testCreateDmaBuf(m_resolution, m_drmFormat, receivedModifiers);
++            m_dmabufParams = testCreateDmaBuf(m_resolution, wantedFormat, receivedModifiers);
+ 
+             // In case we fail to use any modifier from the list of offered ones, remove these
+             // from our all future offerings, otherwise there will be no indication that it cannot
+             // be used and clients can go for it over and over
+             if (!m_dmabufParams.has_value()) {
+                 for (uint64_t modifier : receivedModifiers) {
+-                    m_modifiers.erase(modifier);
++                    (m_hdrNegotiated ? m_hdrModifiers : m_modifiers).erase(modifier);
+                 }
+             }
+ 
+             qCDebug(KWIN_SCREENCAST) << objectName() << "Stream dmabuf modifiers received, offering our best suited modifier" << m_dmabufParams.has_value();
+-            char buffer[2048];
++            char buffer[4096];
+             auto params = buildFormats(m_dmabufParams.has_value(), buffer);
+             pw_stream_update_params(m_pwStream, params.data(), params.count());
+             return;
+@@ -330,6 +354,15 @@ ScreenCastStream::ScreenCastStream(ScreenCastSource *source, std::shared_ptr<Pip
+         scheduleRecord(Content::Video);
+     });
+     connect(source, &ScreenCastSource::closed, this, &ScreenCastStream::close);
++    connect(source, &ScreenCastSource::formatsChanged, this, [this]() {
++        const quint32 previous = m_hdrDrmFormat;
++        updateHdrFormat();
++        if (m_pwStream && previous != m_hdrDrmFormat) {
++            char buffer[4096];
++            auto params = buildFormats(false, buffer);
++            pw_stream_update_params(m_pwStream, params.data(), params.count());
++        }
++    });
+ 
+     m_pwStreamEvents.version = PW_VERSION_STREAM_EVENTS;
+     m_pwStreamEvents.add_buffer = [](void *data, struct pw_buffer *buffer) {
+@@ -432,8 +465,9 @@ bool ScreenCastStream::createStream()
+         m_modifiers = *itModifiers;
+     }
+     m_hasDmaBuf = testCreateDmaBuf(m_resolution, m_drmFormat, m_modifiers).has_value();
++    updateHdrFormat();
+ 
+-    char buffer[2048];
++    char buffer[4096];
+     QList<const spa_pod *> params = buildFormats(false, buffer);
+ 
+     pw_stream_add_listener(m_pwStream, &m_streamListener, &m_pwStreamEvents, this);
+@@ -619,6 +653,7 @@ void ScreenCastStream::record(Contents contents)
+     Region damage;
+     if (effectiveContents & Content::Video) {
+         if (auto memfd = dynamic_cast<MemFdScreenCastBuffer *>(buffer)) {
++            m_source->setHdrTarget(false);
+             damage = m_source->render(memfd->view.image(), m_damageJournal.accumulate(memfd->m_age, Region::infinite()));
+             bumpBufferAge(memfd);
+         } else if (auto dmabuf = dynamic_cast<DmaBufScreenCastBuffer *>(buffer)) {
+@@ -633,6 +668,7 @@ void ScreenCastStream::record(Contents contents)
+                 }
+             }
+ 
++            m_source->setHdrTarget(m_hdrNegotiated);
+             damage = m_source->render(dmabuf->framebuffer.get(), m_damageJournal.accumulate(dmabuf->m_age, Region::infinite()));
+             bumpBufferAge(dmabuf);
+         }
+@@ -692,7 +728,7 @@ void ScreenCastStream::resize(const QSize &resolution)
+     }
+     m_resolution = resolution;
+ 
+-    char buffer[2048];
++    char buffer[4096];
+     auto params = buildFormats(false, buffer);
+     pw_stream_update_params(m_pwStream, params.data(), params.count());
+ }
+@@ -748,12 +784,38 @@ void ScreenCastStream::invalidateCursor()
+     m_cursor.invalid = true;
+ }
+ 
+-QList<const spa_pod *> ScreenCastStream::buildFormats(bool fixate, char buffer[2048])
++bool ScreenCastStream::isHdrFormat(quint32 drmFormat) const
++{
++    return drmFormat == DRM_FORMAT_ABGR2101010 || drmFormat == DRM_FORMAT_XBGR2101010
++        || drmFormat == DRM_FORMAT_ARGB2101010 || drmFormat == DRM_FORMAT_XRGB2101010;
++}
++
++void ScreenCastStream::updateHdrFormat()
++{
++    m_hdrDrmFormat = 0;
++    m_hdrModifiers.clear();
++    const quint32 hdrFormat = m_source->hdrDrmFormat();
++    if (!hdrFormat) {
++        qCDebug(KWIN_SCREENCAST) << objectName() << "source is not HDR";
++        return;
++    }
++    const auto supported = Compositor::self()->backend()->supportedFormats();
++    const auto it = supported.constFind(hdrFormat);
++    if (it == supported.constEnd() || !testCreateDmaBuf(m_resolution, hdrFormat, *it).has_value()) {
++        qCWarning(KWIN_SCREENCAST) << objectName() << "HDR format" << FormatInfo::drmFormatName(hdrFormat) << "cannot be allocated";
++        return;
++    }
++    m_hdrDrmFormat = hdrFormat;
++    m_hdrModifiers = *it;
++    qCDebug(KWIN_SCREENCAST) << objectName() << "offering HDR" << FormatInfo::drmFormatName(hdrFormat) << "modifiers" << m_hdrModifiers.size();
++}
++
++QList<const spa_pod *> ScreenCastStream::buildFormats(bool fixate, char buffer[4096])
+ {
+     const auto dmabufFormat = drmFormatToSpaVideoFormat(m_drmFormat);
+     const auto shmFormat = drmFormatToSpaVideoFormat(DRM_FORMAT_ARGB8888);
+ 
+-    spa_pod_builder podBuilder = SPA_POD_BUILDER_INIT(buffer, 2048);
++    spa_pod_builder podBuilder = SPA_POD_BUILDER_INIT(buffer, 4096);
+     spa_fraction defFramerate = SPA_FRACTION(0, 1);
+     spa_fraction minFramerate = SPA_FRACTION(0, 1);
+     spa_fraction maxFramerate = SPA_FRACTION(m_source->refreshRate() / 1000, 1);
+@@ -761,8 +823,16 @@ QList<const spa_pod *> ScreenCastStream::buildFormats(bool fixate, char buffer[2
+     spa_rectangle resolution = SPA_RECTANGLE(uint32_t(m_resolution.width()), uint32_t(m_resolution.height()));
+ 
+     QList<const spa_pod *> params;
++    // HDR first: a consumer that accepts 10-bit BT.2020/PQ gets it, everyone else falls through.
++    if (m_hdrDrmFormat) {
++        const auto hdrFormat = drmFormatToSpaVideoFormat(m_hdrDrmFormat);
++        if (fixate && m_hdrNegotiated) {
++            params.append(buildFormat(&podBuilder, hdrFormat, &resolution, &defFramerate, &minFramerate, &maxFramerate, {m_dmabufParams->modifier}, SPA_POD_PROP_FLAG_MANDATORY, true));
++        }
++        params.append(buildFormat(&podBuilder, hdrFormat, &resolution, &defFramerate, &minFramerate, &maxFramerate, m_hdrModifiers, SPA_POD_PROP_FLAG_MANDATORY | SPA_POD_PROP_FLAG_DONT_FIXATE, true));
++    }
+     if (m_hasDmaBuf) {
+-        if (fixate) {
++        if (fixate && !m_hdrNegotiated) {
+             params.append(buildFormat(&podBuilder, dmabufFormat, &resolution, &defFramerate, &minFramerate, &maxFramerate, {m_dmabufParams->modifier}, SPA_POD_PROP_FLAG_MANDATORY));
+         }
+         params.append(buildFormat(&podBuilder, dmabufFormat, &resolution, &defFramerate, &minFramerate, &maxFramerate, m_modifiers, SPA_POD_PROP_FLAG_MANDATORY | SPA_POD_PROP_FLAG_DONT_FIXATE));
+@@ -773,7 +843,7 @@ QList<const spa_pod *> ScreenCastStream::buildFormats(bool fixate, char buffer[2
+ 
+ spa_pod *ScreenCastStream::buildFormat(struct spa_pod_builder *b, enum spa_video_format format, struct spa_rectangle *resolution,
+                                        struct spa_fraction *defaultFramerate, struct spa_fraction *minFramerate, struct spa_fraction *maxFramerate,
+-                                       const ModifierList &modifiers, quint32 modifiersFlags)
++                                       const ModifierList &modifiers, quint32 modifiersFlags, bool hdr)
+ {
+     struct spa_pod_frame f[2];
+     spa_pod_builder_push_object(b, &f[0], SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
+@@ -794,10 +864,21 @@ spa_pod *ScreenCastStream::buildFormat(struct spa_pod_builder *b, enum spa_video
+     } else if (format == SPA_VIDEO_FORMAT_RGBA) {
+         /* announce equivalent format without alpha */
+         spa_pod_builder_add(b, SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, format, format, SPA_VIDEO_FORMAT_RGBx), 0);
++    } else if (format == SPA_VIDEO_FORMAT_ABGR_210LE) {
++        /* announce equivalent format without alpha */
++        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, format, format, SPA_VIDEO_FORMAT_xBGR_210LE), 0);
++    } else if (format == SPA_VIDEO_FORMAT_ARGB_210LE) {
++        /* announce equivalent format without alpha */
++        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(3, format, format, SPA_VIDEO_FORMAT_xRGB_210LE), 0);
+     } else {
+         spa_pod_builder_add(b, SPA_FORMAT_VIDEO_format, SPA_POD_Id(format), 0);
+     }
+ 
++    if (hdr) {
++        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_colorPrimaries, SPA_POD_Id(SPA_VIDEO_COLOR_PRIMARIES_BT2020), 0);
++        spa_pod_builder_add(b, SPA_FORMAT_VIDEO_transferFunction, SPA_POD_Id(SPA_VIDEO_TRANSFER_SMPTE2084), 0);
++    }
++
+     if (!modifiers.empty()) {
+         spa_pod_builder_prop(b, SPA_FORMAT_VIDEO_modifier, modifiersFlags);
+         spa_pod_builder_push_choice(b, &f[1], SPA_CHOICE_Enum, 0);
+diff --git a/src/plugins/screencast/screencaststream.h b/src/plugins/screencast/screencaststream.h
+index d0af11d647..180264dbc6 100644
+--- a/src/plugins/screencast/screencaststream.h
++++ b/src/plugins/screencast/screencaststream.h
+@@ -88,7 +88,8 @@ private:
+     void onStreamRemoveBuffer(pw_buffer *buffer);
+ 
+     bool createStream();
+-    QList<const spa_pod *> buildFormats(bool fixate, char buffer[2048]);
++    QList<const spa_pod *> buildFormats(bool fixate, char buffer[4096]);
++    void updateHdrFormat();
+     void updateParams();
+     void resize(const QSize &resolution);
+     void coreFailed(const QString &errorMessage);
+@@ -99,12 +100,13 @@ private:
+     void newStreamParams();
+     spa_pod *buildFormat(struct spa_pod_builder *b, enum spa_video_format format, struct spa_rectangle *resolution,
+                          struct spa_fraction *defaultFramerate, struct spa_fraction *minFramerate, struct spa_fraction *maxFramerate,
+-                         const ModifierList &modifiers, quint32 modifiersFlags);
++                         const ModifierList &modifiers, quint32 modifiersFlags, bool hdr = false);
+     pw_buffer *dequeueBuffer();
+     void record(Contents contents);
+     void bumpBufferAge(ScreenCastBuffer *renderedBuffer);
+ 
+     std::optional<ScreenCastDmaBufTextureParams> testCreateDmaBuf(const QSize &size, quint32 format, const ModifierList &modifiers);
++    bool isHdrFormat(quint32 drmFormat) const;
+ 
+     std::shared_ptr<PipeWireCore> m_pwCore;
+     std::unique_ptr<ScreenCastSource> m_source;
+@@ -135,6 +137,10 @@ private:
+     quint64 m_sequential = 0;
+     bool m_hasDmaBuf = false;
+     quint32 m_drmFormat = 0;
++    // 10-bit HDR DMA-BUF offered in addition to m_drmFormat while the source is HDR.
++    quint32 m_hdrDrmFormat = 0;
++    ModifierList m_hdrModifiers;
++    bool m_hdrNegotiated = false;
+ 
+     std::optional<std::chrono::steady_clock::time_point> m_lastSent;
+     QTimer m_pendingFrame;

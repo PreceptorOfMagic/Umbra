@@ -1,0 +1,443 @@
+diff --git a/src/backends/meta-stream-source-virtual.c b/src/backends/meta-stream-source-virtual.c
+index d97213362..a2103c855 100644
+--- a/src/backends/meta-stream-source-virtual.c
++++ b/src/backends/meta-stream-source-virtual.c
+@@ -23,6 +23,9 @@
+ #include <spa/param/video/format-utils.h>
+ #include <spa/buffer/meta.h>
+ 
++#include "backends/meta-backend-private.h"
++#include "backends/meta-color-device.h"
++#include "backends/meta-color-manager.h"
+ #include "backends/meta-crtc-mode.h"
+ #include "backends/meta-cursor-tracker-private.h"
+ #include "backends/meta-eis-viewport.h"
+@@ -32,6 +35,7 @@
+ #include "backends/meta-stage-private.h"
+ #include "backends/meta-virtual-monitor.h"
+ #include "core/boxes-private.h"
++#include "core/meta-debug-control-private.h"
+ 
+ enum
+ {
+@@ -75,11 +79,20 @@ struct _MetaStreamSourceVirtual
+   gulong cursor_changed_handler_id;
+ 
+   gulong monitors_changed_handler_id;
++  gulong color_state_changed_handler_id;
++
++  /* HDR (BT.2100) capture of an HDR virtual monitor, as the monitor source does it. */
++  GArray *formats;
++  CoglPipeline *blending_pipeline;
++  CoglFramebuffer *blending_framebuffer;
+ 
+   MetaStreamFrameClockDriver *driver;
+ };
+ 
+ static void init_initable_iface (GInitableIface *iface);
++static void on_device_color_state_changed (MetaColorManager        *color_manager,
++                                           MetaColorDevice         *color_device,
++                                           MetaStreamSourceVirtual *source_virtual);
+ 
+ static GInitableIface *initable_parent_iface;
+ 
+@@ -149,6 +162,33 @@ stage_from_source (MetaStreamSource *source)
+   return CLUTTER_STAGE (meta_backend_get_stage (backend_from_source (source)));
+ }
+ 
++static MetaMonitor *
++monitor_from_source (MetaStreamSourceVirtual *source_virtual)
++{
++  MetaOutput *output;
++
++  if (!source_virtual->virtual_monitor)
++    return NULL;
++
++  output = meta_virtual_monitor_get_output (source_virtual->virtual_monitor);
++  return output ? meta_output_get_monitor (output) : NULL;
++}
++
++/* The stream's colour state comes from the negotiated format; only a BT.2100 (PQ)
++ * format takes the colour-managed path below, so SDR streams are recorded as before. */
++static gboolean
++is_pq_color_state (ClutterColorState *color_state)
++{
++  const ClutterEOTF *eotf;
++
++  if (!CLUTTER_IS_COLOR_STATE_PARAMS (color_state))
++    return FALSE;
++
++  eotf = clutter_color_state_params_get_eotf (CLUTTER_COLOR_STATE_PARAMS (color_state));
++  return eotf->type == CLUTTER_EOTF_TYPE_NAMED &&
++         eotf->tf_name == CLUTTER_TRANSFER_FUNCTION_PQ;
++}
++
+ static void
+ pointer_position_invalidated (MetaCursorTracker *cursor_tracker,
+                               MetaStreamSource  *source)
+@@ -397,14 +437,23 @@ meta_stream_source_virtual_record_to_buffer (MetaStreamSource      *source,
+   CoglFramebuffer *framebuffer;
+   MtkRectangle view_rect;
+   float scale;
++  ClutterColorState *color_state;
+ 
+   view = view_from_source (source);
+   framebuffer = clutter_stage_view_get_onscreen (view);
+   scale = clutter_stage_view_get_scale (view);
+   clutter_stage_view_get_layout (view, &view_rect);
+ 
++  /* An HDR stream paints the stage in its BT.2100 colour state rather than
++   * reading back the view, which stays in the monitor's blending space. */
++  color_state = meta_stream_source_get_color_state (source);
++  if (is_pq_color_state (color_state))
++    framebuffer = NULL;
++  else
++    color_state = NULL;
++
+   return meta_stream_source_paint_to_buffer (source,
+-                                             NULL,
++                                             color_state,
+                                              framebuffer,
+                                              &view_rect, scale,
+                                              width, height, stride, data,
+@@ -413,6 +462,160 @@ meta_stream_source_virtual_record_to_buffer (MetaStreamSource      *source,
+                                              error);
+ }
+ 
++/* Ported from the monitor source (ensure_blending_pipeline), but rebuilt when the
++ * stream size changes: a virtual monitor can be resized while streaming. */
++static gboolean
++ensure_blending_pipeline (MetaStreamSourceVirtual  *source_virtual,
++                          CoglFramebuffer          *target_framebuffer,
++                          ClutterColorState        *blending_color_state,
++                          ClutterColorState        *target_color_state,
++                          CoglPipeline            **blending_pipeline,
++                          CoglFramebuffer         **blending_framebuffer,
++                          GError                  **error)
++{
++  MetaBackend *backend = backend_from_source (META_STREAM_SOURCE (source_virtual));
++  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
++  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
++  int width = cogl_framebuffer_get_width (target_framebuffer);
++  int height = cogl_framebuffer_get_height (target_framebuffer);
++  ClutterEncodingRequiredFormat required_format;
++  CoglPixelFormat formats[10];
++  size_t n_formats = 0;
++  g_autoptr (CoglOffscreen) offscreen = NULL;
++  g_autoptr (CoglPipeline) pipeline = NULL;
++
++  if (source_virtual->blending_pipeline && source_virtual->blending_framebuffer &&
++      cogl_framebuffer_get_width (source_virtual->blending_framebuffer) == width &&
++      cogl_framebuffer_get_height (source_virtual->blending_framebuffer) == height)
++    {
++      *blending_pipeline = source_virtual->blending_pipeline;
++      *blending_framebuffer = source_virtual->blending_framebuffer;
++      return TRUE;
++    }
++
++  required_format = clutter_color_state_required_format (blending_color_state);
++  if (required_format <= CLUTTER_ENCODING_REQUIRED_FORMAT_UINT8)
++    {
++      formats[n_formats++] =
++        cogl_framebuffer_get_internal_format (target_framebuffer);
++    }
++  else
++    {
++      formats[n_formats++] = COGL_PIXEL_FORMAT_RGBX_FP_16161616;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_BGRX_FP_16161616;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_XRGB_FP_16161616;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_XBGR_FP_16161616;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE;
++      formats[n_formats++] = COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE;
++    }
++
++  offscreen = cogl_offscreen_new_from_formats (cogl_context,
++                                               formats, n_formats,
++                                               width, height,
++                                               error);
++  if (!offscreen)
++    return FALSE;
++
++  pipeline = cogl_pipeline_new (cogl_context);
++  cogl_pipeline_set_layer_texture (pipeline, 0,
++                                   cogl_offscreen_get_texture (offscreen));
++
++  clutter_color_pipeline_shader_set_color_state (pipeline,
++                                                 blending_color_state,
++                                                 target_color_state,
++                                                 CLUTTER_COLOR_STATE_TRANSFORM_OPAQUE);
++
++  g_set_object (&source_virtual->blending_pipeline, pipeline);
++  g_set_object (&source_virtual->blending_framebuffer,
++                COGL_FRAMEBUFFER (offscreen));
++  *blending_pipeline = source_virtual->blending_pipeline;
++  *blending_framebuffer = source_virtual->blending_framebuffer;
++  return TRUE;
++}
++
++/* HDR stream: paint the stage for this virtual monitor straight into the stream's
++ * (10-bit or half-float) buffer in the negotiated BT.2100 colour state, exactly as
++ * the monitor source's stage-paint path does. The view's own buffer is not used. */
++static gboolean
++record_hdr_to_framebuffer (MetaStreamSourceVirtual  *source_virtual,
++                           ClutterStageView         *view,
++                           CoglFramebuffer          *framebuffer,
++                           ClutterColorState        *target_color_state,
++                           MtkRegion                *damage,
++                           GError                  **error)
++{
++  MetaStreamSource *source = META_STREAM_SOURCE (source_virtual);
++  MetaStream *stream = meta_stream_source_get_stream (source);
++  MetaBackend *backend = backend_from_source (source);
++  MetaContext *context = meta_backend_get_context (backend);
++  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
++  ClutterPaintFlag paint_flags = CLUTTER_PAINT_FLAG_NONE;
++  g_autoptr (ClutterColorState) blending_color_state = NULL;
++  MtkRectangle view_rect;
++  float scale;
++  gboolean force_linear;
++
++  clutter_stage_view_get_layout (view, &view_rect);
++  scale = clutter_stage_view_get_scale (view);
++
++  switch (meta_stream_get_cursor_mode (stream))
++    {
++    case META_STREAM_CURSOR_MODE_METADATA:
++    case META_STREAM_CURSOR_MODE_HIDDEN:
++      paint_flags |= CLUTTER_PAINT_FLAG_NO_CURSORS;
++      break;
++    case META_STREAM_CURSOR_MODE_EMBEDDED:
++      paint_flags |= CLUTTER_PAINT_FLAG_FORCE_CURSORS;
++      break;
++    }
++
++  force_linear = meta_debug_control_is_linear_blending_forced (debug_control);
++  blending_color_state = clutter_color_state_get_blending (target_color_state,
++                                                           force_linear);
++
++  if (!clutter_color_state_equals (target_color_state, blending_color_state))
++    {
++      CoglPipeline *blending_pipeline;
++      CoglFramebuffer *blending_framebuffer;
++
++      if (!ensure_blending_pipeline (source_virtual,
++                                     framebuffer,
++                                     blending_color_state,
++                                     target_color_state,
++                                     &blending_pipeline,
++                                     &blending_framebuffer,
++                                     error))
++        return FALSE;
++
++      meta_stream_source_paint_to_framebuffer_clipped (source,
++                                                       blending_framebuffer,
++                                                       &view_rect,
++                                                       scale,
++                                                       blending_color_state,
++                                                       damage,
++                                                       paint_flags);
++      cogl_framebuffer_draw_textured_rectangle (framebuffer,
++                                                blending_pipeline,
++                                                -1, 1, 1, -1,
++                                                0, 0, 1, 1);
++    }
++  else
++    {
++      meta_stream_source_paint_to_framebuffer_clipped (source,
++                                                       framebuffer,
++                                                       &view_rect,
++                                                       scale,
++                                                       target_color_state,
++                                                       damage,
++                                                       paint_flags);
++    }
++
++  cogl_framebuffer_flush (framebuffer);
++  return TRUE;
++}
++
+ static gboolean
+ meta_stream_source_virtual_record_to_framebuffer (MetaStreamSource      *source,
+                                                   MetaStreamPaintPhase   paint_phase,
+@@ -420,10 +623,19 @@ meta_stream_source_virtual_record_to_framebuffer (MetaStreamSource      *source,
+                                                   MtkRegion             *damage,
+                                                   GError               **error)
+ {
++  MetaStreamSourceVirtual *source_virtual =
++    META_STREAM_SOURCE_VIRTUAL (source);
+   ClutterStageView *view;
+   CoglFramebuffer *view_framebuffer;
++  ClutterColorState *target_color_state =
++    meta_stream_source_get_color_state (source);
+ 
+   view = view_from_source (source);
++
++  if (is_pq_color_state (target_color_state))
++    return record_hdr_to_framebuffer (source_virtual, view, framebuffer,
++                                      target_color_state, damage, error);
++
+   view_framebuffer = clutter_stage_view_get_framebuffer (view);
+   if (damage ?
+       !cogl_framebuffer_blit_region (view_framebuffer,
+@@ -852,6 +1064,11 @@ meta_stream_source_virtual_initable_init (GInitable     *initable,
+     g_signal_connect (monitor_manager, "monitors-changed-internal",
+                       G_CALLBACK (on_monitors_changed),
+                       source_virtual);
++  source_virtual->color_state_changed_handler_id =
++    g_signal_connect (meta_backend_get_color_manager (backend),
++                      "device-color-state-changed",
++                      G_CALLBACK (on_device_color_state_changed),
++                      source_virtual);
+ 
+   return initable_parent_iface->init (initable, cancellable, error);
+ }
+@@ -921,6 +1138,11 @@ meta_stream_source_virtual_dispose (GObject *object)
+ 
+   g_clear_signal_handler (&source_virtual->monitors_changed_handler_id,
+                           monitor_manager);
++  g_clear_signal_handler (&source_virtual->color_state_changed_handler_id,
++                          meta_backend_get_color_manager (backend));
++  g_clear_object (&source_virtual->blending_pipeline);
++  g_clear_object (&source_virtual->blending_framebuffer);
++  g_clear_pointer (&source_virtual->formats, g_array_unref);
+ 
+   parent_class->dispose (object);
+ 
+@@ -929,6 +1151,106 @@ meta_stream_source_virtual_dispose (GObject *object)
+                 (GDestroyNotify) meta_virtual_mode_info_free);
+ }
+ 
++static void
++clear_format (MetaStreamFormat *format)
++{
++  g_clear_object (&format->color_state);
++}
++
++/* Ported from the monitor source's update_formats(): the default 8-bit formats, plus
++ * 10-bit and half-float formats carrying the monitor's colour state when it is BT.2100. */
++static void
++update_formats (MetaStreamSourceVirtual *source_virtual)
++{
++  MetaBackend *backend = backend_from_source (META_STREAM_SOURCE (source_virtual));
++  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
++  MetaMonitor *monitor = monitor_from_source (source_virtual);
++  MetaColorDevice *color_device = NULL;
++  ClutterColorState *color_state = NULL;
++  int i;
++  const CoglPixelFormat basic_formats[] = {
++    COGL_PIXEL_FORMAT_BGRX_8888,
++    COGL_PIXEL_FORMAT_BGRA_8888_PRE,
++  };
++
++  if (monitor)
++    color_device = meta_color_manager_get_color_device (color_manager, monitor);
++  if (color_device)
++    color_state = meta_color_device_get_color_state (color_device);
++
++  g_clear_pointer (&source_virtual->formats, g_array_unref);
++  source_virtual->formats = g_array_new (TRUE, TRUE, sizeof (MetaStreamFormat));
++  g_array_set_clear_func (source_virtual->formats, (GDestroyNotify) clear_format);
++
++  for (i = 0; i < G_N_ELEMENTS (basic_formats); i++)
++    {
++      MetaStreamFormat format = {
++        .format = basic_formats[i],
++      };
++
++      g_array_append_val (source_virtual->formats, format);
++    }
++
++  if (CLUTTER_IS_COLOR_STATE_PARAMS (color_state))
++    {
++      ClutterColorStateParams *color_state_params =
++        CLUTTER_COLOR_STATE_PARAMS (color_state);
++      const ClutterColorimetry *colorimetry;
++
++      colorimetry =
++        clutter_color_state_params_get_colorimetry (color_state_params);
++
++      if (colorimetry->type == CLUTTER_COLORIMETRY_TYPE_COLORSPACE &&
++          colorimetry->colorspace == CLUTTER_COLORSPACE_BT2020 &&
++          is_pq_color_state (color_state))
++        {
++          const CoglPixelFormat hdr_formats[] = {
++              COGL_PIXEL_FORMAT_XRGB_2101010,
++              COGL_PIXEL_FORMAT_XBGR_2101010,
++              COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE,
++          };
++
++          for (i = 0; i < G_N_ELEMENTS (hdr_formats); i++)
++            {
++              MetaStreamFormat format = {
++                .format = hdr_formats[i],
++                .color_state = g_object_ref (color_state),
++              };
++
++              g_array_append_val (source_virtual->formats, format);
++            }
++        }
++    }
++}
++
++static const MetaStreamFormat *
++meta_stream_source_virtual_get_formats (MetaStreamSource *source)
++{
++  MetaStreamSourceVirtual *source_virtual =
++    META_STREAM_SOURCE_VIRTUAL (source);
++
++  update_formats (source_virtual);
++
++  return (const MetaStreamFormat *) source_virtual->formats->data;
++}
++
++/* Switching the virtual monitor's colour mode (DisplayConfig "color-mode") changes its
++ * colour state after the stream was negotiated; offer the new formats then. */
++static void
++on_device_color_state_changed (MetaColorManager        *color_manager,
++                               MetaColorDevice         *color_device,
++                               MetaStreamSourceVirtual *source_virtual)
++{
++  MetaMonitor *monitor = monitor_from_source (source_virtual);
++
++  if (!monitor || meta_color_device_get_monitor (color_device) != monitor)
++    return;
++
++  g_clear_object (&source_virtual->blending_pipeline);
++  g_clear_object (&source_virtual->blending_framebuffer);
++  meta_stream_source_renegotiate (META_STREAM_SOURCE (source_virtual));
++}
++
+ static void
+ meta_stream_source_virtual_class_init (MetaStreamSourceVirtualClass *klass)
+ {
+@@ -947,6 +1269,7 @@ meta_stream_source_virtual_class_init (MetaStreamSourceVirtualClass *klass)
+     meta_stream_source_virtual_record_to_buffer;
+   source_class->record_to_framebuffer =
+     meta_stream_source_virtual_record_to_framebuffer;
++  source_class->get_formats = meta_stream_source_virtual_get_formats;
+   source_class->queue_follow_up =
+     meta_stream_source_virtual_queue_follow_up;
+   source_class->is_cursor_metadata_valid =
+diff --git a/src/backends/native/meta-output-virtual.c b/src/backends/native/meta-output-virtual.c
+index fb85db2f0..fbad4ee83 100644
+--- a/src/backends/native/meta-output-virtual.c
++++ b/src/backends/native/meta-output-virtual.c
+@@ -59,6 +59,16 @@ meta_output_virtual_new (uint64_t                      id,
+   output_info->product = g_strdup (info->product);
+   output_info->serial = g_strdup (info->serial);
+ 
++  /* A virtual output has no sink to limit it, so it can carry BT.2100 (BT.2020
++   * primaries, PQ transfer) as well as the default. This only makes the colour
++   * mode selectable; virtual monitors still start in the default mode. */
++  output_info->supported_color_spaces =
++    (1 << META_OUTPUT_COLORSPACE_DEFAULT) |
++    (1 << META_OUTPUT_COLORSPACE_BT2020);
++  output_info->supported_hdr_eotfs =
++    (1 << META_OUTPUT_HDR_METADATA_EOTF_TRADITIONAL_GAMMA_SDR) |
++    (1 << META_OUTPUT_HDR_METADATA_EOTF_PQ);
++
+   if (modes)
+     {
+       output_info->modes = g_new0 (MetaCrtcMode *, g_list_length (modes));

@@ -1,5 +1,5 @@
 diff --git a/src/backends/meta-screen-cast-virtual-stream-src.c b/src/backends/meta-screen-cast-virtual-stream-src.c
-index 4d70801..f34b3dc 100644
+index 4d70801f3..2205acd97 100644
 --- a/src/backends/meta-screen-cast-virtual-stream-src.c
 +++ b/src/backends/meta-screen-cast-virtual-stream-src.c
 @@ -27,6 +27,9 @@
@@ -169,9 +169,9 @@ index 4d70801..f34b3dc 100644
 +                                              pipeline,
 +                                              CLUTTER_COLOR_STATE_TRANSFORM_OPAQUE);
 +
-+  g_set_object (&virtual_src->blending_pipeline, g_steal_pointer (&pipeline));
++  g_set_object (&virtual_src->blending_pipeline, pipeline);
 +  g_set_object (&virtual_src->blending_framebuffer,
-+                COGL_FRAMEBUFFER (g_steal_pointer (&offscreen)));
++                COGL_FRAMEBUFFER (offscreen));
 +  *blending_pipeline = virtual_src->blending_pipeline;
 +  *blending_framebuffer = virtual_src->blending_framebuffer;
 +  return TRUE;
@@ -194,7 +194,7 @@ index 4d70801..f34b3dc 100644
 +  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
 +  ClutterStage *stage = stage_from_src (src);
 +  ClutterPaintFlag paint_flags = CLUTTER_PAINT_FLAG_CLEAR;
-+  ClutterColorState *blending_color_state;
++  g_autoptr (ClutterColorState) blending_color_state = NULL;
 +  MtkRectangle view_rect;
 +  float scale;
 +  gboolean force_linear;
@@ -418,7 +418,7 @@ index 4d70801..f34b3dc 100644
      meta_screen_cast_virtual_stream_queue_follow_up;
    src_class->is_cursor_metadata_valid =
 diff --git a/src/backends/native/meta-output-virtual.c b/src/backends/native/meta-output-virtual.c
-index e488cdf..6b48fa7 100644
+index e488cdf3f..6b48fa7dd 100644
 --- a/src/backends/native/meta-output-virtual.c
 +++ b/src/backends/native/meta-output-virtual.c
 @@ -59,6 +59,16 @@ meta_output_virtual_new (uint64_t                      id,
