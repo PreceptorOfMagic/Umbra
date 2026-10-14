@@ -59,6 +59,8 @@ case $family in
     ;;
   fedora)
     grep -q '^assumeyes' /etc/dnf/dnf.conf 2>/dev/null || echo 'assumeyes=True' >> /etc/dnf/dnf.conf
+    # Served from outside Fedora's mirrors and often unreachable; Fedora's noopenh264 stands in.
+    sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/fedora-cisco-openh264.repo 2>/dev/null || true
     pkg_install() { dnf -y -q install "$@" >/dev/null; }
     pkg_install tar gzip
     tools_gnome=(pipewire pipewire-utils python3 python3-gobject dbus-daemon dbus-tools glib2 mesa-dri-drivers mesa-libEGL)

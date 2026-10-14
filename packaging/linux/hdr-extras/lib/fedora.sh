@@ -6,6 +6,8 @@ fedora_evr() { # <package>: the version-release dnf would install
 }
 
 fam_setup() {
+  # Served from outside Fedora's mirrors and often unreachable; Fedora's own builders do not use it.
+  sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/fedora-cisco-openh264.repo 2>/dev/null || true
   dnf -y -q install rpm-build gawk tar gzip findutils 'dnf-command(builddep)' 'dnf-command(download)' >/dev/null
 }
 
