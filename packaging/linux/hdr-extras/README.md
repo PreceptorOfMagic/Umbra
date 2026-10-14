@@ -45,8 +45,10 @@ KDE Plasma 6.7: KWin 6.7 announces its outputs only through `kde_output_device_r
 (plasma-wayland-protocols 1.21), which Umbra 0.5.1's output control (`src/platform/linux/kde-output.c`)
 predates. Umbra 0.5.1 therefore finds no KDE output on Plasma 6.7: no virtual display per stream,
 no co-op and no HDR there, with or without the extra. `kde-output.c` now uses the registry when
-KWin offers it, and the old per-output globals otherwise. The KWin 6.7 extras need an Umbra release
-with that change, and their README.txt says so. The smoke test builds `kde-output.c` from the
+KWin offers it, and the old per-output globals otherwise. KWin 6.7 also generates custom modes with
+libxcvt and reports their real refresh rate (1920x1080 at 60 Hz becomes 59.963 Hz), so the stream's
+mode is now matched within 2% rather than exactly. The KWin 6.7 extras need an Umbra release with
+both changes, and their README.txt says so. The smoke test builds `kde-output.c` from the
 checkout, so it checks the version being released.
 
 CachyOS:

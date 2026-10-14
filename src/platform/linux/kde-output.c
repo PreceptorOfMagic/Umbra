@@ -290,6 +290,18 @@ int umbra_kde_output_set_hdr(const char *name,int enable) {
 end:
  cleanup(c);return ok;
 }
+/* The output's mode of this size nearest the refresh rate, within 2%. KWin 6.7 generates custom
+ * modes with libxcvt and reports the modeline's own rate (1920x1080 at 60 Hz is 59.963 Hz; small
+ * modes at low rates are up to 1.5% off), so an exact match is never announced back. */
+static struct mode *nearest_mode(struct output *o,int w,int h,int hz) {
+ struct mode *best=NULL;int64_t best_d=0;
+ for(int i=0;i<o->count;i++) {
+  struct mode *m=&o->modes[i];if(m->removed||m->w!=w||m->h!=h)continue;
+  int64_t d=(int64_t)m->hz-hz;if(d<0)d=-d;
+  if(!best||d<best_d){best=m;best_d=d;}
+ }
+ return best && best_d*50<=hz?best:NULL;
+}
 int umbra_kde_output_resize(const char *name,int w,int h,int hz,int *x,int *y) {
  /* Name comes from the fixed Umbra app identity, never an arbitrary display preference. */
  if(!umbra_output_name(name) || w<64 || w>8192 || h<64 || h>8192 || hz<1000 || hz>360000)return 0;
@@ -302,10 +314,7 @@ int umbra_kde_output_resize(const char *name,int w,int h,int hz,int *x,int *y) {
  if(!target || !(target->caps&0x2000)){fprintf(stderr,"KDE virtual output unavailable for mode control: %s (found=%d)\n",name,target!=NULL);goto end;}
  struct mode *chosen=NULL;
  for(int pass=0;pass<2;pass++) {
-  for(int i=0;i<target->count;i++) {
-   struct mode *m=&target->modes[i];
-   if(!m->removed&&m->w==w&&m->h==h&&m->hz==hz)chosen=m;
-  }
+  chosen=nearest_mode(target,w,h,hz);
   if(chosen)break;
   if(pass)goto end;
   struct kde_mode_list_v2 *list=kde_output_management_v2_create_mode_list(c->manager);
@@ -314,7 +323,7 @@ int umbra_kde_output_resize(const char *name,int w,int h,int hz,int *x,int *y) {
    struct mode *m=&target->modes[i];if(m->removed||!(m->flags&1))continue;
    kde_mode_list_v2_set_resolution(list,m->w,m->h);
    kde_mode_list_v2_set_refresh_rate(list,m->hz);
-   kde_mode_list_v2_set_reduced_blanking(list,0);kde_mode_list_v2_add_mode(list);
+   kde_mode_list_v2_set_reduced_blanking(list,(m->flags&2)!=0);kde_mode_list_v2_add_mode(list);
   }
   kde_mode_list_v2_set_resolution(list,w,h);kde_mode_list_v2_set_refresh_rate(list,hz);
   kde_mode_list_v2_set_reduced_blanking(list,0);kde_mode_list_v2_add_mode(list);
