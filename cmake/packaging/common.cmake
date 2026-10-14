@@ -14,7 +14,12 @@ set(CPACK_PACKAGE_HOMEPAGE_URL ${CMAKE_PROJECT_HOMEPAGE_URL})
 set(CPACK_RESOURCE_FILE_LICENSE ${PROJECT_SOURCE_DIR}/LICENSE)
 set(CPACK_PACKAGE_ICON ${PROJECT_SOURCE_DIR}/apollo.png)
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}")
-set(CPACK_STRIP_FILES YES)
+# A signed build strips its binaries BEFORE they are signed, because stripping afterwards removes
+# the signature, and then packs them untouched (.github/workflows/release-windows-signed.yml).
+option(UMBRA_PACKAGE_PRESTRIPPED "Binaries are already stripped and signed; CPack must not strip them" OFF)
+if(NOT UMBRA_PACKAGE_PRESTRIPPED)
+    set(CPACK_STRIP_FILES YES)
+endif()
 
 # Install the release notices with the required application component so every
 # NSIS/ZIP staging tree carries the same legal and source-delivery material.

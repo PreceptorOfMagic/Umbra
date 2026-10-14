@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "umbra-windows-installer" (a copy of what is configured in
+     SignPath). Input: the zipped GitHub Actions artifact holding the NSIS installer that CPack packed
+     from the already-signed binaries in the same workflow run. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Umbra-windows-x64.exe"><authenticode-sign/></pe-file>
+  </zip-file>
+</artifact-configuration>

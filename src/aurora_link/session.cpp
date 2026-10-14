@@ -3,7 +3,7 @@
  * @brief The whole per-stream session, as two verbs Umbra can call directly.
  *
  * WHY THIS EXISTS: Umbra's global_prep_cmd pointed at a hand-built tree in
- * C:\Users\camer\xlink-build -- a .cmd that called a .vbs that launched an .exe and
+ * a local xlink-build folder -- a .cmd that called a .vbs that launched an .exe and
  * two Python scripts, plus a second .cmd for the audio cable. Every one of those is
  * an absolute path with a username in it, none of them are removed when Umbra is
  * uninstalled, and a second host needs the tree copied and its paths rewritten. That

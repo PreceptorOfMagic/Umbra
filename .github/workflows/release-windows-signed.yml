@@ -1,0 +1,326 @@
+name: Release (Windows x64, signed)
+run-name: "Signed Windows build for ${{ inputs.tag }}"
+
+# Builds Umbra for Windows from a release tag, has SignPath sign it (SignPath Foundation's free
+# open-source programme; see CODE_SIGNING_POLICY.md), and attaches the signed installer and ZIP to
+# that GitHub release. Started by hand after the release exists; each signing request must also be
+# approved in SignPath. Maintainer steps: docs/signpath-setup.md in the Eclipse repository.
+#
+# Mirrors the local 0.5.0 release build (Release, APOLLO_BETA_PROFILE=OFF, MinHook built from
+# source, GPU HEVC co-op encoder built with MSVC from the Eclipse repository) with every downloaded
+# input pinned by commit or SHA-256. Two signing requests per run:
+#   1. the binaries built from this repository     (artifact configuration: umbra-windows-app)
+#   2. the NSIS installer packed from them         (umbra-windows-installer)
+# CPack normally strips binaries while packing, which would remove a signature, so this workflow
+# strips them first, signs, and packs with UMBRA_PACKAGE_PRESTRIPPED=ON (cmake/packaging/common.cmake).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build, sign and attach (for example umbra-v0.5.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG || 'umbra' }}
+  SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+  # GPU HEVC co-op encoder: Eclipse repository, experimental/gpu-hevc (GPL-3.0-only), at the Eclipse 1.3.4
+  # release commit. Its encoder source is identical to the source of the Umbra 0.5.0 build.
+  GPU_HEVC_REPOSITORY: PreceptorOfMagic/Eclipse
+  GPU_HEVC_COMMIT: 6d13e6721db72e557f479b2d27d1ed19d3c70f2e
+  X265_URL: https://bitbucket.org/multicoreware/x265_git/get/b81f650e21e8aacbe6a9ad04ce14aefc05b932c0.tar.gz
+  X265_SHA256: 540de59b5004274f70a4fe229e86c7602d49b5b1a96112fd95a9dcdb5c9f1dc9
+  OPENCL_HEADERS_URL: https://github.com/KhronosGroup/OpenCL-Headers/archive/386ca390b2f52efeb3e1a55a500690eb8013f60e.tar.gz
+  OPENCL_HEADERS_SHA256: 310552b495dfd1bb9aa25ab9c5232a1dccbd6804304e2acb1740106a74e24b49
+  MINHOOK_URL: https://github.com/TsudaKageyu/minhook/archive/c3fcafdc10146beb5919319d0683e44e3c30d537.tar.gz
+  MINHOOK_SHA256: 31757833475be039c16359d4e276e718db6ba2ba61a6b870053a112106015822
+  # The binaries this repository builds, as they sit in the package. Only these are signed; the
+  # SudoVDA driver, nefconc.exe, the ViGEmBus installer and zlib1.dll are third-party.
+  SIGNED_FILES: sunshine.exe aurora-link.exe tools/audio-info.exe tools/dxgi-info.exe tools/sunshinesvc.exe gpu-hevc/aurora_gpu_hevc8.dll gpu-hevc/aurora_gpu_hevc10.dll
+
+jobs:
+  build-sign-attach:
+    name: Build, sign and attach (Windows x64)
+    runs-on: windows-2022
+    timeout-minutes: 340
+    permissions:
+      contents: write   # attach the signed files to the release
+      actions: read     # SignPath reads this job and downloads its artifacts
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          submodules: recursive
+
+      - name: Checkout the GPU HEVC encoder source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GPU_HEVC_REPOSITORY }}
+          ref: ${{ env.GPU_HEVC_COMMIT }}
+          path: _deps/eclipse
+          sparse-checkout: experimental/gpu-hevc
+
+      - name: Check the release exists
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "No GitHub release for tag $env:TAG; publish the release first." }
+
+      - name: Download pinned sources
+        shell: pwsh
+        run: |
+          function Get-Pinned([string]$Url, [string]$Sha256, [string]$Into) {
+            $archive = "_deps/$Into.tar.gz"
+            Invoke-WebRequest -Uri $Url -OutFile $archive
+            $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+            if ($actual -ne $Sha256) { throw "$Url hashed $actual, expected $Sha256" }
+            New-Item -ItemType Directory -Force "_deps/$Into" | Out-Null
+            tar -xzf $archive -C "_deps/$Into" --strip-components=1
+            if ($LASTEXITCODE -ne 0) { throw "Extracting $archive failed" }
+          }
+          Get-Pinned $env:X265_URL $env:X265_SHA256 'x265-source'
+          Get-Pinned $env:OPENCL_HEADERS_URL $env:OPENCL_HEADERS_SHA256 'opencl-headers'
+          Get-Pinned $env:MINHOOK_URL $env:MINHOOK_SHA256 'minhook-source'
+
+      - name: Build static x265 (8- and 10-bit, MSVC)
+        shell: pwsh
+        run: |
+          foreach ($depth in 8, 10) {
+            $highBitDepth = if ($depth -eq 10) { 'ON' } else { 'OFF' }
+            cmake -S _deps/x265-source/source -B "_deps/x265-win$depth" -G 'Visual Studio 17 2022' -A x64 `
+              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DENABLE_ASSEMBLY=OFF `
+              -DSTATIC_LINK_CRT=ON -DEXPORT_C_API=ON -DENABLE_HDR10_PLUS=OFF -DENABLE_ALPHA=OFF `
+              -DENABLE_MULTIVIEW=OFF -DENABLE_SCC_EXT=OFF -DMAIN12=OFF "-DHIGH_BIT_DEPTH=$highBitDepth"
+            if ($LASTEXITCODE -ne 0) { throw "x265 $depth-bit configure failed" }
+            cmake --build "_deps/x265-win$depth" --config Release --target x265-static
+            if ($LASTEXITCODE -ne 0) { throw "x265 $depth-bit build failed" }
+          }
+
+      - name: Build the GPU HEVC co-op encoder (MSVC)
+        shell: pwsh
+        run: |
+          $src = '_deps/eclipse/experimental/gpu-hevc'
+          cmake -S $src -B _deps/gpu-hevc-build -G 'Visual Studio 17 2022' -A x64 -DBUILD_HOST_DLLS=ON `
+            "-DOPENCL_HEADERS=$PWD/_deps/opencl-headers" "-DX265_SOURCE=$PWD/_deps/x265-source" `
+            "-DX265_BUILD_8=$PWD/_deps/x265-win8" "-DX265_BUILD_10=$PWD/_deps/x265-win10"
+          if ($LASTEXITCODE -ne 0) { throw 'GPU HEVC configure failed' }
+          cmake --build _deps/gpu-hevc-build --config Release --target aurora_gpu_hevc8 aurora_gpu_hevc10
+          if ($LASTEXITCODE -ne 0) { throw 'GPU HEVC build failed' }
+
+          # The folder UMBRA_GPU_HEVC_DIR expects (cmake/packaging/windows.cmake).
+          $out = '_deps/gpu-hevc'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item _deps/gpu-hevc-build/Release/aurora_gpu_hevc8.dll, _deps/gpu-hevc-build/Release/aurora_gpu_hevc10.dll $out
+          Copy-Item -Recurse "$src/kernels" $out
+          Copy-Item "$src/COPYING", "$src/COPYING-GPL-3" $out
+          $files = [ordered]@{}
+          Get-ChildItem -File -Recurse $out | Sort-Object FullName | ForEach-Object {
+            $files[$_.FullName.Substring((Resolve-Path $out).Path.Length + 1).Replace('\', '/')] = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+          }
+          [ordered]@{
+            component = 'Umbra GPU HEVC co-op encoder'
+            source_repository = "https://github.com/$env:GPU_HEVC_REPOSITORY"
+            source_commit = $env:GPU_HEVC_COMMIT
+            source_path = 'experimental/gpu-hevc'
+            x265_source = $env:X265_URL
+            x265_archive_sha256 = $env:X265_SHA256
+            opencl_headers_source = $env:OPENCL_HEADERS_URL
+            opencl_headers_archive_sha256 = $env:OPENCL_HEADERS_SHA256
+            build = "GitHub Actions $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID, MSVC (Visual Studio 17 2022), Release, static CRT; DLLs listed here are before signing"
+            files = $files
+          } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 "$out/BUILD-PROVENANCE.json"
+
+      - name: Set up Node.js (web UI build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+
+      - name: Set up MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-binutils
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-cppwinrt
+            mingw-w64-ucrt-x86_64-curl-winssl
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-libvpl
+            mingw-w64-ucrt-x86_64-make
+            mingw-w64-ucrt-x86_64-miniupnpc
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-opus
+            mingw-w64-ucrt-x86_64-pkgconf
+
+      - name: Build MinHook (static)
+        shell: msys2 {0}
+        run: |
+          cmake -S _deps/minhook-source -B _deps/minhook-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          cmake --build _deps/minhook-build
+          ls _deps/minhook-build/*.a
+
+      - name: Build Umbra
+        shell: msys2 {0}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          export BRANCH=release
+          export BUILD_VERSION="v${TAG#umbra-v}"
+          export COMMIT="$GITHUB_SHA"
+          minhook_lib=$(ls _deps/minhook-build/*.a | head -1)
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_DOCS=OFF \
+            -DBUILD_TESTS=OFF \
+            -DAPOLLO_BETA_PROFILE=OFF \
+            -DUMBRA_PACKAGE_PRESTRIPPED=ON \
+            -DUMBRA_GPU_HEVC_DIR="$(cygpath -m "$PWD/_deps/gpu-hevc")" \
+            -DMINHOOK_LIBRARY="$(cygpath -m "$PWD/$minhook_lib")" \
+            -DMINHOOK_INCLUDE_DIR="$(cygpath -m "$PWD/_deps/minhook-source/include")"
+          cmake --build build
+
+      - name: Strip the binaries before signing
+        shell: msys2 {0}
+        run: |
+          # What CPack's CPACK_STRIP_FILES would otherwise do to these after signing.
+          strip build/sunshine.exe build/tools/aurora-link.exe build/tools/audio-info.exe \
+                build/tools/dxgi-info.exe build/tools/sunshinesvc.exe
+
+      - name: Stage the binaries for signing (package layout)
+        shell: pwsh
+        run: |
+          $from = @{
+            'sunshine.exe' = 'build/sunshine.exe'
+            'aurora-link.exe' = 'build/tools/aurora-link.exe'
+            'tools/audio-info.exe' = 'build/tools/audio-info.exe'
+            'tools/dxgi-info.exe' = 'build/tools/dxgi-info.exe'
+            'tools/sunshinesvc.exe' = 'build/tools/sunshinesvc.exe'
+            'gpu-hevc/aurora_gpu_hevc8.dll' = '_deps/gpu-hevc/aurora_gpu_hevc8.dll'
+            'gpu-hevc/aurora_gpu_hevc10.dll' = '_deps/gpu-hevc/aurora_gpu_hevc10.dll'
+          }
+          foreach ($relative in $env:SIGNED_FILES.Split(' ')) {
+            $target = Join-Path signing/app $relative
+            New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
+            Copy-Item $from[$relative] $target
+          }
+          # Kept for the next step, which puts the signed files back where CPack reads them.
+          $from | ConvertTo-Json | Set-Content signing/sources.json
+
+      - name: Upload the binaries for signing
+        id: upload-app
+        uses: actions/upload-artifact@v4
+        with:
+          name: umbra-windows-app-unsigned
+          path: signing/app/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign the binaries (approve the request in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: umbra-windows-app
+          github-artifact-id: ${{ steps.upload-app.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signing/app-signed
+
+      - name: Put the signed binaries back where CPack reads them
+        shell: pwsh
+        run: |
+          $from = Get-Content signing/sources.json -Raw | ConvertFrom-Json
+          foreach ($p in $from.PSObject.Properties) { Copy-Item -Force (Join-Path signing/app-signed $p.Name) $p.Value }
+
+      - name: Pack the installer and ZIP (no stripping)
+        shell: msys2 {0}
+        run: |
+          cd build
+          cpack -G "NSIS;ZIP"
+          mkdir -p ../dist
+          mv cpack_artifacts/Umbra.exe ../dist/Umbra-windows-x64.exe
+          mv cpack_artifacts/Umbra.zip ../dist/Umbra-windows-x64.zip
+
+      - name: Check the packed binaries are still signed
+        shell: pwsh
+        run: |
+          function Assert-SignPath([string]$Path) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $Path
+            if ($signature.Status -ne 'Valid') { throw "${Path}: signature $($signature.Status)" }
+            if ($signature.SignerCertificate.Subject -notmatch '(^|, )O=SignPath Foundation(,|$)') { throw "${Path}: signer $($signature.SignerCertificate.Subject)" }
+            if ($null -eq $signature.TimeStamperCertificate) { throw "${Path}: no timestamp" }
+          }
+          Expand-Archive dist/Umbra-windows-x64.zip _check
+          foreach ($relative in $env:SIGNED_FILES.Split(' ')) { Assert-SignPath (Join-Path _check/Umbra $relative) }
+          Write-Host "All $($env:SIGNED_FILES.Split(' ').Count) binaries in the ZIP carry a valid, timestamped SignPath Foundation signature."
+
+      - name: Stage the installer for signing
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force signing/installer | Out-Null
+          Copy-Item dist/Umbra-windows-x64.exe signing/installer/
+
+      - name: Upload the installer for signing
+        id: upload-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: umbra-windows-installer-unsigned
+          path: signing/installer/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign the installer (approve the request in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: umbra-windows-installer
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signing/installer-signed
+
+      - name: Check the signed installer and hash the release files
+        shell: pwsh
+        run: |
+          $installer = 'dist/Umbra-windows-x64.exe'
+          Copy-Item -Force signing/installer-signed/Umbra-windows-x64.exe $installer
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne 'Valid') { throw "Installer signature is $($signature.Status)" }
+          if ($signature.SignerCertificate.Subject -notmatch '(^|, )O=SignPath Foundation(,|$)') { throw "Unexpected installer signer: $($signature.SignerCertificate.Subject)" }
+          if ($null -eq $signature.TimeStamperCertificate) { throw 'Installer signature has no timestamp' }
+          foreach ($file in 'Umbra-windows-x64.exe', 'Umbra-windows-x64.zip') {
+            $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath "dist/$file").Hash.ToLowerInvariant()
+            "$digest  $file" | Set-Content -Encoding ascii "dist/$file.sha256"
+          }
+
+      - name: Attach the signed files to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload $env:TAG --repo $env:GITHUB_REPOSITORY --clobber `
+            dist/Umbra-windows-x64.exe dist/Umbra-windows-x64.exe.sha256 `
+            dist/Umbra-windows-x64.zip dist/Umbra-windows-x64.zip.sha256
+          if ($LASTEXITCODE -ne 0) { throw "Upload to release $env:TAG failed" }
