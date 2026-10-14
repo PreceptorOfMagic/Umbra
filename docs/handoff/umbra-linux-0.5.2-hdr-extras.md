@@ -8,9 +8,9 @@ git fetch origin claude/great-pascal-njfsyf
 git show origin/claude/great-pascal-njfsyf:docs/handoff/umbra-linux-0.5.2-hdr-extras.md
 ```
 
-This file is a working note, not product documentation. It is the newest commit on
-`claude/great-pascal-njfsyf`, after the release's packaging commit `7456c15`. Delete it
-(`git rm`) in the commit you tag, so it is not part of the release (section 6).
+This file is a working note, not product documentation. On `claude/great-pascal-njfsyf` it sits on
+top of the release's packaging commit `7456c15` and the workflow fix `f9ee44e` (both part of the
+release). Delete it (`git rm`) in the commit you tag, so it is not part of the release (section 6).
 
 ## 1. Your job, and who is driving
 
@@ -60,7 +60,7 @@ wherever it is offered, updated with whatever the hardware tests show.
 
 | Repo | Branch | State |
 |---|---|---|
-| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `62ea2d0` = release code commit (the Flatpak builds it), `7456c15` = packaging commit pinning it; this handoff on top. Add test results here, then tag (section 6) |
+| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `62ea2d0` = release code commit (the Flatpak builds it), `7456c15` = packaging commit pinning it, `f9ee44e` = release workflow builds with flatpak-builder 1.4.4; this handoff on top. Add test results here, then tag (section 6) |
 | `PreceptorOfMagic/Umbra` | `release/umbra-linux-0.5` | Still at `f9cff84` (0.5.1 docs). Fast-forward to the commit you tag (the claude branch descends from it) |
 | `PreceptorOfMagic/Umbra` | `release/umbra-0.5` (default branch) | At `fee8b4e`. Needs the README/workflow commit in section 6 after release |
 | `PreceptorOfMagic/Eclipse-Umbra-Project-Hub` | `claude/great-pascal-njfsyf` | Website and docs for 0.5.2 (`2208f00`, on top of `dfae32f`, `7fd5d88`). Merge to `main` after release; Pages deploys from `main` |
@@ -136,7 +136,8 @@ CI requires the KMS path for KDE (`UMBRA_SMOKE_REQUIRE_KMS=1`).
 - `.github/workflows/linux-release.yml` runs on a tag `umbra-linux-v*`:
   - `check`: the manifest's `BUILD_VERSION` matches the tag, the pinned `COMMIT` is in the history, and
     `packaging/linux/release-notes/<tag>.md` exists.
-  - `flatpak`: flatpak-builder on ubuntu-24.04 builds the bundle. It installs the published 0.5.1
+  - `flatpak`: flatpak-builder 1.4.4 (from the Ubuntu archive, checked by SHA-256) on ubuntu-24.04
+    builds the bundle. It installs the published 0.5.1
     bundle, then this one with `--reinstall`, and checks that settings survive, that `--version`
     reports 0.5.2 and that `ldd` finds every library. It also writes the sources archive (CUDA parts
     listed in `CUDA-SOURCES.txt`, not included) and the project source.
@@ -163,13 +164,74 @@ CI requires the KMS path for KDE (`UMBRA_SMOKE_REQUIRE_KMS=1`).
 
 The automated test uses no real GPU or display, does not stream, and shows no HDR on a screen.
 
-Last all-green extras run at the near-final code:
-<https://github.com/PreceptorOfMagic/Umbra/actions/runs/38612599567> (commit `b05af93`, 14/14). The
-commits since then change only README.txt wording, workflows and docs.
+Last all-green extras run: <https://github.com/PreceptorOfMagic/Umbra/actions/runs/38632834823>
+(commit `7456c15`, 14/14, the candidates in section 5). Nothing under `packaging/linux/hdr-extras/` or
+the patches has changed since.
 
 ## 5. The release candidates CI built
 
-<!-- CANDIDATES -->
+Test these. CI built them from this branch; the release builds the same things again from the tag.
+Download them with `gh` (logged in to an account that can read the repository) into an empty
+directory:
+
+```sh
+mkdir -p ~/umbra-candidates && cd ~/umbra-candidates
+gh run download 38640460427 --repo PreceptorOfMagic/Umbra -n linux-flatpak -D flatpak
+gh run download 38632834823 --repo PreceptorOfMagic/Umbra -p 'hdr-*' -D extras
+(cd flatpak && sha256sum -c ./*.sha256)
+for d in extras/hdr-*; do (cd "$d" && sha256sum -c ./*.sha256); done
+```
+
+GitHub deletes these artifacts after 90 days (the extras on 2027-01-12, the Flatpak about the same day).
+After that, push a commit to rebuild them (see "If a test fails" in section 7).
+
+### The Flatpak
+
+[Linux release dry run 38640460427](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38640460427),
+from packaging commit `f9ee44e`, which builds Umbra code commit `62ea2d0`. **Check that this run
+passed** (`gh run view 38640460427 --repo PreceptorOfMagic/Umbra`); it was still building when this
+was written. If it failed, do not test it: tell the maintainer. That is the code the
+release builds, so a hardware result for this bundle holds for the released one. The release rebuilds
+it from the same manifest; only Flathub runtime updates in between can differ. The artifact holds
+`Umbra-0.5.2-linux-x86_64.flatpak`, `Umbra-0.5.2-linux-flatpak-sources.tar.gz` and
+`umbra-linux-0.5.2-project-source.tar.gz`, each with its `.sha256`. CI checked that it installs over
+0.5.1 with settings kept, reports 0.5.2 and finds every library.
+
+### The 14 HDR extras
+
+[Linux HDR extras run 38632834823](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38632834823),
+at commit `7456c15`, 14/14 passed with 0 smoke-test failures. The patches, revisions and build scripts
+are the ones on this branch now. Each `extras/hdr-<desktop>-<target>/` holds
+`Umbra-HDR-<KDE|GNOME>-<target>.tar.gz`, its `-source.tar.gz` and their `.sha256` files. Unpack with
+`tar -xzf Umbra-HDR-KDE-ubuntu26.04.tar.gz` (for example) and follow that extra's `README.txt`.
+
+| Tarball | Built version | Fits only | Size |
+|---|---|---|---|
+| `Umbra-HDR-KDE-ubuntu26.04.tar.gz` | `4:6.6.6-0ubuntu0.1+umbrahdr4` | `4:6.6.6-0ubuntu0.1` | 10.8 MB |
+| `Umbra-HDR-KDE-ubuntu26.10.tar.gz` | `4:6.7.5-0ubuntu1+umbrahdr1` | `4:6.7.5-0ubuntu1` | 11.0 MB |
+| `Umbra-HDR-KDE-fedora44.tar.gz` | `6.7.5-1.fc44.umbrahdr1` | `6.7.5-1.fc44` | 7.2 MB |
+| `Umbra-HDR-KDE-fedora45.tar.gz` | `6.7.5-1.fc45.umbrahdr1` | `6.7.5-1.fc45` | 7.3 MB |
+| `Umbra-HDR-KDE-opensuse-tumbleweed.tar.gz` | `6.7.5-1.1.umbrahdr1` | `6.7.5-1.1` | 7.9 MB |
+| `Umbra-HDR-KDE-arch.tar.gz` | `6.7.5-3` (Packager: Umbra HDR extra) | `6.7.5-3` | 13.0 MB |
+| `Umbra-HDR-KDE-cachyos.tar.gz` | `6.7.5-3.1` (Packager: Umbra HDR extra) | `6.7.5-3.1` | 12.1 MB |
+| `Umbra-HDR-GNOME-ubuntu26.04.tar.gz` | `50.1-0ubuntu2.4+umbrahdr2` | `50.1-0ubuntu2.4` | 2.3 MB |
+| `Umbra-HDR-GNOME-ubuntu26.10.tar.gz` | `51.0-1ubuntu3+umbrahdr1` | `51.0-1ubuntu3` | 2.3 MB |
+| `Umbra-HDR-GNOME-fedora44.tar.gz` | `50.5-1.fc44.umbrahdr2` | `50.5-1.fc44` | 2.6 MB |
+| `Umbra-HDR-GNOME-fedora45.tar.gz` | `51.0-1.fc45.umbrahdr1` | `51.0-1.fc45` | 2.6 MB |
+| `Umbra-HDR-GNOME-opensuse-tumbleweed.tar.gz` | `50.5-3.1.umbrahdr2` | `50.5-3.1` | 2.0 MB |
+| `Umbra-HDR-GNOME-arch.tar.gz` | `51.1-1` (Packager: Umbra HDR extra) | `51.1-1` | 3.9 MB |
+| `Umbra-HDR-GNOME-cachyos.tar.gz` | `51.0-2` (Packager: Umbra HDR extra) | `51.0-2` | 3.5 MB |
+
+- An extra fits only the exact compositor version in its "Fits only" column. Before installing one on a test
+  PC, run its README.txt "ONLY FOR" check. If the distribution has updated KWin or Mutter since
+  2026-10-14, the candidate does not fit: rebuild it (push any change under
+  `packaging/linux/hdr-extras/`, for example the recorded results; the extras workflow cannot be
+  started by hand until it is on the default branch) and test the new build.
+- The candidates' README.txt source links name commit `7456c15`; the released ones name the tagged
+  commit. Their TESTED text is from 2026-10-14, before your results.
+- Rolling back: each README.txt has the command. Arch and CachyOS keep the repository's version
+  number, so after rolling back check that `pacman -Qi kwin` (or `mutter`) no longer shows
+  `Packager: Umbra HDR extra`.
 
 ## 6. Publishing, after the hardware tests and the maintainer's go-ahead
 
@@ -349,3 +411,8 @@ re-checks the new text.
 - Arch and CachyOS GNOME source tarballs are about 114 MB, because their Mutter recipes clone the
   whole Mutter git history. Left as is.
 - GitHub job logs are not downloadable while a job runs.
+- Ubuntu 24.04's flatpak-builder 1.4.2 does not pass CMake modules `CMAKE_INSTALL_LIBDIR=lib`, so
+  `ayatana-ido` installed to `/app/lib64` and `libayatana-indicator` failed ("Package
+  'libayatana-ido3-0.4' not found"). 1.4.4 passes it; Ubuntu's packages of 1.4.6 and newer need libxml2 2.14, which Ubuntu
+  24.04 lacks. Do not set a global libdir in the manifest instead: the CUDA host compiler module uses
+  its own prefix. For a local build, use flatpak-builder 1.4.4 or newer.
