@@ -75,7 +75,18 @@ case $family in
     files_of() { rpm -ql "$1"; }
     ;;
   arch | cachyos)
+    # CachyOS's pacman runs install scripts and hooks without network access, and a container
+    # cannot isolate the network, so it would skip them all (glib-compile-schemas among them,
+    # and Mutter aborts without compiled schemas). A desktop system is not affected.
+    allow_hooks() {
+      if grep -aq DisableSandboxNetwork /usr/bin/pacman /usr/lib/libalpm.so* 2>/dev/null &&
+         ! grep -q '^DisableSandboxNetwork' /etc/pacman.conf; then
+        sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf
+      fi
+    }
+    allow_hooks
     pacman -Syu --noconfirm >/dev/null
+    allow_hooks
     pkg_install() { pacman -S --noconfirm --needed "$@" >/dev/null; }
     tools_gnome=(pipewire python python-gobject dbus glib2 mesa)
     tools_kde=(pipewire python dbus gcc wayland mesa)
@@ -117,7 +128,7 @@ if is_accepted "$stock"; then pass "README check prints the distribution's versi
 
 runtime() { # <label>: prints the probe's JSON
   if [ "$desktop" = gnome ]; then
-    { bash "$here/smoke/gnome-runtime.sh" "$work/$1" 2>/dev/null || true; } | tail -n1
+    { timeout 180 bash "$here/smoke/gnome-runtime.sh" "$work/$1" 2>/dev/null || true; } | tail -n1
   else
     # Decided on the stock run and kept for the patched one: DRM when a KMS device exists and
     # stock KWin starts on it, otherwise the headless backend.
@@ -128,11 +139,11 @@ runtime() { # <label>: prints the probe's JSON
       mode=virtual
       ls /dev/dri/card* >/dev/null 2>&1 && mode=drm
     fi
-    result=$({ bash "$here/smoke/kde-runtime.sh" "$mode" "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
+    result=$({ timeout 180 bash "$here/smoke/kde-runtime.sh" "$mode" "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
     if [ "$mode" = drm ] && [ ! -f "$work/kde-mode" ] && grep -q 'kwin_wayland exited' <<<"$result"; then
       note "KWin did not start on the KMS device ($(grep -m1 -iE 'drm|fail|error' "$work/$1.log" 2>/dev/null || true)); using its headless backend"
       mode=virtual
-      result=$({ bash "$here/smoke/kde-runtime.sh" virtual "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
+      result=$({ timeout 180 bash "$here/smoke/kde-runtime.sh" virtual "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
     fi
     [ -f "$work/kde-mode" ] || echo "$mode" > "$work/kde-mode"
     echo "$result"

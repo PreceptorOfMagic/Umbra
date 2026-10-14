@@ -9,12 +9,18 @@ rpm_topdir=$(rpm --eval '%{_topdir}' 2>/dev/null || echo /root/rpmbuild)
 rpm_prepare_spec() {
   local spec=$1 patch=$2 release=$3
   cp "$patch" "$rpm_topdir/SOURCES/umbra-virtual-hdr-screencast.patch"
+  # The extra source goes at the end of the main preamble: rpm numbers an unnumbered Source: after
+  # the one before it, so ahead of openSUSE's "Source:" it would leave the spec without Source0.
   awk -v release="$release" '
     !done_release && /^Release:/ {
       print "Release:        " release
-      print "Source9990:     umbra-virtual-hdr-screencast.patch"
       done_release = 1
       next
+    }
+    !done_source && /^%(description|package)([[:space:]]|$)/ {
+      print "Source9990:     umbra-virtual-hdr-screencast.patch"
+      print ""
+      done_source = 1
     }
     /^%prep/ { in_prep = 1; print; next }
     in_prep && /^%(conf|build|generate_buildrequires|install|check)([[:space:]]|$)/ {
@@ -25,8 +31,8 @@ rpm_prepare_spec() {
       done_prep = 1
     }
     { print }
-    END { if (!done_release || !done_prep) exit 1 }
-  ' "$spec" > "$spec.umbra" || die "could not add the patch to $spec (no Release: tag or %prep section)"
+    END { if (!done_release || !done_source || !done_prep) exit 1 }
+  ' "$spec" > "$spec.umbra" || die "could not add the patch to $spec (no Release: tag, %description or %prep section)"
   mv "$spec.umbra" "$spec"
 }
 

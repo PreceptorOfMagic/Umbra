@@ -44,13 +44,14 @@ dbus-run-session -- bash -c '
   done
   sleep 2
   coproc PROBE { WAYLAND_DISPLAY=umbra-smoke "$probe"; }
+  probe_pid=$PROBE_PID  # bash clears PROBE_PID once the probe exits
   read -r -t 30 line <&"${PROBE[0]}" || line="{\"error\": \"probe gave no answer\"}"
   sleep 2
   node=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get(\"node_id\", \"\"))" "$line" 2>/dev/null)
   formats="[]"
   [ -n "$node" ] && formats=$(python3 "$here/pw_formats.py" "$node")
-  eval "exec ${PROBE[1]}>&-"
-  wait $PROBE_PID 2>/dev/null
+  [ -n "${PROBE[1]:-}" ] && eval "exec ${PROBE[1]}>&-"
+  [ -n "$probe_pid" ] && wait "$probe_pid" 2>/dev/null
   kill $kwin 2>/dev/null
   python3 -c "
 import json, sys
