@@ -53,7 +53,7 @@ case $family in
     apt-get update -qq
     pkg_install() { apt-get install -y -qq --no-install-recommends "$@" >/dev/null; }
     tools_gnome=(mutter pipewire pipewire-bin python3 python3-gi gir1.2-glib-2.0 dbus-daemon dbus-bin libglib2.0-bin libegl-mesa0 libgl1-mesa-dri)
-    tools_kde=(pipewire pipewire-bin python3 dbus-daemon dbus-bin gcc libc6-dev libwayland-dev libwayland-bin libegl-mesa0 libgl1-mesa-dri libgbm1)
+    tools_kde=(pipewire pipewire-bin python3 dbus-daemon dbus-bin gcc libc6-dev pkg-config libwayland-dev libwayland-bin libegl-mesa0 libgl1-mesa-dri libgbm1)
     unattended() { sed 's/^dpkg -i /dpkg -i --force-confnew /'; }
     files_of() { dpkg -L "$1"; }
     ;;
@@ -62,7 +62,7 @@ case $family in
     pkg_install() { dnf -y -q install "$@" >/dev/null; }
     pkg_install tar gzip
     tools_gnome=(pipewire pipewire-utils python3 python3-gobject dbus-daemon dbus-tools glib2 mesa-dri-drivers mesa-libEGL)
-    tools_kde=(pipewire pipewire-utils python3 dbus-daemon dbus-tools gcc wayland-devel mesa-dri-drivers mesa-libEGL mesa-libgbm)
+    tools_kde=(pipewire pipewire-utils python3 dbus-daemon dbus-tools gcc pkgconf-pkg-config wayland-devel mesa-dri-drivers mesa-libEGL mesa-libgbm)
     unattended() { cat; }
     files_of() { rpm -ql "$1"; }
     ;;
@@ -71,7 +71,7 @@ case $family in
     pkg_install tar gzip
     tools_gnome=(pipewire pipewire-tools python3 python3-gobject typelib-1_0-GLib-2_0 typelib-1_0-Gio-2_0 dbus-1 dbus-1-daemon glib2-tools Mesa-dri Mesa-libEGL1)
     # The image installs no recommended packages, so gcc comes without the C library headers.
-    tools_kde=(pipewire pipewire-tools python3 dbus-1 dbus-1-daemon gcc glibc-devel wayland-devel Mesa-dri Mesa-libEGL1 libgbm1)
+    tools_kde=(pipewire pipewire-tools python3 dbus-1 dbus-1-daemon gcc glibc-devel pkgconf-pkg-config wayland-devel Mesa-dri Mesa-libEGL1 libgbm1)
     unattended() { sed 's/^zypper /zypper -n /'; }
     files_of() { rpm -ql "$1"; }
     ;;
@@ -90,7 +90,7 @@ case $family in
     allow_hooks
     pkg_install() { pacman -S --noconfirm --needed "$@" >/dev/null; }
     tools_gnome=(pipewire python python-gobject dbus glib2 mesa)
-    tools_kde=(pipewire python dbus gcc wayland mesa)
+    tools_kde=(pipewire python dbus gcc pkgconf wayland mesa)
     unattended() { sed 's/^pacman \(-[US]\) /pacman \1 --noconfirm /'; }
     files_of() { pacman -Qlq "$1"; }
     ;;

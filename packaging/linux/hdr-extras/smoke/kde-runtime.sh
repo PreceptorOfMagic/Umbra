@@ -18,9 +18,15 @@ for p in zkde-screencast-unstable-v1 kde-output-device-v2 kde-output-management-
   wayland-scanner client-header "$repo/third-party/kde-output-protocols/$p.xml" "$tmp/$p.h" &&
     wayland-scanner private-code "$repo/third-party/kde-output-protocols/$p.xml" "$tmp/$p.c" || exit 1
 done
+# pkg-config knows where a distribution keeps the Wayland headers; without it, the default paths.
+wayland=$(pkg-config --cflags --libs wayland-client 2>/dev/null) || wayland=-lwayland-client
+# shellcheck disable=SC2086
 gcc -O1 -o "$tmp/probe" -I"$tmp" -I"$repo/src/platform/linux" "$here/kde-virtual-hdr-probe.c" \
-  "$repo/src/platform/linux/kde-output.c" "$tmp"/*.c -lwayland-client >"$log.cc.log" 2>&1 ||
-  { echo '{"error": "probe did not compile"}'; cat "$log.cc.log" >&2; exit 1; }
+  "$repo/src/platform/linux/kde-output.c" "$tmp"/*.c $wayland >"$log.cc.log" 2>&1 || {
+  { echo "wayland-client flags: '$wayland'; wayland-client.h: $(find /usr -name wayland-client.h 2>/dev/null | head -n3 | tr '\n' ' ')"
+    cat "$log.cc.log"; } >"$log.cc.log.new" && mv "$log.cc.log.new" "$log.cc.log"
+  echo '{"error": "probe did not compile"}'; cat "$log.cc.log" >&2; exit 1
+}
 
 export XDG_RUNTIME_DIR="$tmp/run"
 mkdir -m 700 "$XDG_RUNTIME_DIR"
