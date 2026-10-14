@@ -89,22 +89,18 @@ namespace {
       // "<name> pci:dddd:bb:dd.f" where OpenCL reports it (cl_khr_pci_bus_info): the GPU-frame
       // hand-off must reach the same GPU. Without it GPU frames are read back.
       if (const char *at = std::strstr(selected, " pci:")) pci = at + 5;
-      // GPU frames: the stage exists before the encoder session so that, where CUDA does not hand
-      // frames over, the session's OpenCL context can share the stage's EGL context. A stage that
-      // cannot be created leaves `frames` empty: convert() fails and the capture reinitialises to
-      // read-back (gpu_frames_possible() is false by then).
+      // GPU frames: the stage exists before the encoder session. CUDA hands its frames to the encoder;
+      // elsewhere the stage reads them back. A stage that cannot be created leaves `frames` empty:
+      // convert() fails and the capture reinitialises to read-back (gpu_frames_possible() is false by then).
       void *egl_display = nullptr, *egl_context = nullptr;
       if (gpu_frames && gpu_frames_possible()) {
         frames = gpu_frames_t::create(config.width, config.height, capture_format == capture_format_e::bt2020_pq_xbgr2101010, pci);
-        if (frames && std::strcmp(frames->hand_off(), "cuda") && library.gl_sharing) {
-          // Mesa rusticl finds EGL through the process's global symbols (dlsym(NULL, "eglGetProcAddress"),
-          // rusticl/core/gl.rs) and refuses the shared context with -1000 when it can't; glad loads libEGL
-          // RTLD_LOCAL. Promote the already-loaded library to global scope (RTLD_NOLOAD loads nothing).
-          if (!dlopen("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD))
-            BOOST_LOG(warning) << "[AURORA-GPU-HEVC] libEGL not loaded; OpenCL cannot share the stage's GL context";
-          egl_display = frames->egl_display();
-          egl_context = frames->egl_context();
-        }
+        // OpenCL/GL sharing is not offered on the non-CUDA (AMD, Mesa rusticl) path: measured 2026-10-14 on
+        // an RX Vega (Mesa 26.0.8, 1920x2176 co-op) the encoder took 55-58 ms per shared frame against 34-39 ms
+        // read back, and delivered fewer frames. To try it again: pass frames->egl_display()/egl_context() here
+        // and first promote libEGL to global scope, dlopen("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD):
+        // rusticl finds EGL with dlsym(NULL, "eglGetProcAddress") (rusticl/core/gl.rs) and refuses the shared
+        // context with -1000 while glad keeps libEGL RTLD_LOCAL.
       }
       aghl_config args {sizeof(aghl_config), AGHL_ABI_VERSION, uint32_t(config.width), uint32_t(config.height),
         colorspace.bit_depth, video::colorspace_is_hdr(colorspace) ? 1u : 0u, kernels.c_str(),
