@@ -1,0 +1,46 @@
+name: Linux HDR extras
+
+on:
+  push:
+    branches: [claude/great-pascal-njfsyf]
+    paths:
+      - .github/workflows/linux-hdr-extras.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    name: KWin/Mutter in ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:26.04
+          - ubuntu:26.10
+          - debian:13
+          - debian:testing
+          - fedora:43
+          - fedora:44
+          - fedora:45
+          - archlinux:latest
+          - opensuse/tumbleweed:latest
+          - opensuse/leap:16.0
+    container: ${{ matrix.image }}
+    steps:
+      - name: Query
+        shell: sh
+        run: |
+          . /etc/os-release; echo "$PRETTY_NAME"
+          if command -v apt-get >/dev/null; then
+            apt-get update -qq >/dev/null
+            apt-cache policy kwin-wayland mutter-common | grep -E '^[a-z]|Candidate'
+          elif command -v dnf >/dev/null; then
+            dnf -q repoquery --latest-limit=1 --qf '%{name} %{evr} %{repoid}\n' kwin kwin-wayland mutter gnome-shell plasma-workspace | sort -u
+          elif command -v pacman >/dev/null; then
+            pacman -Sy >/dev/null; pacman -Si kwin mutter gnome-shell | grep -E '^(Name|Version|Repository)'
+          elif command -v zypper >/dev/null; then
+            zypper -q -n refresh >/dev/null; zypper -q -n info kwin6 mutter | grep -E '^(Name|Version|Repository)'
+          fi
