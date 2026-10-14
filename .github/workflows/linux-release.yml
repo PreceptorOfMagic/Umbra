@@ -131,12 +131,15 @@ jobs:
         # mirrors. NVIDIA's CUDA compiler components are build tools that do not ship in the bundle
         # and are not redistributed here; CUDA-SOURCES.txt lists where they come from.
         run: |
-          jq -r '.sources[] | "\(.url)  sha256 \(.sha256)"' packaging/linux/flatpak-umbra/modules/cuda.json > CUDA-SOURCES.txt
+          jq -r '.sources[] | select(.url) | "\(.url)  sha256 \(.sha256)"' packaging/linux/flatpak-umbra/modules/cuda.json > CUDA-SOURCES.txt
           cat CUDA-SOURCES.txt
           tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
             --exclude='cuda_*' --transform "s|^|Umbra-$VERSION-linux-flatpak-sources/|" \
             -czf "dist/Umbra-$VERSION-linux-flatpak-sources.tar.gz" \
             CUDA-SOURCES.txt -C .flatpak-builder downloads git
+          ! tar -tzf "dist/Umbra-$VERSION-linux-flatpak-sources.tar.gz" | grep '/cuda_[^/]*$' ||
+            { echo "::error::the sources archive contains NVIDIA's CUDA components"; exit 1; }
+          (cd .flatpak-builder && du -ah -d2 downloads && du -h -d1 git) | sort -h | tail -n 25
           # Umbra at this commit, with the shared-modules submodule the manifest uses: build it with
           # packaging/linux/flatpak-umbra/DEVELOPMENT.md.
           git ls-files --recurse-submodules | grep -v '^packaging/linux/flatpak/deps/shared-modules$' |
