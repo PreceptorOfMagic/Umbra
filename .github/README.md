@@ -1,6 +1,6 @@
 # Umbra
 
-**The gaming-PC app: a Windows host for everyday streaming and Eclipse’s two-host couch co-op.**
+**The gaming-PC app: a Windows and Linux host for everyday streaming and Eclipse’s two-host couch co-op.**
 
 [Project Hub](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub) · [Installation Guide](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md) · [Eclipse](https://github.com/PreceptorOfMagic/Eclipse) · [Umbra](https://github.com/PreceptorOfMagic/Umbra) · [Development](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
 
@@ -14,11 +14,12 @@ Umbra is an independent fork. It is not affiliated with or endorsed by ClassicOl
 
 ## Downloads and installation
 
-Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choose the compatible release and expand **Assets**. Download the **Windows x64 installer .exe**, not GitHub’s automatically generated source archives. If no installer is attached, there is no published installation package yet.
+Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choose the compatible release and expand **Assets**. Download the **Windows x64 installer .exe** or the **Linux .flatpak**, not GitHub’s automatically generated source archives. Windows and Linux are published as separate releases. If no installer is attached, there is no published installation package yet.
 
 | Device | Package | Install |
 |---|---|---|
 | Windows x64 gaming PC | Umbra Windows installer, with bundled virtual-display and device components | [Windows steps](#windows-x64) |
+| Linux x86_64 gaming PC | Umbra Flatpak bundle, plus optional HDR extras for Ubuntu 26.04 | [Linux steps](#linux-x86_64-flatpak) |
 | LG TV / Windows / Linux display device | Eclipse client, from its own repository | [Eclipse downloads](https://github.com/PreceptorOfMagic/Eclipse#downloads-and-installation) |
 
 ### Windows x64
@@ -29,9 +30,32 @@ Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choos
 4. Allow access on your trusted private network. Use the installed shortcut or tray action to open the web interface and create the local administrator login.
 5. Review game/desktop entries, keep client-driven display defaults and pair Eclipse using its PIN.
 
-Windows 11 x64 on RTX 4070, RTX 3070 and Radeon RX Vega is the current physical test base. Linux/macOS host packages are not an Umbra release target here.
+Windows 11 x64 on RTX 4070, RTX 3070 and Radeon RX Vega is the current physical test base. macOS host packages are not an Umbra release target here.
 
 [Full Windows host installation](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#umbra-windows).
+
+### Linux x86_64 (Flatpak)
+
+Download `Umbra-0.5.1-linux-x86_64.flatpak` from the [Umbra 0.5.1 for Linux release](https://github.com/PreceptorOfMagic/Umbra/releases/tag/umbra-linux-v0.5.1).
+
+1. Install Flatpak and add Flathub if you have not already: `sudo apt install flatpak`, then `flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo`.
+2. Check the download: `sha256sum -c Umbra-0.5.1-linux-x86_64.flatpak.sha256`.
+3. Install it: `flatpak install --user Umbra-0.5.1-linux-x86_64.flatpak`. Flatpak fetches the Freedesktop 25.08 runtime and, on NVIDIA, the driver extension matching your installed driver.
+4. Start **Umbra** from the application menu. Accept **Input Setup** when it is offered: it adds the input rule streamed controllers, mouse and keyboard need, through your desktop's administrator prompt, and can start Umbra when you sign in. If the desktop asks to allow screen sharing, allow it.
+5. Open `https://localhost:47990`, create the administrator login and pair Eclipse using its PIN.
+
+| Desktop | Streaming | Per-client virtual display | Co-op | HDR |
+|---|---|---|---|---|
+| KDE Plasma, Wayland (tested: Ubuntu 26.04, KWin 6.6.6) | Yes | Yes | Yes | With the KDE HDR extra |
+| GNOME, Wayland (tested: Ubuntu 26.04, Mutter 50.1) | Yes | Yes | Yes | With the GNOME HDR extra; a physical HDR monitor streams HDR without it |
+| X11 desktops (Cinnamon, Xfce, MATE …) | Yes (tested during development on Linux Mint 22.3) | No | No | No |
+| Sway, Hyprland and other wlroots desktops, COSMIC | Not supported | | | |
+
+- GPUs: NVIDIA (tested: RTX 2060 SUPER, driver 595) and AMD (tested: Radeon RX Vega). On AMD the card's own video encoder sets the limit: an RX Vega reaches about 60 fps at 4K and 165 fps only at 1080p, and co-op panes about 35 fps. Intel GPUs and multi-GPU systems are untested.
+- Other distributions running KDE Plasma or GNOME on Wayland are expected to behave like those rows but are untested.
+- A Linux host and a Windows host can share one co-op session (tested with Umbra 0.5.0 on Windows).
+- **HDR extras** (optional, Ubuntu 26.04 only): stock KWin and Mutter keep the virtual displays Umbra streams SDR. The release carries patched KWin (KDE) and Mutter (GNOME) packages that add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. They replace your desktop's compositor packages, an Ubuntu update of KWin or Mutter replaces them again, and rollback is one command. Install, verify and rollback steps are in each extra's `README.txt`, and the patches are in [kwin-virtual-hdr](../packaging/linux/kwin-virtual-hdr/) and [mutter-virtual-hdr](../packaging/linux/mutter-virtual-hdr/).
+- To remove Umbra: `flatpak run --command=remove-additional-install.sh io.github.PreceptorOfMagic.Umbra` removes the input rule and sign-in start, then `flatpak uninstall --user io.github.PreceptorOfMagic.Umbra` removes the app.
 
 ## What Umbra provides
 
@@ -54,8 +78,8 @@ Working co-op defaults are separate from ordinary streaming settings. The Co-op 
 
 ## Reporting and contributing
 
-Use [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues/new/choose) for installation, capture, virtual display, host service, pairing or encoder problems. Include both app versions, Windows/GPU/driver, reproduction steps and the [reviewed diagnostic bundle](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#diagnostics).
+Use [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues/new/choose) for installation, capture, virtual display, host service, pairing or encoder problems. Include both app versions, Windows or Linux distribution and desktop, GPU/driver, reproduction steps and the [reviewed diagnostic bundle](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#diagnostics).
 
-[Windows build guide](../docs/umbra-windows-build.md) · [Development and milestones](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
+[Windows build guide](../docs/umbra-windows-build.md) · [Linux Flatpak build](../packaging/linux/flatpak-umbra/DEVELOPMENT.md) · [Development and milestones](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
 
 [Eclipse/Umbra licence & notices](../LICENSES.md) · [GPL-3.0](../LICENSE)

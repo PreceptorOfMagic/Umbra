@@ -1,6 +1,6 @@
 # Linux Co-op Pane: Flatpak capture feasibility
 
-Status: **per-client virtual displays, GPU-frame capture and KDE co-op panes implemented, under validation; not released** (2026-10-13). Current candidate: see the Windows-parity section at the end.
+Status: **released as Umbra 0.5.1 for Linux** (Flatpak, tag `umbra-linux-v0.5.1`). This file is the development record; the supported setups are listed in the repository README.
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 Paths written `test-records/...` below name the project's private test records (logs, captures);

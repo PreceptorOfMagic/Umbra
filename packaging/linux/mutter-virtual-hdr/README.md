@@ -22,6 +22,9 @@ virtual monitors (a physical monitor in HDR mode still streams HDR), nothing els
 
 ## Install (prebuilt, Ubuntu 26.04 with GNOME 50.1, mutter 50.1-0ubuntu2.4 only)
 
+The Umbra 0.5.1 for Linux release carries these packages (`Umbra-HDR-GNOME-ubuntu26.04.tar.gz`, with a
+`README.txt`) and their source package (`Umbra-HDR-GNOME-ubuntu26.04-source.tar.gz`).
+
 ```
 sudo dpkg -i gir1.2-mutter-18_50.1-0ubuntu2.4+umbrahdr1_amd64.deb \
              libmutter-18-0_50.1-0ubuntu2.4+umbrahdr1_amd64.deb \

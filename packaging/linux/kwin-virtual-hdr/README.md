@@ -23,6 +23,12 @@ nothing else changes.
   change could come back linear on stock KWin.)
 - Warning lines for each DMA-BUF buffer failure step (`kwin_screencast`).
 
+## Prebuilt packages
+
+The Umbra 0.5.1 for Linux release carries the packages built from this patch for Ubuntu 26.04
+(`Umbra-HDR-KDE-ubuntu26.04.tar.gz`, with install, verify and rollback steps in its `README.txt`) and
+their source package (`Umbra-HDR-KDE-ubuntu26.04-source.tar.gz`).
+
 ## Build and install (Ubuntu 26.04, `kwin` 4:6.6.6-0ubuntu0.1)
 
 ```

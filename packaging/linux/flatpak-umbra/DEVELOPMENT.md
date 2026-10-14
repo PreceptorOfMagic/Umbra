@@ -1,9 +1,22 @@
 # Umbra Linux development Flatpak
 
-This recipe is a private candidate, not a published release. Its source commit must be available
-before another machine can build it from the public URL. For a local build, copy this packaging
-directory (dereferencing shared-modules), replace only the Umbra git URL with the local clone's
-file URL, and retain the pinned commit. Do not publish the machine-specific builder copy.
+This recipe builds the published Umbra 0.5.1 for Linux bundle (tag `umbra-linux-v0.5.1`). It fetches
+the Umbra commit it pins from the public repository. To build it from a checkout of the tag (a
+recursive clone fails: the `third-party/build-deps` submodule pins a commit no longer on any branch,
+which the manifest fetches as an archive instead):
+
+```
+git clone --branch umbra-linux-v0.5.1 https://github.com/PreceptorOfMagic/Umbra.git && cd Umbra
+git submodule update --init packaging/linux/flatpak/deps/shared-modules
+flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo build \
+  packaging/linux/flatpak-umbra/io.github.PreceptorOfMagic.Umbra.yml
+flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+  repo Umbra.flatpak io.github.PreceptorOfMagic.Umbra master
+```
+
+For a local build of unpublished changes, copy this packaging directory (dereferencing shared-modules),
+replace only the Umbra git URL with the local clone's file URL and pin the local commit. Do not publish
+the machine-specific builder copy.
 
 The intended experience is one ordinary Flatpak installation, one desktop screen-sharing approval,
 remembered permission where supported, and clear setup for streamed input. A desktop's missing
@@ -11,8 +24,8 @@ virtual-display controls must not prevent ordinary desktop streaming.
 
 The final release also requires the custom GPU HEVC encoder for mixed-hardware co-op with Windows
 behavioral parity, plus HDR wherever capture, encoding and presentation support it. The development package now includes the Linux custom encoder and portal HDR path.
-Mixed-host parity and final release qualification remain open. See the final release
-scope and implementation order in [the Linux co-op record](../../../docs/umbra-linux-coop.md).
+Both are in the 0.5.1 release; the repository README lists the setups it was tested on. The
+development record is [the Linux co-op record](../../../docs/umbra-linux-coop.md).
 
 ## Build choices
 
@@ -77,4 +90,4 @@ Also validate clean install, upgrade, permission denial/revocation, restart, uni
 older NVIDIA GPUs, older Intel hardware (25.08 removed intel-vaapi-driver in favor of
 intel-media-driver), fractional scaling and multi-monitor input. HDR evidence currently covers GNOME/NVIDIA ordinary streaming. TV presentation,
 HDR games, other GPU/desktop combinations and HDR co-op remain unqualified. Do not promise165fps
-or Windows-equivalent co-op based on mode labels or counters. Publication stays deferred.
+or Windows-equivalent co-op based on mode labels or counters.
