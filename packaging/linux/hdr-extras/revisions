@@ -1,0 +1,7 @@
+# Umbra revision of each patch series, appended to the distribution's package version
+# (Debian/Ubuntu +umbrahdrN, Fedora/openSUSE .umbrahdrN, Arch pkgrel .N). Raise it whenever the
+# patch for that series changes, so a rebuilt package replaces the previous one.
+kwin-6.6     4
+kwin-6.7     1
+mutter-50    2
+mutter-51    1

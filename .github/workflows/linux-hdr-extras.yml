@@ -1,43 +1,140 @@
 name: Linux HDR extras
+run-name: "HDR extras${{ inputs.release_tag && format(' for {0}', inputs.release_tag) || '' }}"
+
+# Builds the optional HDR extras, patched KWin (KDE) and Mutter (GNOME) packages, for every
+# distribution in packaging/linux/hdr-extras/targets. Each build runs in a container of that
+# distribution and starts from its own current kwin or mutter source package, so the packages match
+# what its users have installed. Pushes and pull requests that touch the patches or the build check
+# that every target still builds; the weekly run notices distribution updates the patches no longer
+# fit (and extras that a distribution update has made stale). Started by hand with a release tag, it
+# attaches the extras to that existing release and updates its SHA256SUMS.
 
 on:
   push:
-    branches: [claude/great-pascal-njfsyf]
     paths:
       - .github/workflows/linux-hdr-extras.yml
+      - packaging/linux/hdr-extras/**
+      - packaging/linux/kwin-virtual-hdr/*.patch
+      - packaging/linux/mutter-virtual-hdr/*.patch
+  pull_request:
+    paths:
+      - .github/workflows/linux-hdr-extras.yml
+      - packaging/linux/hdr-extras/**
+      - packaging/linux/kwin-virtual-hdr/*.patch
+      - packaging/linux/mutter-virtual-hdr/*.patch
+  schedule:
+    - cron: '17 4 * * 1'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release to attach the extras to (for example umbra-linux-v0.5.2); empty only builds
+        required: false
+        type: string
+      targets:
+        description: Only these targets, space-separated names from packaging/linux/hdr-extras/targets; empty for all
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  cachyos:
-    name: CachyOS packaging of KWin and Mutter
+  plan:
+    name: Plan
     runs-on: ubuntu-24.04
-    container: cachyos/cachyos-v3:latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - name: Query
-        shell: bash
+      - uses: actions/checkout@v4
+      - id: plan
+        name: Targets
+        env:
+          ONLY: ${{ inputs.targets }}
         run: |
-          set -x
-          ls /etc/pacman.d
-          grep -vE '^\s*(#|$)' /etc/pacman.conf
-          head -5 /etc/pacman.d/cachyos-v3-mirrorlist /etc/pacman.d/cachyos-mirrorlist || true
-          pacman -Sy --noconfirm git >/dev/null
-          git clone -q --depth 1 https://github.com/CachyOS/CachyOS-PKGBUILDS /tmp/cp
-          ls /tmp/cp | grep -iE 'mutter|kwin|gnome-shell' || true
-          for d in /tmp/cp/*mutter* /tmp/cp/*kwin*; do
-            [ -d "$d" ] || continue
-            echo "== $d"; ls "$d"
-            grep -E '^(pkgname|pkgbase|pkgver|pkgrel|epoch|_commit|_tag)=' "$d/PKGBUILD"
-            sed -n '/^source=/,/)/p' "$d/PKGBUILD"
-            grep -nE 'patch|git apply|meson|prepare\(' "$d/PKGBUILD" | head -40
+          matrix=$(awk -v only=" $ONLY " '
+            !/^#/ && NF >= 4 && (only == "  " || index(only, " " $1 " ")) {
+              for (i = 4; i <= NF; i++) printf "%s\t%s\n", $1, $i
+            }' packaging/linux/hdr-extras/targets |
+            jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {target: .[0], desktop: .[1]})')
+          [ "$matrix" != "[]" ] || { echo "::error::no target matches '$ONLY'"; exit 1; }
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
+
+  build:
+    name: ${{ matrix.desktop }} on ${{ matrix.target }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        # A KWin build tree with its dependencies needs more than the runner's free 14 GB.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Build
+        env:
+          CONTAINER_ENGINE: docker
+          UMBRA_REF: ${{ github.sha }}
+        run: packaging/linux/hdr-extras/run-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out
+
+      - name: Summary
+        run: |
+          for f in out/Umbra-HDR-*.tar.gz; do
+            case $f in *-source.tar.gz) continue ;; esac
+            readme=$(tar -xzOf "$f" --wildcards '*/README.txt')
+            {
+              echo "### ${{ matrix.desktop }} on ${{ matrix.target }}"
+              echo '```'
+              echo "$readme" | sed -n '1p; /^PACKAGES/,/^$/p'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           done
-          for v in v4 znver4; do
-            for u in "https://mirror.cachyos.org/repo/x86_64_v4/cachyos-extra-$v/cachyos-extra-$v.db" \
-                     "https://cdn77.cachyos.org/repo/x86_64_v4/cachyos-extra-$v/cachyos-extra-$v.db"; do
-              if curl -fsSL -o /tmp/$v.db "$u"; then
-                echo "$u"; tar -tf /tmp/$v.db | grep -E '^(kwin|mutter|qt6-base)-[0-9]' | grep /$ ; break
-              fi
-            done
-          done
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hdr-${{ matrix.desktop }}-${{ matrix.target }}
+          path: out/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Attach to ${{ inputs.release_tag }}
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: hdr-*
+          merge-multiple: true
+
+      - name: Upload and update SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+        working-directory: dist
+        run: |
+          gh release view "$TAG" --json tagName >/dev/null
+          sha256sum -c ./*.sha256
+          gh release upload "$TAG" ./*.tar.gz ./*.tar.gz.sha256 --clobber
+          # The release's SHA256SUMS lists every file: replace the lines of the files uploaded here.
+          gh release download "$TAG" --pattern SHA256SUMS --output previous.sums || : > previous.sums
+          ls ./*.tar.gz | sed 's|^\./||' > uploaded
+          {
+            awk 'NR == FNR { up[$1] = 1; next } !($2 in up)' uploaded previous.sums
+            sha256sum $(cat uploaded)
+          } | sort -k2 > SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber
+          cat SHA256SUMS
