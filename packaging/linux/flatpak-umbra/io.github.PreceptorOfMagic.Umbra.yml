@@ -63,9 +63,9 @@ modules:
     build-options:
       append-path: /usr/lib/sdk/node22/bin
       env:
-        BUILD_VERSION: "v0.5.1-linux-parity"
-        BRANCH: "linux/coop"
-        COMMIT: "ec62f67dbd0fd5643162e595318707e73a2de145"
+        BUILD_VERSION: "v0.5.1"
+        BRANCH: "release/umbra-linux-0.5"
+        COMMIT: "e104c35f6e9b44a79c8fc04b5f2e54599f1dba2f"
         XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
         npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
         npm_config_nodedir: /usr/lib/sdk/node22
@@ -99,9 +99,10 @@ modules:
     sources:
       - generated-sources.json
       - type: git
-        # Development commit; publish only after the compatibility matrix passes.
+        # Umbra 0.5.1 for Linux: the code commit. The tag umbra-linux-v0.5.1 is the packaging commit
+        # after it, which only pins this one.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        commit: "ec62f67dbd0fd5643162e595318707e73a2de145"
+        commit: "e104c35f6e9b44a79c8fc04b5f2e54599f1dba2f"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
         disable-submodules: true
