@@ -7,7 +7,8 @@ run-name: "HDR extras${{ inputs.release_tag && format(' for {0}', inputs.release
 # what its users have installed. Pushes and pull requests that touch the patches or the build check
 # that every target still builds; the weekly run notices distribution updates the patches no longer
 # fit (and extras that a distribution update has made stale). Started by hand with a release tag, it
-# attaches the extras to that existing release and updates its SHA256SUMS.
+# attaches the extras to that existing release and updates its SHA256SUMS. linux-release.yml calls it
+# for a new release, which it publishes once these builds and the Flatpak have passed.
 
 on:
   push:
@@ -24,6 +25,7 @@ on:
       - packaging/linux/mutter-virtual-hdr/*.patch
   schedule:
     - cron: '17 4 * * 1'
+  workflow_call:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -51,10 +53,18 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      ref: ${{ steps.ref.outputs.ref }}
     steps:
+      - id: ref
+        name: Source to build
+        # The default branch carries only this file (for the weekly run and starting it by hand); the
+        # patches and build scripts are on the Linux release branch.
+        env:
+          REF: ${{ inputs.ref || ((github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch) && 'release/umbra-linux-0.5') || github.sha }}
+        run: echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ steps.ref.outputs.ref }}
       - id: plan
         name: Targets
         env:
@@ -81,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ needs.plan.outputs.ref }}
 
       - name: Free disk space
         # A KWin build tree with its dependencies needs more than the runner's free 14 GB.

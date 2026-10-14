@@ -1,4 +1,4 @@
-# Private development candidate. Not published or validated as a release.
+# Umbra for Linux release recipe (built by .github/workflows/linux-release.yml; see DEVELOPMENT.md).
 # CUDA12.9 + source-built GCC14 preserve pre-Turing targets on supported runtime25.08.
 app-id: io.github.PreceptorOfMagic.Umbra
 runtime: org.freedesktop.Platform
@@ -63,9 +63,9 @@ modules:
     build-options:
       append-path: /usr/lib/sdk/node22/bin
       env:
-        BUILD_VERSION: "v0.5.1"
+        BUILD_VERSION: "v0.5.2"
         BRANCH: "release/umbra-linux-0.5"
-        COMMIT: "e104c35f6e9b44a79c8fc04b5f2e54599f1dba2f"
+        COMMIT: "b05af9334c8996527f3cd81b7b4d20a92e606437"
         XDG_CACHE_HOME: /run/build/umbra/flatpak-node/cache
         npm_config_cache: /run/build/umbra/flatpak-node/npm-cache
         npm_config_nodedir: /usr/lib/sdk/node22
@@ -99,10 +99,10 @@ modules:
     sources:
       - generated-sources.json
       - type: git
-        # Umbra 0.5.1 for Linux: the code commit. The tag umbra-linux-v0.5.1 is the packaging commit
-        # after it, which only pins this one.
+        # Umbra for Linux: the code commit. The release tag (umbra-linux-vX.Y.Z) is the packaging
+        # commit after it, which pins this one.
         url: "https://github.com/PreceptorOfMagic/Umbra.git"
-        commit: "e104c35f6e9b44a79c8fc04b5f2e54599f1dba2f"
+        commit: "b05af9334c8996527f3cd81b7b4d20a92e606437"
         # Submodules are listed below at the exact commits the tag pins (third-party/ only; the
         # packaging/linux/flatpak/deps tools are not used by the build).
         disable-submodules: true

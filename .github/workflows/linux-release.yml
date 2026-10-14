@@ -1,0 +1,177 @@
+name: Linux release
+run-name: "Linux release ${{ github.ref_name }}"
+
+# Builds Umbra for Linux the way packaging/linux/flatpak-umbra/DEVELOPMENT.md describes: the Flatpak
+# bundle from the manifest (which fetches the Umbra code commit it pins), every third-party source the
+# build fetched, and the project source. Pushing a tag umbra-linux-vX.Y.Z also builds every HDR extra
+# (linux-hdr-extras.yml, with its smoke tests) and, once all of it has passed, publishes the release
+# with the notes in packaging/linux/release-notes/<tag>.md. Pushes that touch this workflow or the
+# Flatpak packaging only build, so the build is known to work before a tag is made.
+
+on:
+  push:
+    # Tags always run (GitHub does not apply path filters to tags); branches only for these paths.
+    tags:
+      - 'umbra-linux-v*'
+    branches:
+      - '**'
+    paths:
+      - .github/workflows/linux-release.yml
+      - packaging/linux/flatpak-umbra/**
+
+permissions:
+  contents: read
+
+env:
+  APP_ID: io.github.PreceptorOfMagic.Umbra
+  MANIFEST: packaging/linux/flatpak-umbra/io.github.PreceptorOfMagic.Umbra.yml
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        name: Version, pinned commit and release notes
+        run: |
+          version=$(sed -n 's/^ *BUILD_VERSION: *"v\([^"]*\)".*/\1/p' "$MANIFEST")
+          commit=$(sed -n 's/^ *COMMIT: *"\([0-9a-f]*\)".*/\1/p' "$MANIFEST")
+          [ -n "$version" ] && [ -n "$commit" ] || { echo "::error::no BUILD_VERSION or COMMIT in $MANIFEST"; exit 1; }
+          # The manifest builds the code commit it pins; it must be this commit or one before it.
+          git merge-base --is-ancestor "$commit" HEAD ||
+            { echo "::error::the manifest pins $commit, which is not part of this history"; exit 1; }
+          release=
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            [ "$GITHUB_REF_NAME" = "umbra-linux-v$version" ] ||
+              { echo "::error::tag $GITHUB_REF_NAME, but the manifest builds $version"; exit 1; }
+            [ -f "packaging/linux/release-notes/$GITHUB_REF_NAME.md" ] ||
+              { echo "::error::no packaging/linux/release-notes/$GITHUB_REF_NAME.md"; exit 1; }
+            release=1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Umbra $version for Linux, code commit $commit${release:+, publishing $GITHUB_REF_NAME}"
+
+  flatpak:
+    name: Flatpak
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shared modules
+        run: git submodule update --init packaging/linux/flatpak/deps/shared-modules
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Flatpak tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --version; flatpak-builder --version
+
+      - name: Build
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean --disable-rofiles-fuse \
+            --repo=repo build "$MANIFEST"
+
+      - name: Bundle
+        run: |
+          mkdir -p dist
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            repo "dist/Umbra-$VERSION-linux-x86_64.flatpak" "$APP_ID" master
+          ls -l dist
+
+      - name: Check the bundle
+        # Installed as a user would: the version it reports, and every library of the host finds its
+        # libraries inside the runtime. Nothing here streams; that stays a hardware test.
+        run: |
+          flatpak install --user -y --noninteractive "dist/Umbra-$VERSION-linux-x86_64.flatpak"
+          flatpak info --user "$APP_ID"
+          out=$(flatpak run --command=sunshine "$APP_ID" --version 2>&1 || true)
+          echo "$out"
+          grep -q "$VERSION" <<<"$out" || { echo "::error::the bundle does not report version $VERSION"; exit 1; }
+          missing=$(flatpak run --command=sh "$APP_ID" -c 'for f in /app/bin/sunshine /app/lib/*.so* /app/lib/umbra/gpu-hevc/*; do [ -f "$f" ] && ldd "$f" 2>/dev/null | sed "s|^|$f: |"; done' | grep 'not found' || true)
+          [ -z "$missing" ] || { echo "$missing"; echo "::error::libraries not found in the bundle"; exit 1; }
+          echo "every library resolves"
+
+      - name: Sources
+        # Every third-party source the build fetched, from flatpak-builder's download cache and git
+        # mirrors. NVIDIA's CUDA compiler components are build tools that do not ship in the bundle
+        # and are not redistributed here; CUDA-SOURCES.txt lists where they come from.
+        run: |
+          jq -r '.sources[] | "\(.url)  sha256 \(.sha256)"' packaging/linux/flatpak-umbra/modules/cuda.json > CUDA-SOURCES.txt
+          cat CUDA-SOURCES.txt
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+            --exclude='cuda_*' --transform "s|^|Umbra-$VERSION-linux-flatpak-sources/|" \
+            -czf "dist/Umbra-$VERSION-linux-flatpak-sources.tar.gz" \
+            CUDA-SOURCES.txt -C .flatpak-builder downloads git
+          # Umbra at this commit, with the shared-modules submodule the manifest uses: build it with
+          # packaging/linux/flatpak-umbra/DEVELOPMENT.md.
+          git ls-files --recurse-submodules | grep -v '^packaging/linux/flatpak/deps/shared-modules$' |
+            tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 --no-recursion \
+              --transform "s|^|umbra-linux-$VERSION/|" -czf "dist/umbra-linux-$VERSION-project-source.tar.gz" -T -
+          cd dist
+          for f in *; do sha256sum "$f" > "$f.sha256"; done
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  extras:
+    name: HDR extras
+    needs: check
+    if: needs.check.outputs.release == '1'
+    uses: ./.github/workflows/linux-hdr-extras.yml
+    # The called workflow's publish job asks for write access; it only runs when started by hand.
+    permissions:
+      contents: write
+
+  publish:
+    name: Publish ${{ github.ref_name }}
+    needs: [check, flatpak, extras]
+    if: needs.check.outputs.release == '1'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum -c ./*.sha256
+          ls | grep -v '\.sha256$' | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish
+        run: |
+          # Linux releases do not replace the Windows release as the repository's latest.
+          gh release create "$TAG" dist/* --verify-tag --latest=false \
+            --title "Umbra $VERSION for Linux" --notes-file "packaging/linux/release-notes/$TAG.md"
+          gh release view "$TAG" --json url,assets --jq '.url, (.assets | length | tostring) + " assets"'
