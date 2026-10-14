@@ -19,7 +19,7 @@ Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choos
 | Device | Package | Install |
 |---|---|---|
 | Windows x64 gaming PC | Umbra Windows installer, with bundled virtual-display and device components | [Windows steps](#windows-x64) |
-| Linux x86_64 gaming PC | Umbra Flatpak bundle, plus optional HDR extras for Ubuntu 26.04 | [Linux steps](#linux-x86_64-flatpak) |
+| Linux x86_64 gaming PC | Umbra Flatpak bundle, plus optional HDR extras for Ubuntu, Fedora, openSUSE Tumbleweed, Arch and CachyOS | [Linux steps](#linux-x86_64-flatpak) |
 | LG TV / Windows / Linux display device | Eclipse client, from its own repository | [Eclipse downloads](https://github.com/PreceptorOfMagic/Eclipse#downloads-and-installation) |
 
 ### Windows x64
@@ -54,7 +54,18 @@ Download `Umbra-0.5.1-linux-x86_64.flatpak` from the [Umbra 0.5.1 for Linux rele
 - GPUs: NVIDIA (tested: RTX 2060 SUPER, driver 595) and AMD (tested: Radeon RX Vega). The only AMD card available for testing is a Radeon RX Vega from 2017: its video encoder reaches about 60 fps at 4K and 165 fps only at 1080p, and its co-op panes about 35 fps. The same card hit the same 4K limit on Windows (62 fps), so its age, not Umbra, is the likely limit; newer AMD cards could not be tested. Intel GPUs and multi-GPU systems are untested.
 - Other distributions running KDE Plasma or GNOME on Wayland are expected to behave like those rows but are untested.
 - A Linux host and a Windows host can share one co-op session (tested with Umbra 0.5.0 on Windows).
-- **HDR extras** (optional): stock KWin and Mutter keep the virtual displays Umbra streams SDR. Two small patches, to KWin 6.6.6 (KDE) and Mutter 50.1 (GNOME), add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. Like the Flatpak they were tested on Ubuntu 26.04, and both apply unchanged to KDE's and GNOME's own 6.6.6 and 50.1 releases, so other distributions shipping those versions are expected to work but are untested. The release carries prebuilt packages for Ubuntu 26.04; elsewhere, add the patch to your distribution's own `kwin` or `mutter` package and rebuild it. They replace your desktop's compositor packages, a distribution update of KWin or Mutter replaces them again, and reinstalling the distribution's package undoes them. Install, verify and rollback steps are in each extra's `README.txt`, and the patches are in [kwin-virtual-hdr](../packaging/linux/kwin-virtual-hdr/) and [mutter-virtual-hdr](../packaging/linux/mutter-virtual-hdr/).
+- **HDR extras** (optional): stock KWin and Mutter keep the virtual displays Umbra streams SDR. Small patches to KWin (KDE) and Mutter (GNOME) add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. The release carries them prebuilt, each built from that distribution's own KWin or Mutter package:
+
+  | Distribution | KDE extra | GNOME extra |
+  |---|---|---|
+  | Ubuntu 26.04 | Yes (tested) | Yes (tested) |
+  | Ubuntu 26.10 | Yes | Yes |
+  | Fedora 44, 45 | Yes | Yes |
+  | openSUSE Tumbleweed | Yes | Yes |
+  | Arch Linux | Yes | Yes |
+  | CachyOS | Yes | Yes (for CachyOS's own Mutter) |
+
+  Download `Umbra-HDR-KDE-<distribution>.tar.gz` or `Umbra-HDR-GNOME-<distribution>.tar.gz`. Its `README.txt` names the exact KWin or Mutter version it fits (install it over no other) and has the install, verify and rollback steps. Only the Ubuntu 26.04 extras have been tested on hardware; the others are built automatically and smoke-tested (installed over the distribution's packages and rolled back in a clean container, and the patched compositor run without a GPU), not tested on hardware. They replace your desktop's compositor packages, a distribution update of KWin or Mutter replaces them again (streams are SDR until a matching extra is published), and reinstalling the distribution's package undoes them. Debian 13, openSUSE Leap 16.0 and Fedora 43 ship KWin, Mutter or PipeWire too old for the patches. On other distributions, add the matching patch from [kwin-virtual-hdr](../packaging/linux/kwin-virtual-hdr/) or [mutter-virtual-hdr](../packaging/linux/mutter-virtual-hdr/) to your own `kwin` or `mutter` package and rebuild it; [hdr-extras](../packaging/linux/hdr-extras/) shows how the prebuilt ones are made.
 - To remove Umbra: `flatpak run --command=remove-additional-install.sh io.github.PreceptorOfMagic.Umbra` removes the input rule and sign-in start, then `flatpak uninstall --user io.github.PreceptorOfMagic.Umbra` removes the app.
 
 ## What Umbra provides

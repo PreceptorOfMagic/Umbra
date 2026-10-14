@@ -2,9 +2,11 @@
 
 Umbra gives every stream its own KWin virtual output (Windows Umbra's per-client virtual
 display). Stock KWin 6.6 cannot make a virtual output HDR and only screencasts 8-bit, so on
-stock KDE every stream and both co-op panes are SDR. `kwin-virtual-hdr-screencast.patch`
-(against KWin v6.6.6) adds what is missing. Umbra detects it at runtime: no patch, no HDR,
-nothing else changes.
+stock KDE every stream and both co-op panes are SDR. The patch adds what is missing, in one
+version per KWin series: `kwin-virtual-hdr-screencast-6.6.patch` (against KWin v6.6.6) and
+`kwin-virtual-hdr-screencast-6.7.patch` (against v6.7.5; the same change on KWin 6.7's DMA-BUF
+modifier types, compile-tested only). Umbra detects it at runtime: no patch, no HDR, nothing else
+changes.
 
 ## What the patch changes
 
@@ -25,22 +27,26 @@ nothing else changes.
 
 ## Prebuilt packages
 
-The Umbra 0.5.1 for Linux release carries the packages built from this patch for Ubuntu 26.04
-(`Umbra-HDR-KDE-ubuntu26.04.tar.gz`, with install, verify and rollback steps in its `README.txt`) and
-their source package (`Umbra-HDR-KDE-ubuntu26.04-source.tar.gz`).
+[`../hdr-extras`](../hdr-extras/) builds these patches into each major distribution's own KWin
+package: Ubuntu 26.04 and 26.10, Fedora 44 and 45, openSUSE Tumbleweed, Arch Linux and CachyOS.
+A release carries them as `Umbra-HDR-KDE-<distribution>.tar.gz`, with install, verify and rollback
+steps in its `README.txt`, and their source as `Umbra-HDR-KDE-<distribution>-source.tar.gz`. The
+Umbra 0.5.1 for Linux release carries the Ubuntu 26.04 one.
 
 ## Other distributions
 
-The patch applies unchanged to KDE's own KWin 6.6.6 release (the Ubuntu source package's upstream tarball is byte-identical to it), so a
-distribution shipping KWin 6.6.6 can add it to its own `kwin` package, rebuild that package with its usual tools and install it. This is
-expected to work but is untested; the prebuilt packages and every measurement here are Ubuntu 26.04. Other KWin versions need the patch
-adapted. Undo it by reinstalling the distribution's own package. Check the running version with `kwin_wayland --version`.
+Each patch applies unchanged to KDE's own release of its series (the Ubuntu source packages' upstream tarballs are byte-identical to them),
+so another distribution shipping KWin 6.6 or 6.7 can add the matching patch to its own `kwin` package, rebuild that package with its usual
+tools and install it. [`../hdr-extras/lib`](../hdr-extras/lib/) shows how for Debian, Fedora, openSUSE and pacman packaging. Other KWin
+series need the patch adapted; KWin 6.3 and 6.4 (Debian 13, openSUSE Leap 16.0) lack the colour-managed screencast it extends, and
+PipeWire before 1.6 (Fedora 43) lacks the PQ transfer function it announces. Undo it by
+reinstalling the distribution's own package. Check the running version with `kwin_wayland --version`.
 
 ## Build and install (Ubuntu 26.04, `kwin` 4:6.6.6-0ubuntu0.1)
 
 ```
 apt source kwin                       # or: git clone https://invent.kde.org/plasma/kwin -b v6.6.6
-cp kwin-virtual-hdr-screencast.patch kwin-6.6.6/debian/patches/umbra-virtual-output-hdr-screencast.patch
+cp kwin-virtual-hdr-screencast-6.6.patch kwin-6.6.6/debian/patches/umbra-virtual-output-hdr-screencast.patch
 echo umbra-virtual-output-hdr-screencast.patch >> kwin-6.6.6/debian/patches/series
 cd kwin-6.6.6 && dch -v 4:6.6.6-0ubuntu0.1+umbrahdr4 "Umbra: HDR virtual outputs, 10-bit screencast"
 DEB_BUILD_OPTIONS="nocheck nodoc noautodbgsym" dpkg-buildpackage -b -uc -us

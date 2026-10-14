@@ -59,7 +59,7 @@ fam_check_versions() {
   # The v3 repositories are configured here; v4 and Zen 4 must carry the same rebuild.
   for db in "${cachyos_extra_dbs[@]}"; do
     curl -fsSL -o "$work/extra.db" "$db"
-    v=$(bsdtar -tf "$work/extra.db" | sed -n 's|^kwin-\([^/]*\)/$|\1|p' | head -n1)
+    v=$(bsdtar -tf "$work/extra.db" | sed -n 's|^kwin-\([0-9][^/]*\)/$|\1|p' | head -n1)
     [ "$v" = "$distro_version" ] || die "$(basename "$db") has kwin $v, not $distro_version"
   done
 }

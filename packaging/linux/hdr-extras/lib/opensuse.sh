@@ -17,7 +17,7 @@ opensuse_evr() { # <package>: the version-release zypper would install
 fam_repo_label() { echo "openSUSE's"; }
 
 fam_setup() {
-  zypper -n -q install rpm-build patch >/dev/null
+  zypper -n -q install rpm-build patch gawk tar gzip findutils >/dev/null
   if ! zypper -n lr -u | grep -q '/source/tumbleweed/'; then
     zypper -n -q addrepo -f https://download.opensuse.org/source/tumbleweed/repo/oss/ umbra-source
   fi

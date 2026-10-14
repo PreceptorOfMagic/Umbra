@@ -6,7 +6,7 @@ fedora_evr() { # <package>: the version-release dnf would install
 }
 
 fam_setup() {
-  dnf -y -q install rpm-build 'dnf-command(builddep)' 'dnf-command(download)' >/dev/null
+  dnf -y -q install rpm-build gawk tar gzip findutils 'dnf-command(builddep)' 'dnf-command(download)' >/dev/null
 }
 
 fam_fetch() {

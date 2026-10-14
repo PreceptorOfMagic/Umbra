@@ -84,6 +84,23 @@ jobs:
           UMBRA_REF: ${{ github.sha }}
         run: packaging/linux/hdr-extras/run-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out
 
+      - name: Virtual KMS device for the KDE runtime test
+        # KWin's DRM backend, where the patch changes virtual outputs, needs a KMS device; vkms is
+        # one without a GPU. Without it the smoke test runs KWin's headless backend and says so.
+        if: matrix.desktop == 'kde'
+        continue-on-error: true
+        run: |
+          sudo modprobe vkms || { sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" && sudo modprobe vkms; }
+          ls -l /dev/dri
+
+      - name: Smoke test
+        env:
+          CONTAINER_ENGINE: docker
+        run: |
+          set -o pipefail
+          packaging/linux/hdr-extras/smoke-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out | tee smoke.txt
+          { echo "### Smoke test: ${{ matrix.desktop }} on ${{ matrix.target }}"; echo '```'; grep -E '^(PASS|FAIL|NOTE|==)' smoke.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summary
         run: |
           for f in out/Umbra-HDR-*.tar.gz; do

@@ -10,6 +10,9 @@
 # source packages disagree.
 set -euo pipefail
 
+# All of it in main(): bash then parses the whole file before running any of it.
+main() {
+
 desktop=${1:?usage: build.sh <kde|gnome> <target> <output-dir>}
 target=${2:?usage: build.sh <kde|gnome> <target> <output-dir>}
 out=${3:?usage: build.sh <kde|gnome> <target> <output-dir>}
@@ -29,8 +32,12 @@ umbra_tree="https://github.com/PreceptorOfMagic/Umbra/tree/$umbra_ref/packaging/
 log() { printf '==> %s\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-read -r _ image family desktops < <(awk -v t="$target" '$1 == t' "$here/targets") ||
-  die "unknown target $target (see $here/targets)"
+# Plain bash until fam_setup has installed the tools (openSUSE's image has no awk).
+family=
+while read -r name _image fam rest; do
+  [ "$name" = "$target" ] && { family=$fam; desktops=$rest; break; }
+done < <(grep -v '^#' "$here/targets")
+[ -n "$family" ] || die "unknown target $target (see $here/targets)"
 [[ " $desktops " == *" $desktop "* ]] || die "$target has no $desktop extra (see $here/targets)"
 
 case $desktop in
@@ -74,8 +81,17 @@ tested_note() {
       echo "memory-leak fixes Mutter made to the code this patch copies)."
       ;;
     *)
-      echo "Not yet on this distribution. These packages are built automatically from $(fam_repo_label)"
-      echo "source package; the $compositor $series patch they carry has $(series_status)."
+      echo "Not on hardware with this distribution yet. These packages are built automatically from"
+      echo "$(fam_repo_label) source package; the $compositor $series patch they carry has $(series_status)."
+      echo "Before release, each build is installed over the distribution's own packages in a clean"
+      echo "$distro_name container, checked with the commands above and rolled back again;"
+      if [ "$component" = mutter ]; then
+        echo "Mutter then runs without a GPU and must offer HDR and 10-bit capture on the virtual monitor"
+        echo "Umbra asks for (stock Mutter must not)."
+      else
+        echo "KWin then runs without a GPU and must start with the patched screencast plugin and answer"
+        echo "the virtual-output request Umbra makes."
+      fi
       ;;
   esac
 }
@@ -139,7 +155,8 @@ for f in "${shipped[@]}"; do
     kwin)
       grep -qE '/libkwin\.so\.[0-9]' <<<"$files" && lib_package=$f
       p=$(grep -E '/kwin/plugins/screencast\.so$' <<<"$files" | head -n1 || true)
-      [ -n "$p" ] && plugin_path=/${p#./}
+      p=${p#./}
+      [ -n "$p" ] && plugin_path=/${p#/}
       ;;
     mutter)
       grep -qE '/libmutter-[0-9]+\.so\.[0-9]' <<<"$files" && lib_package=$f
@@ -262,3 +279,6 @@ pack "$out/$name.tar.gz" "$dir"
 pack "$out/$name-source.tar.gz" "$src_dir"
 log "wrote $out/$name.tar.gz and $out/$name-source.tar.gz"
 cat "$dir/README.txt" >&2
+}
+
+main "$@"

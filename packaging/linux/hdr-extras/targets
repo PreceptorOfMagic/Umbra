@@ -4,11 +4,11 @@
 # distribution's own current kwin or mutter source package and adds the patch for its version
 # series (README.md lists which series exist). Not here, because no patch can cover them:
 #   Debian 13, openSUSE Leap 16.0: KWin 6.3/6.4 and Mutter 48 lack the colour-managed screencast
-#   the patches extend. Fedora 43 GNOME: Mutter 49 has no HDR screen capture.
+#   the patches extend. Fedora 43: its PipeWire (1.4) has no PQ transfer function for the 10-bit
+#   capture to announce (PipeWire 1.6 has it), and its Mutter 49 no HDR screen capture.
 # The cachyos image needs an x86-64-v3 CPU to run; its packages are built for any x86-64 CPU.
 ubuntu26.04            ubuntu:26.04                  deb       kde gnome
 ubuntu26.10            ubuntu:26.10                  deb       kde gnome
-fedora43               fedora:43                     fedora    kde
 fedora44               fedora:44                     fedora    kde gnome
 fedora45               fedora:45                     fedora    kde gnome
 arch                   archlinux:latest              arch      kde gnome
