@@ -97,6 +97,11 @@ namespace {
       if (gpu_frames && gpu_frames_possible()) {
         frames = gpu_frames_t::create(config.width, config.height, capture_format == capture_format_e::bt2020_pq_xbgr2101010, pci);
         if (frames && std::strcmp(frames->hand_off(), "cuda") && library.gl_sharing) {
+          // Mesa rusticl finds EGL through the process's global symbols (dlsym(NULL, "eglGetProcAddress"),
+          // rusticl/core/gl.rs) and refuses the shared context with -1000 when it can't; glad loads libEGL
+          // RTLD_LOCAL. Promote the already-loaded library to global scope (RTLD_NOLOAD loads nothing).
+          if (!dlopen("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD))
+            BOOST_LOG(warning) << "[AURORA-GPU-HEVC] libEGL not loaded; OpenCL cannot share the stage's GL context";
           egl_display = frames->egl_display();
           egl_context = frames->egl_context();
         }
