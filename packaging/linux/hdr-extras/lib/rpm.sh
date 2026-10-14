@@ -37,9 +37,9 @@ rpm_build() {
   find "$rpm_topdir/SRPMS" -name '*.src.rpm' -exec mv {} "$work/src/" \;
 }
 
-# Ship what a desktop has installed: not -devel, -doc, -lang, tests or debug packages.
+# Ship what a desktop has installed: not -devel, -devkit, -doc, -lang, tests or debug packages.
 fam_select() {
-  ls -1 "$work/bin" | grep -vE -- '-(devel|doc|docs|lang|tests?|debuginfo|debugsource)-[0-9]'
+  ls -1 "$work/bin" | grep -vE -- '-(devel|devkit|doc|docs|lang|tests?|debuginfo|debugsource)-[0-9]'
 }
 
 fam_list_files() { rpm -qlp "$1" 2>/dev/null; }

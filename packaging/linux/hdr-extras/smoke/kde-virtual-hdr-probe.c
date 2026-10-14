@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Ask a running KWin for a virtual output the way Umbra does (zkde_screencast_unstable_v1
  * stream_virtual_output), then use Umbra's own output control (src/platform/linux/kde-output.c)
- * to read whether KWin offers HDR on it and to switch it on. Prints one JSON line, then keeps the
- * stream open until stdin closes so the caller can inspect the PipeWire node.
+ * as Umbra does for each stream: check KWin's output management is usable, resize the output to
+ * the stream's mode, read whether KWin offers HDR on it and switch it on. Prints one JSON line, then
+ * keeps the stream open until stdin closes so the caller can inspect the PipeWire node.
  *
  * With the HDR patch on KWin's DRM backend: hdr_capable 1, hdr_enabled 1, and the stream then
  * offers 10-bit formats. Stock KWin, or the headless virtual backend: hdr_capable 0.
@@ -68,10 +69,14 @@ int main(void) {
     return 1;
   }
 
+  int supported = umbra_kde_output_supported();
+  int x = 0, y = 0;
+  int resized = umbra_kde_output_resize(output, 1920, 1080, 60000, &x, &y);
   int capable = umbra_kde_output_hdr_capable(output);
   int enabled = capable ? umbra_kde_output_set_hdr(output, 1) : 0;
   wl_display_roundtrip(display);
-  printf("{\"output\": \"%s\", \"node_id\": %u, \"hdr_capable\": %d, \"hdr_enabled\": %d}\n", output, node, capable, enabled);
+  printf("{\"output\": \"%s\", \"node_id\": %u, \"output_control\": %d, \"resized\": %d, \"hdr_capable\": %d, \"hdr_enabled\": %d}\n",
+         output, node, supported, resized, capable, enabled);
   fflush(stdout);
 
   /* Keep the stream (and its virtual output) until the caller is done with the node. */

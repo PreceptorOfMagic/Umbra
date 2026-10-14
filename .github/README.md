@@ -53,6 +53,7 @@ Download `Umbra-0.5.1-linux-x86_64.flatpak` from the [Umbra 0.5.1 for Linux rele
 
 - GPUs: NVIDIA (tested: RTX 2060 SUPER, driver 595) and AMD (tested: Radeon RX Vega). The only AMD card available for testing is a Radeon RX Vega from 2017: its video encoder reaches about 60 fps at 4K and 165 fps only at 1080p, and its co-op panes about 35 fps. The same card hit the same 4K limit on Windows (62 fps), so its age, not Umbra, is the likely limit; newer AMD cards could not be tested. Intel GPUs and multi-GPU systems are untested.
 - Other distributions running KDE Plasma or GNOME on Wayland are expected to behave like those rows but are untested.
+- **KDE Plasma 6.7** (Ubuntu 26.10, Fedora 44 and 45, openSUSE Tumbleweed, Arch, CachyOS): KWin 6.7 announces its outputs through a newer protocol than Umbra 0.5.1 knows, so Umbra 0.5.1 finds no KDE output to control and streams the desktop there without a virtual display per stream, co-op or HDR. The fix is on the Linux release branch for the next Linux release; the KDE HDR extras for those distributions need it.
 - A Linux host and a Windows host can share one co-op session (tested with Umbra 0.5.0 on Windows).
 - **HDR extras** (optional): stock KWin and Mutter keep the virtual displays Umbra streams SDR. Small patches to KWin (KDE) and Mutter (GNOME) add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. The release carries them prebuilt, each built from that distribution's own KWin or Mutter package:
 

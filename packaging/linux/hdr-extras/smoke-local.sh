@@ -26,5 +26,5 @@ if [ "$desktop" = kde ] && ls /dev/dri/card* >/dev/null 2>&1; then
 fi
 
 "$engine" pull -q "$image" >/dev/null
-"$engine" run --rm "${args[@]}" -v "$repo:/src:ro" -v "$dir:/in:ro" "$image" \
+"$engine" run --rm "${args[@]}" -v "$repo:/src:ro" -v "$dir:/in:ro" -e UMBRA_SMOKE_REQUIRE_KMS="${UMBRA_SMOKE_REQUIRE_KMS:-}" "$image" \
   bash /src/packaging/linux/hdr-extras/smoke-test.sh "$desktop" "$target" /in

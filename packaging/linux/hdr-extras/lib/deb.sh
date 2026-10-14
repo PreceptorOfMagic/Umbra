@@ -22,6 +22,7 @@ deb_candidate() { apt-cache policy "$1" | awk '/Candidate:/ { print $2 }'; }
 
 fam_setup() {
   export DEBIAN_FRONTEND=noninteractive
+  echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80umbra-retries
   local f
   for f in /etc/apt/sources.list.d/*.sources; do
     [ -f "$f" ] && sed -i 's/^Types: deb$/Types: deb deb-src/' "$f"

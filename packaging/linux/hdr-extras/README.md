@@ -41,6 +41,14 @@ Arch and CachyOS packages keep the repository's version. `pacman -U` reinstalls 
 repository's package, and the next repository update replaces it. Their README.txt shows how to
 tell them apart (`pacman -Qi`, Packager: Umbra HDR extra).
 
+KDE Plasma 6.7: KWin 6.7 announces its outputs only through `kde_output_device_registry_v2`
+(plasma-wayland-protocols 1.21), which Umbra 0.5.1's output control (`src/platform/linux/kde-output.c`)
+predates. Umbra 0.5.1 therefore finds no KDE output on Plasma 6.7: no virtual display per stream,
+no co-op and no HDR there, with or without the extra. `kde-output.c` now uses the registry when
+KWin offers it, and the old per-output globals otherwise. The KWin 6.7 extras need an Umbra release
+with that change, and their README.txt says so. The smoke test builds `kde-output.c` from the
+checkout, so it checks the version being released.
+
 CachyOS:
 - KWin: CachyOS has no KWin recipe of its own. Its x86-64-v3, v4 and Zen 4 repositories carry
   Arch's KWin rebuilt as `<Arch version>.1`, and its generic repositories carry Arch's package. The
@@ -85,11 +93,14 @@ between, it runs the compositor without a GPU, first stock and then patched:
 - KDE: KWin creates a virtual output the way Umbra asks for one (`zkde_screencast_unstable_v1`
   `stream_virtual_output`), and [`smoke/kde-virtual-hdr-probe.c`](smoke/kde-virtual-hdr-probe.c)
   queries and switches its HDR with Umbra's own output control (`src/platform/linux/kde-output.c`).
-  The patch changes the virtual outputs of KWin's DRM backend, which needs a KMS device: with one
-  (`vkms` on the CI runner), patched KWin must report the output HDR-capable and switch it to HDR,
-  and stock KWin must not. Without one, KWin falls back to its headless backend, which has no
-  OpenGL and refuses screencasts. The test then only shows that patched KWin starts, loads the
-  screencast plugin and answers the request, and it says so.
+  The patch changes the virtual outputs of KWin's DRM backend, which needs a KMS device. The CI
+  runner loads `vkms`, and KWin drives it with software OpenGL. Patched KWin must report the
+  output HDR-capable, switch it to HDR and offer a 10-bit format (`ABGR_210LE`); stock KWin must
+  not. On Ubuntu 26.04: stock, not HDR-capable, `BGRA` only; +umbrahdr4, HDR-capable, switched,
+  `ABGR_210LE` and `BGRA`. Locally without a KMS device, KWin falls back to its headless backend,
+  which has no OpenGL and refuses screencasts. The test then only shows that patched KWin starts,
+  loads the screencast plugin and answers the request, and it says so; CI does not accept that
+  (`UMBRA_SMOKE_REQUIRE_KMS=1`).
 
 Nothing here drives a display or an encoder: HDR output on real hardware and Umbra's capture of it
 stay hardware tests.
@@ -101,10 +112,12 @@ On a push or pull request that touches the patches or this directory, and weekly
 The weekly run notices when a distribution update leaves a published extra stale or brings a
 version no patch fits. Each run's summary lists the versions it built.
 
-To publish, run the workflow by hand with `release_tag` set to an existing release. It attaches the
-tarballs (replacing older ones of the same name) and updates the release's `SHA256SUMS`. `targets`
-limits a run to some distributions, for example to refresh the Fedora 44 extras after a Fedora KWin
-update.
+To publish, run the workflow by hand with `release_tag` set to an existing release. Every build and
+smoke test must pass first. It then attaches the tarballs (replacing older ones of the same name)
+and updates the release's `SHA256SUMS`. GitHub offers a workflow to start by hand only from the
+default branch (`release/umbra-0.5`), so the workflow file must be there too; its `ref` input,
+`release/umbra-linux-0.5` unless set, picks the patches and scripts it builds. `targets` limits a
+run to some distributions, for example to refresh the Fedora 44 extras after a Fedora KWin update.
 
 Locally, with podman or docker:
 

@@ -89,8 +89,8 @@ tested_note() {
         echo "Mutter then runs without a GPU and must offer HDR and 10-bit capture on the virtual monitor"
         echo "Umbra asks for (stock Mutter must not)."
       else
-        echo "KWin then runs without a GPU and must start with the patched screencast plugin and answer"
-        echo "the virtual-output request Umbra makes."
+        echo "KWin then runs without a GPU, on a virtual KMS device, and must make the virtual output"
+        echo "Umbra asks for HDR-capable, switch it to HDR and offer 10-bit capture (stock KWin must not)."
       fi
       ;;
   esac
@@ -207,6 +207,15 @@ EOF
   echo "    $(fam_query_cmd "$lib_name")"
   echo "must print $accepted_versions. With any other $compositor version, do not install these packages."
   echo
+  if [ "$component" = kwin ] && [ "$series" != 6.6 ]; then
+    # KWin 6.7 announces its outputs only through kde_output_device_registry_v2 (plasma-wayland-
+    # protocols 1.21); Umbra's KDE output control learned it after 0.5.1.
+    echo "REQUIRES"
+    echo "An Umbra newer than 0.5.1. KWin 6.7 announces its outputs only through a newer protocol than"
+    echo "Umbra 0.5.1 knows, so Umbra 0.5.1 finds no KDE output to control: on KDE Plasma 6.7 it streams"
+    echo "the desktop without a virtual display per stream, co-op or HDR, with or without these packages."
+    echo
+  fi
   echo "PACKAGES (version $built_version)"
   (IFS=,; echo "${names[*]}" | sed 's/,/, /g')
   echo

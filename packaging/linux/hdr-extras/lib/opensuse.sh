@@ -18,9 +18,12 @@ fam_repo_label() { echo "openSUSE's"; }
 
 fam_setup() {
   zypper -n -q install rpm-build patch gawk tar gzip findutils >/dev/null
-  if ! zypper -n lr -u | grep -q '/source/tumbleweed/'; then
-    zypper -n -q addrepo -f https://download.opensuse.org/source/tumbleweed/repo/oss/ umbra-source
-  fi
+  # The image lists its source repository but leaves it disabled.
+  local alias found=
+  for alias in $(zypper -n lr -u | awk -F'|' 'tolower($0) ~ /\/source\// { gsub(/ /, "", $2); print $2 }'); do
+    zypper -n -q modifyrepo -e "$alias" && found=1
+  done
+  [ -n "$found" ] || zypper -n -q addrepo -f https://download.opensuse.org/source/tumbleweed/repo/oss/ umbra-source
   zypper -n -q --gpg-auto-import-keys refresh >/dev/null
 }
 

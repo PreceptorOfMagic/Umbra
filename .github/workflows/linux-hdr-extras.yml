@@ -34,6 +34,13 @@ on:
         description: Only these targets, space-separated names from packaging/linux/hdr-extras/targets; empty for all
         required: false
         type: string
+      ref:
+        # GitHub starts workflows by hand only from the default branch's copy of this file; the
+        # patches and build scripts are on the Linux release branch.
+        description: Branch, tag or commit whose patches and build scripts to build
+        required: false
+        default: release/umbra-linux-0.5
+        type: string
 
 permissions:
   contents: read
@@ -46,6 +53,8 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - id: plan
         name: Targets
         env:
@@ -71,6 +80,8 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Free disk space
         # A KWin build tree with its dependencies needs more than the runner's free 14 GB.
@@ -81,12 +92,13 @@ jobs:
       - name: Build
         env:
           CONTAINER_ENGINE: docker
-          UMBRA_REF: ${{ github.sha }}
-        run: packaging/linux/hdr-extras/run-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out
+        run: |
+          # README.txt links the patch at the commit built here.
+          UMBRA_REF=$(git rev-parse HEAD) packaging/linux/hdr-extras/run-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out
 
       - name: Virtual KMS device for the KDE runtime test
         # KWin's DRM backend, where the patch changes virtual outputs, needs a KMS device; vkms is
-        # one without a GPU. Without it the smoke test runs KWin's headless backend and says so.
+        # one without a GPU. The smoke test below requires it for KDE.
         if: matrix.desktop == 'kde'
         continue-on-error: true
         run: |
@@ -96,6 +108,7 @@ jobs:
       - name: Smoke test
         env:
           CONTAINER_ENGINE: docker
+          UMBRA_SMOKE_REQUIRE_KMS: ${{ matrix.desktop == 'kde' && '1' || '' }}
         run: |
           set -o pipefail
           packaging/linux/hdr-extras/smoke-local.sh "${{ matrix.target }}" "${{ matrix.desktop }}" out | tee smoke.txt

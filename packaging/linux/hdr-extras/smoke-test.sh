@@ -49,6 +49,7 @@ case $family in
   deb)
     export DEBIAN_FRONTEND=noninteractive
     echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90umbra-smoke
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80umbra-retries
     apt-get update -qq
     pkg_install() { apt-get install -y -qq --no-install-recommends "$@" >/dev/null; }
     tools_gnome=(mutter pipewire pipewire-bin python3 python3-gi gir1.2-glib-2.0 dbus-daemon dbus-bin libglib2.0-bin libegl-mesa0 libgl1-mesa-dri)
@@ -59,6 +60,7 @@ case $family in
   fedora)
     grep -q '^assumeyes' /etc/dnf/dnf.conf 2>/dev/null || echo 'assumeyes=True' >> /etc/dnf/dnf.conf
     pkg_install() { dnf -y -q install "$@" >/dev/null; }
+    pkg_install tar gzip
     tools_gnome=(pipewire pipewire-utils python3 python3-gobject dbus-daemon dbus-tools glib2 mesa-dri-drivers mesa-libEGL)
     tools_kde=(pipewire pipewire-utils python3 dbus-daemon dbus-tools gcc wayland-devel mesa-dri-drivers mesa-libEGL mesa-libgbm)
     unattended() { cat; }
@@ -66,13 +68,14 @@ case $family in
     ;;
   opensuse)
     pkg_install() { zypper -n -q install "$@" >/dev/null; }
-    tools_gnome=(pipewire pipewire-tools python3 python3-gobject dbus-1 glib2-tools Mesa-dri Mesa-libEGL1 tar gzip)
-    tools_kde=(pipewire pipewire-tools python3 dbus-1 gcc wayland-devel Mesa-dri Mesa-libEGL1 Mesa-libgbm1 tar gzip)
+    pkg_install tar gzip
+    tools_gnome=(pipewire pipewire-tools python3 python3-gobject typelib-1_0-GLib-2_0 typelib-1_0-Gio-2_0 dbus-1 dbus-1-daemon glib2-tools Mesa-dri Mesa-libEGL1)
+    tools_kde=(pipewire pipewire-tools python3 dbus-1 dbus-1-daemon gcc wayland-devel Mesa-dri Mesa-libEGL1 libgbm1)
     unattended() { sed 's/^zypper /zypper -n /'; }
     files_of() { rpm -ql "$1"; }
     ;;
   arch | cachyos)
-    pacman -Sy --noconfirm >/dev/null
+    pacman -Syu --noconfirm >/dev/null
     pkg_install() { pacman -S --noconfirm --needed "$@" >/dev/null; }
     tools_gnome=(pipewire python python-gobject dbus glib2 mesa)
     tools_kde=(pipewire python dbus gcc wayland mesa)
@@ -106,7 +109,9 @@ is_accepted() { grep -qxF -- "$1" <<<"$accepted"; }
 # 1. The distribution's own packages, plus what the runtime test needs.
 tools=("${tools_gnome[@]}")
 [ "$desktop" = kde ] && tools=("${tools_kde[@]}")
-pkg_install "${packages[@]}" "${tools[@]}"
+pkg_install "${packages[@]}"
+# Tools one by one: a name a distribution lacks costs only what needed it, and is reported.
+for t in "${tools[@]}"; do pkg_install "$t" 2>/dev/null || note "no package $t here"; done
 stock=$(installed)
 if is_accepted "$stock"; then pass "README check prints the distribution's version ($stock)"; else fail "README check prints '$stock', not one of: $(echo $accepted)"; fi
 
@@ -114,16 +119,33 @@ runtime() { # <label>: prints the probe's JSON
   if [ "$desktop" = gnome ]; then
     { bash "$here/smoke/gnome-runtime.sh" "$work/$1" 2>/dev/null || true; } | tail -n1
   else
-    local mode=virtual
-    ls /dev/dri/card* >/dev/null 2>&1 && mode=drm
-    echo "$mode" > "$work/kde-mode"
-    { bash "$here/smoke/kde-runtime.sh" "$mode" "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1
+    # Decided on the stock run and kept for the patched one: DRM when a KMS device exists and
+    # stock KWin starts on it, otherwise the headless backend.
+    local mode result
+    if [ -f "$work/kde-mode" ]; then
+      mode=$(cat "$work/kde-mode")
+    else
+      mode=virtual
+      ls /dev/dri/card* >/dev/null 2>&1 && mode=drm
+    fi
+    result=$({ bash "$here/smoke/kde-runtime.sh" "$mode" "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
+    if [ "$mode" = drm ] && [ ! -f "$work/kde-mode" ] && grep -q 'kwin_wayland exited' <<<"$result"; then
+      note "KWin did not start on the KMS device ($(grep -m1 -iE 'drm|fail|error' "$work/$1.log" 2>/dev/null || true)); using its headless backend"
+      mode=virtual
+      result=$({ bash "$here/smoke/kde-runtime.sh" virtual "$work/$1" "$repo" 2>/dev/null || true; } | tail -n1)
+    fi
+    [ -f "$work/kde-mode" ] || echo "$mode" > "$work/kde-mode"
+    echo "$result"
   fi
 }
 field() { python3 -c 'import json,sys; v=json.loads(sys.argv[1]).get(sys.argv[2]); print(json.dumps(v) if not isinstance(v, str) else v)' "$1" "$2" 2>/dev/null || true; }
 
+# When the compositor did not start, its log says why.
+show_log() { grep -q 'exited' <<<"$2" && { echo "   --- end of the $1 compositor log:"; tail -n 25 "$work/$1.log" 2>/dev/null | sed 's/^/   | /'; }; true; }
+
 stock_run=$(runtime stock)
 echo "   stock runtime: $stock_run"
+show_log stock "$stock_run"
 
 # 2. The README's own steps.
 if sha256sum -c SHA256SUMS >/dev/null; then pass "sha256sum -c SHA256SUMS"; else fail "sha256sum -c SHA256SUMS"; fi
@@ -153,6 +175,7 @@ if [ -z "$missing" ]; then pass "every library and program in ${packages[*]} fin
 # 3. Runtime, patched.
 patched_run=$(runtime patched)
 echo "   patched runtime: $patched_run"
+show_log patched "$patched_run"
 if [ "$desktop" = gnome ]; then
   if [ "$(field "$stock_run" supported_color_modes)" = "[0]" ] && [ "$(field "$stock_run" ten_bit_formats)" = "[]" ]; then
     pass "stock Mutter: virtual monitor SDR only, 8-bit formats only"
@@ -167,19 +190,35 @@ if [ "$desktop" = gnome ]; then
   fi
 else
   if [ "$(cat "$work/kde-mode")" = drm ]; then
+    # Umbra's output control (kde-output.c from this checkout) must find and resize the output on
+    # this KWin, stock and patched alike: every KDE stream depends on it.
+    for run in stock patched; do
+      r=$stock_run; [ $run = patched ] && r=$patched_run
+      if [ "$(field "$r" output_control)" = 1 ] && [ "$(field "$r" resized)" = 1 ]; then
+        pass "$run KWin (DRM, vkms): Umbra's output control finds the virtual output and resizes it to 1920x1080"
+      else
+        fail "$run KWin (DRM, vkms): Umbra's output control: $r"
+      fi
+    done
     if [ "$(field "$stock_run" hdr_capable)" = 0 ]; then pass "stock KWin (DRM, vkms): virtual output not HDR-capable"; else fail "stock KWin (DRM): expected no HDR, got $stock_run"; fi
     if [ "$(field "$patched_run" hdr_capable)" = 1 ] && [ "$(field "$patched_run" hdr_enabled)" = 1 ]; then
       pass "patched KWin (DRM, vkms): virtual output HDR-capable and switched to HDR"
     else
       fail "patched KWin (DRM): expected HDR, got $patched_run"
     fi
-    if [ "$(field "$patched_run" ten_bit_formats)" != "[]" ]; then
+    if [ "$(field "$patched_run" ten_bit_formats)" != "[]" ] && [ -n "$(field "$patched_run" ten_bit_formats)" ]; then
       pass "patched KWin (DRM, vkms): stream offers $(field "$patched_run" ten_bit_formats)"
+    elif [ "${UMBRA_SMOKE_REQUIRE_KMS:-}" = 1 ]; then
+      fail "patched KWin (DRM, vkms): no 10-bit formats (formats: $(field "$patched_run" formats))"
     else
-      note "patched KWin (DRM, vkms): no 10-bit formats; software rendering on vkms may not allocate 10-bit buffers (formats: $(field "$patched_run" formats))"
+      note "patched KWin (DRM, vkms): no 10-bit formats; this KMS device may not allocate 10-bit buffers (formats: $(field "$patched_run" formats))"
     fi
   else
-    note "no KMS device: KWin's headless backend has no OpenGL, so the HDR check needs vkms"
+    if [ "${UMBRA_SMOKE_REQUIRE_KMS:-}" = 1 ]; then
+      fail "KDE runtime test needs a KMS device KWin starts on (UMBRA_SMOKE_REQUIRE_KMS=1)"
+    else
+      note "no KMS device: KWin's headless backend has no OpenGL, so the HDR check needs vkms"
+    fi
     err=$(field "$patched_run" error)
     if [ -n "$(field "$patched_run" node_id)" ] && [ "$(field "$patched_run" node_id)" != null ] || [ "$err" = "stream_virtual_output failed: Unsupported compositing type" ]; then
       pass "patched KWin (headless): starts, loads the screencast plugin, answers Umbra's virtual-output request"
