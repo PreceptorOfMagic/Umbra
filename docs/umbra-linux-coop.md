@@ -3,6 +3,8 @@
 Status: **per-client virtual displays, GPU-frame capture and KDE co-op panes implemented, under validation; not released** (2026-10-13). Current candidate: see the Windows-parity section at the end.
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
+Paths written `test-records/...` below name the project's private test records (logs, captures);
+they are not part of this repository.
 
 ## Final release scope agreed 2026-10-12
 
@@ -266,7 +268,7 @@ rotating gears for75s at each depth, streaming through a FIFO to a live decoder:
 reported Main/yuv420p and Main10/yuv420p10le, limitedBT.709,1920x1088. Early/late
 decoded images were inspected, with visible coloured gears and changed orientation.
 Capture source1920x1080 was aspect-fit. Owned processes/FIFO cleaned and verified.
-Logs/images: ~/umbra-flatpak/gpu-linux/. These are SDR component results, around45fps;
+Logs/images: test-records/gpu-linux/. These are SDR component results, around45fps;
 not GameStream/co-op, HDR, AMD, Windows parity, TV or latency qualification.
 
 The development host uses a compile-time library directory override under the
@@ -311,7 +313,7 @@ OpenCL encoder libraries from source, installing kernels/licences/provenance.
 The module build passed underSDK25.08, exports only fourAGHL symbols per library,
 and those built libraries were used in the network checks above. Vendored source
 hashes identify Eclipse8c092dd6. A complete installed bundle check is still due.
-Evidence: ~/umbra-flatpak/gpu-linux/ (network-8,network-10,network-resume plus host
+Evidence: test-records/gpu-linux/ (network-8,network-10,network-resume plus host
 logs). The previous failed geometry preview is retained separately.
 
 ## Production portal HDR checkpoint — 2026-10-12 15:05
@@ -356,7 +358,7 @@ late raw preview alone is not evidence of the new stream's matrix; decoder
 reconfiguration plus host/client flags supply that evidence. The initial HDR
 notification can follow the first IDR (observed in the switch test).
 
-Evidence: ~/umbra-flatpak/vega/gnome/network-{hdr,sdr,hdr-switch}-production/.
+Evidence: test-records/vega/gnome/network-{hdr,sdr,hdr-switch}-production/.
 This verifies this GNOME/NVIDIA ordinary stream path and fallback, not TV HDR,
 HDR games, controller/audio, mixed-host splicing, GNOME virtual-pane HDR, AMD,
 or Windows visual/performance parity. Throughput remains below60fps. KWin and
@@ -382,7 +384,7 @@ Packaged live network10bitSDR check on Plasma/NVIDIA, adapter_name=/dev/dri/rend
 3365frames/75s,2IDRs, requested recovery, start/cancel/errors0. Host reported RTX2060SUPER
 pci:0000:01:00.0. Main10 limitedBT709. Source and two decoded images showed correct
 desktop/gears colors, geometry and changed gear positions. All owned processes
-stopped after completion. Evidence:~/umbra-flatpak/gpu-linux/network-selection/.
+stopped after completion. Evidence:test-records/gpu-linux/network-selection/.
 At this checkpoint HDR runtime evidence applied to ABI2. The ABI3 HDR regression
 below closes that version gap; AMD and physical multi-GPU remain unqualified.
 
@@ -403,7 +405,7 @@ custom-encoder stream:4291frames over75s,2IDRs,requested recovery1,launch/Quit0,
 failed0. Explicit renderD128 selected RTX2060SUPER pci:0000:01:00.0. Source and
 received desktop/game-loading images were inspected. This was the rebuilt binary
 inside the installed Flatpak runtime, not yet a newly exported final package.
-Evidence: private ~/umbra-flatpak/vega/dual-distro/network-mint and startup logs.
+Evidence: private test-records/vega/dual-distro/network-mint and startup logs.
 
 This closes the measured Mint startup deadlock. The earlier WSL/Xvfb heap abort
 has not yet been rerun and is not established as the same defect. Native input
@@ -419,7 +421,7 @@ the logged-in user read/write ACLs and passed access checks inside the Flatpak.
 The helper now explicitly loads both modules. The uhid rule also gets
 static_node=uhid, matching the existing uinput approach, so static nodes receive
 the rule's permissions and uaccess tag at boot. After Mint -> Ubuntu -> Mint,
-both nodes had camer:rw ACLs and were writable inside Flatpak before uhid loaded.
+both nodes had rw ACLs for the desktop user and were writable inside Flatpak before uhid loaded.
 Host encoder/input probing created Xbox, DualSense and Nintendo virtual devices.
 The first-run input UI correctly returned without a prompt when access was ready.
 Rules were installed through authorized SSH sudo for this headless diagnostic;
@@ -435,7 +437,7 @@ passed4361frames/75s with a deliberate Steam-window movement visible in received
 images. OS package updates ran concurrently; these are not performance comparisons.
 The no-desktop tray failure path also reached the configuration HTTP endpoint
 without deadlocking, then shut down. Evidence: private vega/dual-distro tree
-under ~/umbra-flatpak (network-input, input-events.log, network-auto,
+in the private test records (network-input, input-events.log, network-auto,
 mint-return-boot.log, mint-tray-failure.log).
 
 ## Packaged ABI3 HDR regression — 2026-10-12 16:51
@@ -463,7 +465,7 @@ appearance alone does not establish the new stream's colour metadata.
 The first SDR attempt outlived the pattern's120s timeout and ended on the
 desktop. It is retained as transport evidence only and superseded for pattern
 qualification by network-sdr-abi3-pattern. Restart the bounded host/pattern
-harness for each75s test. Evidence:~/umbra-flatpak/vega/gnome/network-hdr-abi3,
+harness for each75s test. Evidence:test-records/vega/gnome/network-hdr-abi3,
 network-sdr-abi3-pattern and network-hdr-switch-abi3. Cleanup restored SDR and
 Plasma; no owned host/pattern/decoder remained. No TV, HDR-game, co-op, AMD,
 physical multi-GPU, latency or sustained60fps verdict follows from these checks.
@@ -480,7 +482,7 @@ HDR, both pane geometries, QP extremes, intra/inter and POC wrap boundaries.
 Both comparisons matched completely. This closes compilation and syntax
 regression coverage for that change; live Windows GPU/frame, mixed-host and
 performance parity are still separate gates. Evidence: private
-C:/Users/camer/umbra-linux-compat-20261012/windows-encoder/header-contract.
+test-records/umbra-linux-compat-20261012/windows-encoder/header-contract.
 
 ## Acceptance fixes — 2026-10-12 21:15
 
@@ -525,7 +527,7 @@ were opened and read.
 | GNOME automatic 3840x2160 Main10, true HDR | 73010 | 941 | HDR enabled, valid metadata; PQ pattern layout and aspect correct |
 
 All runs reported launch, cancel and failure counts of 0. Evidence:
-`~/umbra-flatpak/gpu-linux/acceptance-*` and `~/umbra-flatpak/vega/gnome/network-fixed-hdr-4k`.
+`test-records/gpu-linux/acceptance-*` and `test-records/vega/gnome/network-fixed-hdr-4k`.
 These are one-host checks, not TV presentation. They are not verdicts on mixed-host co-op, 165fps,
 latency or calibrated HDR. Linux virtual co-op is SDR. TV, co-op, game, pad, audio, AMD/multi-GPU and Windows-parity acceptance are
 still outstanding.
@@ -546,7 +548,7 @@ The custom GPU encoder still provides Main10.
 Both runs reported launch, cancel and failure counts of 0. Source screenshots and decoded frames
 were read: the Mint desktop at correct 16:9 proportions, with moving gears and correct primaries.
 Each run had its own bounded host and gears harness, torn down afterwards. Evidence:
-`~/umbra-flatpak/gpu-linux/network-mint-accept-*`; host logs are in VEGA's Mint home as
+`test-records/gpu-linux/network-mint-accept-*`; host logs are in VEGA's Mint home as
 `umbra-coop-probe/mint-accept-{auto-sdr2020-8,sdr-10}-host.log`. The automatic run does not exercise the
 custom converter fix; the TV's Rec2020 case on KDE is covered by the Ubuntu rows above.
 

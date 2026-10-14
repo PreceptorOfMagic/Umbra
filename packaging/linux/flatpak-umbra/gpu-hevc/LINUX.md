@@ -1,5 +1,7 @@
 # Linux host library — development status, 2026-10-12
 
+`test-records/...` paths below name the project's private test records; they are not in this repository.
+
 The Linux OpenCL adapter shares the Windows v12b picture encoder, rate controller,
 HEVC headers and eight existing kernels. Before this port, all nine source files
 matched the v12 build source and all eight kernel hashes matched the release's
@@ -50,7 +52,7 @@ red/green/blue gears, changed gear orientation, no black/corrupt image observed.
 The 8-bit host image was also inspected. Actual capture was 1920x1080, aspect-fit
 to the aligned output. Latest JPEG timestamps advanced through each test.
 The owned Flatpak, gears, decoder and FIFO were removed at teardown, verified by
-process inventory. Logs and images are under ~/umbra-flatpak/gpu-linux/.
+process inventory. Logs and images are under test-records/gpu-linux/.
 
 This is roughly 45 encoded frames/second in this component setup, not proof of
 requested 60 fps, game performance, end-to-end latency, visual parity with Windows,
@@ -87,7 +89,7 @@ kept under network-resume-preview-invalid. A startup-race abort also exposed a
 FIFO-reader cleanup hang; the diagnostic now kills its own blocked decoder and
 cleans the pipe on failure.
 
-Network logs/images: ~/umbra-flatpak/gpu-linux/network-{8,10,resume}/,
+Network logs/images: test-records/gpu-linux/network-{8,10,resume}/,
 network-host.log, resume-host.log. Both custom host depths logged HDR=0. The
 transport diagnostic discards audio and does not test input, TV, actual two-host
 splicing, high-rate/game contention or Windows parity. CPU X11/wlroots/KMS adapters
@@ -104,7 +106,7 @@ The packaged custom8-bit encoder streamed the real desktop at1920x1088 for75s:
 3231 received frames, two IDRs including the requested recovery, start/cancel0,
 failed0. Host capture and late live-decoded images were opened and showed the
 coloured moving gears with matching geometry. Logs/images are under
-~/umbra-flatpak/vega/gnome/network-sdr/. This qualifies neither GNOME co-op nor HDR.
+test-records/vega/gnome/network-sdr/. This qualifies neither GNOME co-op nor HDR.
 
 Mutter50.1 source advertises BT2020/PQ monitor capture in xRGB210LE, xBGR210LE and
 RGBA_F16 when the monitor colour state is HDR. Its virtual-stream class inherits
@@ -142,7 +144,7 @@ Corrected all profiles to DimDisplayWhenIdle=false, TurnOffDisplayWhenIdle=false
 AutoSuspendAction0 and LidAction0; restarted PowerDevil at14:06:42. This is a test
 machine setup correction, not a change to Umbra defaults. A capture after34s idle stayed awake without forcing DPMS; a later DRM
 readback also reported On. Longer idle remains to qualify. The general Steam
-capture issue is not yet closed. Source audit is ~/umbra-flatpak/vega/power-audit/.
+capture issue is not yet closed. Source audit is test-records/vega/power-audit/.
 
 Children of Morta native Linux installation completed14:07 (game1.74GB, plus
 Scout/Soldier runtime and shader cache; root1.5GB free). First launch rejected
@@ -158,7 +160,7 @@ Packaged custom8-bit HEVC game-menu smoke14:11:08–14:12:23: 75s,3376 frames,
 images showed the coloured title and mode-selection UI with correct proportions;
 minimal native keyboard Enter visibly navigated to save management. No TV,
 controller, decoded audio, gameplay, HDR or mixed-host proof is claimed. Evidence:
-~/umbra-flatpak/vega/gnome/network-morta/. Host/receiver stopped and game exited
+test-records/vega/gnome/network-morta/. Host/receiver stopped and game exited
 through its own menu. This is approximately45fps at1920x1088, not60fps parity.
 
 ## HDR capture checkpoint — 2026-10-12 14:32
@@ -187,7 +189,7 @@ raw-image preview was opened: four gray bands and the black moving marker,
 without the false colors seen when the shared-memory bytes were unpacked as10bit.
 This is HDR **capture evidence only**, not encoding/network/TV/HDR game proof.
 The production portal adapter remains SDR-only. Evidence lives under
-~/umbra-flatpak/vega/gnome/hdr-dma-capture.log and portal-hdr-dma-0900.rgba32f.
+test-records/vega/gnome/hdr-dma-capture.log and portal-hdr-dma-0900.rgba32f.
 
 ## HDR custom-encoder component — 2026-10-12 14:43
 
@@ -216,7 +218,7 @@ also means those are not measured RGB luminances. Decoded colored-band RGB PQ
 code estimates were red(674.20,21.34,18.69), green(49.07,668.67,34.38),
 blue(27.43,13.22,672.55), white(673.69,668.64,674.62). Windows HDR parity and
 color accuracy remain open; do not call this bit-exact HDR preservation.
-Evidence: ~/umbra-flatpak/vega/gnome/{hdr-live,hdr-live-color}/. Manual negative
+Evidence: test-records/vega/gnome/{hdr-live,hdr-live-color}/. Manual negative
 checks in tests/linux_abi_contract.c passed on the actual Flatpak GPU: reject
 ABI1, BGRA input to HDR, PQ input to SDR, and undersized capture buffers.
 
