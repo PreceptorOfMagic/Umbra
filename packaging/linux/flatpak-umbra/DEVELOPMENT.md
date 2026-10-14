@@ -3,9 +3,10 @@
 This recipe builds the published Umbra 0.5.2 for Linux bundle (tag `umbra-linux-v0.5.2`). It fetches
 the Umbra commit it pins from the public repository. The [Linux release workflow](../../../.github/workflows/linux-release.yml)
 builds the release this way on GitHub from the tag, with the HDR extras, and publishes it once
-everything has passed. To build it from a checkout of the tag (a
-recursive clone fails: the `third-party/build-deps` submodule pins a commit no longer on any branch,
-which the manifest fetches as an archive instead):
+everything has passed. To build it from a checkout of the tag with flatpak-builder 1.4.4 or newer
+(1.4.2, Ubuntu 24.04's, installs the CMake modules to `lib64`, and the build stops at
+`libayatana-indicator`; a recursive clone fails: the `third-party/build-deps` submodule pins a commit
+no longer on any branch, which the manifest fetches as an archive instead):
 
 ```
 git clone --branch umbra-linux-v0.5.2 https://github.com/PreceptorOfMagic/Umbra.git && cd Umbra

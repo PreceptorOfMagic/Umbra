@@ -76,9 +76,18 @@ jobs:
           df -h /
 
       - name: Flatpak tools
+        # Ubuntu 24.04's flatpak-builder 1.4.2 does not pass CMake modules CMAKE_INSTALL_LIBDIR=lib,
+        # so they install to /app/lib64 and the modules after them do not find them. 1.4.4 does, and
+        # is the newest that installs on Ubuntu 24.04.
+        env:
+          BUILDER: http://archive.ubuntu.com/ubuntu/pool/universe/f/flatpak-builder/flatpak-builder_1.4.4-2_amd64.deb
+          BUILDER_SHA256: 7942868062aeccf274a304c1d9d6ef2315379559720de3a909fb6f6276193dbd
         run: |
+          curl -fsSL -o flatpak-builder.deb "$BUILDER"
+          echo "$BUILDER_SHA256  flatpak-builder.deb" | sha256sum -c
           sudo apt-get update -qq
-          sudo apt-get install -y -qq flatpak flatpak-builder
+          sudo apt-get install -y -qq flatpak ./flatpak-builder.deb
+          rm flatpak-builder.deb
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak --version; flatpak-builder --version
 
