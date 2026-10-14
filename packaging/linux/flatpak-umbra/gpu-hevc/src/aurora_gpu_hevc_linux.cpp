@@ -101,15 +101,19 @@ struct GlSharing {
     cl_context_properties props[7]{};
     bool active=false;
     GlSharing(LinuxCL& cl,const aghl_config& c) {
-        if(!c.egl_display || !c.egl_context || !cl.createFromGLTexture || !cl.acquireGL || !cl.releaseGL || !cl.copyImageToBuffer || !cl.getImageInfo)return;
+        if(!c.egl_display || !c.egl_context)return;
+        // The host only reports that sharing is off; say which step refused it (stderr = host log).
+        auto off=[](const char* why,cl_int e){std::fprintf(stderr,"[aghl] OpenCL/GL sharing off: %s (CL error %d)\n",why,int(e));};
+        if(!cl.createFromGLTexture || !cl.acquireGL || !cl.releaseGL || !cl.copyImageToBuffer || !cl.getImageInfo){off("GL-sharing entry points missing",0);return;}
         cl_platform_id platform=nullptr;
-        if(cl.clGetDeviceInfo(cl.id,CL_DEVICE_PLATFORM,sizeof platform,&platform,nullptr)!=CL_SUCCESS || !platform)return;
-        try{if((" "+cl.info(cl.id,CL_DEVICE_EXTENSIONS)+" ").find(" cl_khr_gl_sharing ")==std::string::npos)return;}catch(...){return;}
+        if(cl.clGetDeviceInfo(cl.id,CL_DEVICE_PLATFORM,sizeof platform,&platform,nullptr)!=CL_SUCCESS || !platform){off("no device platform",0);return;}
+        try{if((" "+cl.info(cl.id,CL_DEVICE_EXTENSIONS)+" ").find(" cl_khr_gl_sharing ")==std::string::npos){off("device lacks cl_khr_gl_sharing",0);return;}}
+        catch(...){off("device extensions unreadable",0);return;}
         const cl_context_properties wanted[7]={CL_CONTEXT_PLATFORM,cl_context_properties(platform),
             CL_GL_CONTEXT_KHR,cl_context_properties(c.egl_context),CL_EGL_DISPLAY_KHR,cl_context_properties(c.egl_display),0};
         cl_int e=CL_SUCCESS;
         cl_context probe=cl.clCreateContext(wanted,1,&cl.id,nullptr,nullptr,&e);
-        if(e!=CL_SUCCESS || !probe)return;  // e.g. NVIDIA: EGL sharing refused (-59)
+        if(e!=CL_SUCCESS || !probe){off("clCreateContext with the EGL context refused",e);return;}  // e.g. NVIDIA: EGL sharing refused (-59)
         cl.clReleaseContext(probe);
         std::memcpy(props,wanted,sizeof props);active=true;
     }
