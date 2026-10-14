@@ -38,6 +38,13 @@ one stream, so it re-detects. A distribution Mutter update replaces these packag
 
 Rollback: `sudo apt install --allow-downgrades gir1.2-mutter-18=50.1-0ubuntu2.4 libmutter-18-0=50.1-0ubuntu2.4 mutter-common=50.1-0ubuntu2.4 mutter-common-bin=50.1-0ubuntu2.4`, then log out and in.
 
+## Other distributions
+
+The patch applies unchanged to GNOME's own Mutter 50.1 release (the Ubuntu source package's upstream tarball is byte-identical to it), so a
+distribution shipping Mutter 50.1 can add it to its own `mutter` package, rebuild that package with its usual tools and install it. This is
+expected to work but is untested; the prebuilt packages and every measurement here are Ubuntu 26.04. Other Mutter versions need the patch
+adapted. Undo it by reinstalling the distribution's own package. Check the running version with `gnome-shell --version` (GNOME Shell 50.1 runs on Mutter 50.1).
+
 ## Build
 
 ```

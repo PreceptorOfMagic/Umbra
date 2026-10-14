@@ -29,6 +29,13 @@ The Umbra 0.5.1 for Linux release carries the packages built from this patch for
 (`Umbra-HDR-KDE-ubuntu26.04.tar.gz`, with install, verify and rollback steps in its `README.txt`) and
 their source package (`Umbra-HDR-KDE-ubuntu26.04-source.tar.gz`).
 
+## Other distributions
+
+The patch applies unchanged to KDE's own KWin 6.6.6 release (the Ubuntu source package's upstream tarball is byte-identical to it), so a
+distribution shipping KWin 6.6.6 can add it to its own `kwin` package, rebuild that package with its usual tools and install it. This is
+expected to work but is untested; the prebuilt packages and every measurement here are Ubuntu 26.04. Other KWin versions need the patch
+adapted. Undo it by reinstalling the distribution's own package. Check the running version with `kwin_wayland --version`.
+
 ## Build and install (Ubuntu 26.04, `kwin` 4:6.6.6-0ubuntu0.1)
 
 ```
