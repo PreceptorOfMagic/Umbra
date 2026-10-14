@@ -9,8 +9,8 @@ git show origin/claude/great-pascal-njfsyf:docs/handoff/umbra-linux-0.5.2-hdr-ex
 ```
 
 This file is a working note, not product documentation. On `claude/great-pascal-njfsyf` it sits on
-top of the release's packaging commit `7456c15` and the workflow fix `f9ee44e` (both part of the
-release). Delete it (`git rm`) in the commit you tag, so it is not part of the release (section 6).
+top of the release's packaging commit `7456c15` and two release-workflow fixes, `f9ee44e` and
+`30c6ece` (all part of the release). Delete it (`git rm`) in the commit you tag, so it is not part of the release (section 6).
 
 ## 1. Your job, and who is driving
 
@@ -60,7 +60,7 @@ wherever it is offered, updated with whatever the hardware tests show.
 
 | Repo | Branch | State |
 |---|---|---|
-| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `62ea2d0` = release code commit (the Flatpak builds it), `7456c15` = packaging commit pinning it, `f9ee44e` = release workflow builds with flatpak-builder 1.4.4; this handoff on top. Add test results here, then tag (section 6) |
+| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `62ea2d0` = release code commit (the Flatpak builds it), `7456c15` = packaging commit pinning it, `f9ee44e` and `30c6ece` = release workflow fixes (flatpak-builder 1.4.4; the sources archive's CUDA check); this handoff on top. Add test results here, then tag (section 6) |
 | `PreceptorOfMagic/Umbra` | `release/umbra-linux-0.5` | Still at `f9cff84` (0.5.1 docs). Fast-forward to the commit you tag (the claude branch descends from it) |
 | `PreceptorOfMagic/Umbra` | `release/umbra-0.5` (default branch) | At `fee8b4e`. Needs the README/workflow commit in section 6 after release |
 | `PreceptorOfMagic/Eclipse-Umbra-Project-Hub` | `claude/great-pascal-njfsyf` | Website and docs for 0.5.2 (`2208f00`, on top of `dfae32f`, `7fd5d88`). Merge to `main` after release; Pages deploys from `main` |
@@ -140,7 +140,8 @@ CI requires the KMS path for KDE (`UMBRA_SMOKE_REQUIRE_KMS=1`).
     builds the bundle. It installs the published 0.5.1
     bundle, then this one with `--reinstall`, and checks that settings survive, that `--version`
     reports 0.5.2 and that `ldd` finds every library. It also writes the sources archive (CUDA parts
-    listed in `CUDA-SOURCES.txt`, not included) and the project source.
+    listed in `CUDA-SOURCES.txt`, not included; the step fails if a `cuda_` file is in it) and the
+    project source.
   - `extras`: calls the extras workflow.
   - `publish`: only after everything passes. It writes `SHA256SUMS`, fills the
     `<!-- HDR extras table -->` marker in the notes with `release-table.sh` output, and runs
@@ -176,26 +177,26 @@ directory:
 
 ```sh
 mkdir -p ~/umbra-candidates && cd ~/umbra-candidates
-gh run download 38640460427 --repo PreceptorOfMagic/Umbra -n linux-flatpak -D flatpak
+gh run download 38645800334 --repo PreceptorOfMagic/Umbra -n linux-flatpak -D flatpak
 gh run download 38632834823 --repo PreceptorOfMagic/Umbra -p 'hdr-*' -D extras
 (cd flatpak && sha256sum -c ./*.sha256)
 for d in extras/hdr-*; do (cd "$d" && sha256sum -c ./*.sha256); done
 ```
 
-GitHub deletes these artifacts after 90 days (the extras on 2027-01-12, the Flatpak about the same day).
+GitHub deletes these artifacts after 90 days (both on 2027-01-12).
 After that, push a commit to rebuild them (see "If a test fails" in section 7).
 
 ### The Flatpak
 
-[Linux release dry run 38640460427](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38640460427),
-from packaging commit `f9ee44e`, which builds Umbra code commit `62ea2d0`. **Check that this run
-passed** (`gh run view 38640460427 --repo PreceptorOfMagic/Umbra`); it was still building when this
-was written. If it failed, do not test it: tell the maintainer. That is the code the
-release builds, so a hardware result for this bundle holds for the released one. The release rebuilds
+[Linux release dry run 38645800334](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38645800334),
+passed, at commit `30c6ece`. Its manifest is unchanged since `7456c15` and builds Umbra code commit
+`62ea2d0`; the bundle logs `Umbra version: 0.5.2 commit: 62ea2d0580dec0b82b12835a8e7f7907c2131ae8`.
+That is the code the release builds, so a hardware result for this bundle holds for the released one. The release rebuilds
 it from the same manifest; only Flathub runtime updates in between can differ. The artifact holds
 `Umbra-0.5.2-linux-x86_64.flatpak`, `Umbra-0.5.2-linux-flatpak-sources.tar.gz` and
-`umbra-linux-0.5.2-project-source.tar.gz`, each with its `.sha256`. CI checked that it installs over
-0.5.1 with settings kept, reports 0.5.2 and finds every library.
+`umbra-linux-0.5.2-project-source.tar.gz`, each with its `.sha256` (10.2 MB, 803 MB and 25.9 MB). CI
+checked that it installs over 0.5.1 with settings kept, reports 0.5.2 and finds every library, on
+runtime `org.freedesktop.Platform` 25.08.
 
 ### The 14 HDR extras
 
@@ -378,7 +379,7 @@ re-checks the new text.
   The extras workflow rebuilds and smoke-tests; download the new candidates and retest.
 - An Umbra problem: fix it on the branch, then pin the manifest (`BUILD_VERSION` stays `v0.5.2`;
   `COMMIT` and the git source `commit` become the fix commit) in a separate packaging commit, as `7456c15`
-  did. The push starts a Flatpak dry run (`linux-release.yml`, about 1.5–2.5 h); download that bundle
+  did. The push starts a Flatpak dry run (`linux-release.yml`, about 40 min); download that bundle
   and retest. Update the release notes ("Nothing else changed: ..." names what changed since 0.5.1).
 - Something that cannot be fixed now: state it as a known limit in the notes, README and website, and
   ask the maintainer whether to publish with it.
@@ -416,3 +417,8 @@ re-checks the new text.
   'libayatana-ido3-0.4' not found"). 1.4.4 passes it; Ubuntu's packages of 1.4.6 and newer need libxml2 2.14, which Ubuntu
   24.04 lacks. Do not set a global libdir in the manifest instead: the CUDA host compiler module uses
   its own prefix. For a local build, use flatpak-builder 1.4.4 or newer.
+- The Flatpak sources archive is 803 MB (0.5.1's, made before this workflow existed, was 402 MB).
+  348 MB of it is flatpak-builder's git mirror of `LizardByte/tray` with its full history; the rest
+  is source tarballs (Boost, GCC, LizardByte build-deps about 85–96 MB each). NVIDIA's `cuda_nvcc` archive (78
+  MB) is in the build cache but not in the archive. The content is correct and within GitHub's 2 GiB
+  limit, so it was left as is.
