@@ -70,7 +70,8 @@ case $family in
     pkg_install() { zypper -n -q install "$@" >/dev/null; }
     pkg_install tar gzip
     tools_gnome=(pipewire pipewire-tools python3 python3-gobject typelib-1_0-GLib-2_0 typelib-1_0-Gio-2_0 dbus-1 dbus-1-daemon glib2-tools Mesa-dri Mesa-libEGL1)
-    tools_kde=(pipewire pipewire-tools python3 dbus-1 dbus-1-daemon gcc wayland-devel Mesa-dri Mesa-libEGL1 libgbm1)
+    # The image installs no recommended packages, so gcc comes without the C library headers.
+    tools_kde=(pipewire pipewire-tools python3 dbus-1 dbus-1-daemon gcc glibc-devel wayland-devel Mesa-dri Mesa-libEGL1 libgbm1)
     unattended() { sed 's/^zypper /zypper -n /'; }
     files_of() { rpm -ql "$1"; }
     ;;
@@ -151,8 +152,15 @@ runtime() { # <label>: prints the probe's JSON
 }
 field() { python3 -c 'import json,sys; v=json.loads(sys.argv[1]).get(sys.argv[2]); print(json.dumps(v) if not isinstance(v, str) else v)' "$1" "$2" 2>/dev/null || true; }
 
-# When the compositor did not start, its log says why.
-show_log() { grep -q 'exited' <<<"$2" && { echo "   --- end of the $1 compositor log:"; tail -n 25 "$work/$1.log" 2>/dev/null | sed 's/^/   | /'; }; true; }
+# When the compositor did not start or the KDE probe did not compile, their logs say why.
+show_log() {
+  if grep -q 'exited' <<<"$2"; then
+    echo "   --- end of the $1 compositor log:"; tail -n 25 "$work/$1.log" 2>/dev/null | sed 's/^/   | /'
+  elif grep -q 'did not compile' <<<"$2"; then
+    echo "   --- the probe's compiler output:"; head -n 25 "$work/$1.cc.log" 2>/dev/null | sed 's/^/   | /'
+  fi
+  true
+}
 
 stock_run=$(runtime stock)
 echo "   stock runtime: $stock_run"
