@@ -29,8 +29,9 @@ enum aghl_format { AGHL_BGRA8=1, AGHL_RGBA8=2, AGHL_SCRGB16F=3, AGHL_XBGR2101010
 #define AGHL_FRAME_EXTERNAL 1u
 // AGHL_FRAME_GL_TEXTURE: the pixels are in gl_texture, a GL_TEXTURE_2D GL_R32UI texture of the
 // session's shared EGL context holding one packed word per pixel (the format's byte layout). The
-// caller's GL work on it is complete (glFinish) before aghl_encode; the library acquires it, copies
-// it on the GPU and releases it. Mesa rusticl offers cl_khr_gl_sharing but no external memory.
+// caller's GL work on it is complete (glFinish) before aghl_encode; the library acquires it, unpacks
+// it into its input image with a kernel and releases it. Mesa rusticl offers cl_khr_gl_sharing but no
+// external memory.
 #define AGHL_FRAME_GL_TEXTURE 2u
 // aghl_encode result when an external frame cannot be imported by this runtime: nothing was
 // encoded and the session is intact; resubmit the same frame id with host pixels.

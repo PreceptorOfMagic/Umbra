@@ -179,12 +179,10 @@ struct aghl_session {
         externalFd=fd;externalBytes=bytes;externalSerial=serial;
         return external;
     }
-    // GL texture frames: the imported image (cached by serial) and a staging buffer, because a
-    // GL_R32UI image cannot be copied straight into the RGBA input image (formats must match).
-    cl_mem glImage=nullptr,staging=nullptr;
+    // GL texture frames: the imported GL_R32UI image (cached by serial); capture_unpack_word reads it.
+    cl_mem glImage=nullptr;
     uint64_t glSerial=0;
-    size_t stagingBytes=0;
-    cl_mem importGl(uint32_t texture,uint64_t serial,size_t bytes) {
+    cl_mem importGl(uint32_t texture,uint64_t serial) {
         if(!glShare.active)throw ExternalUnavailable("GL texture frame without a GL-shared OpenCL context");
         if(!glImage || serial!=glSerial) {
             if(glImage){cl.clReleaseMemObject(glImage);glImage=nullptr;}
@@ -198,18 +196,11 @@ struct aghl_session {
             }
             glImage=image;glSerial=serial;
         }
-        if(!staging || stagingBytes<bytes) {
-            if(staging){cl.clReleaseMemObject(staging);staging=nullptr;}
-            cl_int e=CL_SUCCESS;
-            staging=cl.clCreateBuffer(device.context,CL_MEM_READ_WRITE,bytes,nullptr,&e);check(e,"GL frame staging");
-            stagingBytes=bytes;
-        }
         return glImage;
     }
     ~aghl_session(){
         if(external)cl.clReleaseMemObject(external);
         if(glImage)cl.clReleaseMemObject(glImage);
-        if(staging)cl.clReleaseMemObject(staging);
     }
     bool haveFrame=false,failed=false;
     uint64_t lastFrame=0;
@@ -221,7 +212,8 @@ struct aghl_session {
         rate(config.bitrate_kbps,config.framerate),dispatch(device,1,1),conversionError(device,4) {
         initPictureKernels(device,cl.id,directory,config.bit_depth);
         addProgram(device,cl.id,readFile(directory/"capture.cl"),"-cl-std=CL1.2",{{"capture_yuv","capture_yuv"}});
-        addProgram(device,cl.id,readFile(directory/"linux_capture.cl"),"-cl-std=CL1.2",{{"capture_fit","capture_fit"},{"capture_unpack_pq","capture_unpack_pq"}});
+        addProgram(device,cl.id,readFile(directory/"linux_capture.cl"),"-cl-std=CL1.2",{{"capture_fit","capture_fit"},{"capture_unpack_pq","capture_unpack_pq"},
+            {"capture_unpack_word","capture_unpack_word"},{"capture_unpack_pq_word","capture_unpack_pq_word"}});
         PictureConfig p;p.width=codedWidth;p.height=codedHeight;p.depth=config.bit_depth;p.mvCosts=headers.mvCosts;
         p.adaptiveQp=p.deblock=p.isolatedIntra=p.originalMotion=true;
         encoder=std::make_unique<GpuPictureEncoder>(device,p);
@@ -259,16 +251,19 @@ struct aghl_session {
             check(cl.copyBufferToImage(device.queue,source,pq?packed->mem:input->mem,0,origin,region,0,nullptr,nullptr),"external frame copy");
             check(cl.releaseExternal(device.queue,1,&source,0,nullptr,nullptr),"external frame release");
         } else if(glFrame) {
-            // GPU to GPU through the shared GL context (Mesa rusticl and other cl_khr_gl_sharing runtimes).
-            cl_mem source=importGl(f->gl_texture,f->external_serial,f->bytes);
+            // GPU to GPU through the shared GL context (Mesa rusticl and other cl_khr_gl_sharing runtimes):
+            // a kernel reads the shared image straight into the input image. No image<->buffer copies:
+            // rusticl does those on the CPU where the driver lacks buffer/texture copies (radeonsi).
+            cl_mem source=importGl(f->gl_texture,f->external_serial);
             check(cl.acquireGL(device.queue,1,&source,0,nullptr,nullptr),"GL frame acquire");
-            check(cl.copyImageToBuffer(device.queue,source,staging,origin,region,0,0,nullptr,nullptr),"GL frame copy");
+            if(pq)dispatch.call("capture_unpack_pq_word",size_t(f->width)*f->height,256,nullptr,source,input->mem,f->width,f->height);
+            else dispatch.call("capture_unpack_word",size_t(f->width)*f->height,256,nullptr,source,input->mem,f->width,f->height,
+                cl_uint(f->format==AGHL_BGRA8?1:0));
             check(cl.releaseGL(device.queue,1,&source,0,nullptr,nullptr),"GL frame release");
-            check(cl.copyBufferToImage(device.queue,staging,pq?packed->mem:input->mem,0,origin,region,0,nullptr,nullptr),"GL frame upload");
         } else {
             check(cl.writeImage(device.queue,pq?packed->mem:input->mem,CL_TRUE,origin,region,f->row_pitch,0,f->data,0,nullptr,nullptr),"capture upload");
         }
-        if(pq)dispatch.call("capture_unpack_pq",size_t(f->width)*f->height,256,nullptr,packed->mem,input->mem,f->width,f->height);
+        if(pq && !glFrame)dispatch.call("capture_unpack_pq",size_t(f->width)*f->height,256,nullptr,packed->mem,input->mem,f->width,f->height);
         cl_mem source=input->mem;
         if(f->width!=codedWidth || f->height!=codedHeight || config.width!=codedWidth || config.height!=codedHeight) {
             if(!fitted)fitted=std::make_unique<Image>(cl,device,codedWidth,codedHeight,CL_RGBA,
