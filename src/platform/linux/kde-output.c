@@ -22,6 +22,11 @@ struct context {
  struct output outputs[32]; int count;
  struct kde_output_management_v2 *manager; unsigned version;
  struct wl_display *display; struct wl_registry *registry;
+ /* KWin 6.7 announces outputs only through this registry (kde-output-device-v2 21); older KWin
+  * advertises one kde_output_device_v2 global per output, collected in legacy[] and bound only
+  * when there is no registry. */
+ struct kde_output_device_registry_v2 *devices;
+ struct {uint32_t id,version;} legacy[32]; int legacy_count;
  int64_t deadline;
 };
 static const struct kde_output_device_mode_v2_listener mode_listener;
@@ -67,7 +72,8 @@ static void output_edr_policy(void *data,struct kde_output_device_v2 *obj,uint32
 static void output_sharpness(void *data,struct kde_output_device_v2 *obj,uint32_t sharpness) {}
 static void output_priority(void *data,struct kde_output_device_v2 *obj,uint32_t priority) {}
 static void output_auto_brightness(void *data,struct kde_output_device_v2 *obj,uint32_t enabled) {}
-static const struct kde_output_device_v2_listener output_listener={.geometry=output_geometry,.current_mode=output_current_mode,.mode=output_mode,.done=output_done,.scale=output_scale,.edid=output_edid,.enabled=output_enabled,.uuid=output_uuid,.serial_number=output_serial_number,.eisa_id=output_eisa_id,.capabilities=output_capabilities,.overscan=output_overscan,.vrr_policy=output_vrr_policy,.rgb_range=output_rgb_range,.name=output_name,.high_dynamic_range=output_high_dynamic_range,.sdr_brightness=output_sdr_brightness,.wide_color_gamut=output_wide_color_gamut,.auto_rotate_policy=output_auto_rotate_policy,.icc_profile_path=output_icc_profile_path,.brightness_metadata=output_brightness_metadata,.brightness_overrides=output_brightness_overrides,.sdr_gamut_wideness=output_sdr_gamut_wideness,.color_profile_source=output_color_profile_source,.brightness=output_brightness,.color_power_tradeoff=output_color_power_tradeoff,.dimming=output_dimming,.replication_source=output_replication_source,.ddc_ci_allowed=output_ddc_ci_allowed,.max_bits_per_color=output_max_bits_per_color,.max_bits_per_color_range=output_max_bits_per_color_range,.automatic_max_bits_per_color_limit=output_automatic_max_bits_per_color_limit,.edr_policy=output_edr_policy,.sharpness=output_sharpness,.priority=output_priority,.auto_brightness=output_auto_brightness};
+static void output_removed(void *data,struct kde_output_device_v2 *obj) {((struct output*)data)->alive=0;}
+static const struct kde_output_device_v2_listener output_listener={.removed=output_removed,.geometry=output_geometry,.current_mode=output_current_mode,.mode=output_mode,.done=output_done,.scale=output_scale,.edid=output_edid,.enabled=output_enabled,.uuid=output_uuid,.serial_number=output_serial_number,.eisa_id=output_eisa_id,.capabilities=output_capabilities,.overscan=output_overscan,.vrr_policy=output_vrr_policy,.rgb_range=output_rgb_range,.name=output_name,.high_dynamic_range=output_high_dynamic_range,.sdr_brightness=output_sdr_brightness,.wide_color_gamut=output_wide_color_gamut,.auto_rotate_policy=output_auto_rotate_policy,.icc_profile_path=output_icc_profile_path,.brightness_metadata=output_brightness_metadata,.brightness_overrides=output_brightness_overrides,.sdr_gamut_wideness=output_sdr_gamut_wideness,.color_profile_source=output_color_profile_source,.brightness=output_brightness,.color_power_tradeoff=output_color_power_tradeoff,.dimming=output_dimming,.replication_source=output_replication_source,.ddc_ci_allowed=output_ddc_ci_allowed,.max_bits_per_color=output_max_bits_per_color,.max_bits_per_color_range=output_max_bits_per_color_range,.automatic_max_bits_per_color_limit=output_automatic_max_bits_per_color_limit,.edr_policy=output_edr_policy,.sharpness=output_sharpness,.priority=output_priority,.auto_brightness=output_auto_brightness};
 static void config_applied(void *data,struct kde_output_configuration_v2 *obj) {*(int*)data=1;}
 static void config_failed(void *data,struct kde_output_configuration_v2 *obj) {*(int*)data=-1;}
 static void config_failure_reason(void *data,struct kde_output_configuration_v2 *obj,const char * reason) {}
@@ -78,14 +84,31 @@ static int64_t now_ms(void) {
  struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t);
  return (int64_t)t.tv_sec*1000+t.tv_nsec/1000000;
 }
+static void registry_output(void *data,struct kde_output_device_registry_v2 *registry,struct kde_output_device_v2 *obj) {
+ struct context *c=data;
+ if(c->count>=32){kde_output_device_v2_release(obj);return;}
+ struct output *o=&c->outputs[c->count++];o->id=0;o->alive=1;o->obj=obj;
+ kde_output_device_v2_add_listener(o->obj,&output_listener,o);
+}
+static void registry_finished(void *data,struct kde_output_device_registry_v2 *registry) {}
+static const struct kde_output_device_registry_v2_listener device_registry_listener={.finished=registry_finished,.output=registry_output};
 static void global(void *data,struct wl_registry *r,uint32_t id,const char *iface,uint32_t v) {
  struct context *c=data;
  if(!strcmp(iface,"kde_output_management_v2") && v>=18) {
   c->version=v<19?v:19; c->manager=wl_registry_bind(r,id,&kde_output_management_v2_interface,c->version);
  }
- if(!strcmp(iface,"kde_output_device_v2") && v>=19 && c->count<32) {
-  struct output *o=&c->outputs[c->count++];o->id=id;o->alive=1;
-  o->obj=wl_registry_bind(r,id,&kde_output_device_v2_interface,v<20?v:20);
+ if(!strcmp(iface,"kde_output_device_registry_v2") && v>=21 && !c->devices) {
+  c->devices=wl_registry_bind(r,id,&kde_output_device_registry_v2_interface,21);
+  kde_output_device_registry_v2_add_listener(c->devices,&device_registry_listener,c);
+ }
+ if(!strcmp(iface,"kde_output_device_v2") && v>=19 && c->legacy_count<32) {
+  c->legacy[c->legacy_count].id=id;c->legacy[c->legacy_count++].version=v<20?v:20;
+ }
+}
+static void bind_legacy_outputs(struct context *c) {
+ for(int i=0;i<c->legacy_count && c->count<32;i++) {
+  struct output *o=&c->outputs[c->count++];o->id=c->legacy[i].id;o->alive=1;
+  o->obj=wl_registry_bind(c->registry,c->legacy[i].id,&kde_output_device_v2_interface,c->legacy[i].version);
   kde_output_device_v2_add_listener(o->obj,&output_listener,o);
  }
 }
@@ -131,8 +154,10 @@ static int apply(struct context *c,struct kde_output_configuration_v2 *config) {
 static void cleanup(struct context *c) {
  for(int i=0;i<c->count;i++) {
   for(int j=0;j<c->outputs[i].count;j++)kde_output_device_mode_v2_destroy(c->outputs[i].modes[j].obj);
-  kde_output_device_v2_destroy(c->outputs[i].obj);
+  if(wl_proxy_get_version((struct wl_proxy*)c->outputs[i].obj)>=21)kde_output_device_v2_release(c->outputs[i].obj);
+  else kde_output_device_v2_destroy(c->outputs[i].obj);
  }
+ if(c->devices)kde_output_device_registry_v2_destroy(c->devices);
  if(c->manager)kde_output_management_v2_destroy(c->manager);
  if(c->registry)wl_registry_destroy(c->registry);
  if(c->display)wl_display_disconnect(c->display);
@@ -144,7 +169,9 @@ static struct context *connect_outputs(void) {
  if(!c->display){cleanup(c);return NULL;}
  c->registry=wl_display_get_registry(c->display);if(!c->registry){cleanup(c);return NULL;}
  wl_registry_add_listener(c->registry,&registry_listener,c);
- for(int i=0;i<3;i++)if(!roundtrip(c)){cleanup(c);return NULL;}
+ if(!roundtrip(c)){cleanup(c);return NULL;}
+ if(!c->devices)bind_legacy_outputs(c);
+ for(int i=0;i<2;i++)if(!roundtrip(c)){cleanup(c);return NULL;}
  return c;
 }
 int umbra_kde_output_supported(void) {
