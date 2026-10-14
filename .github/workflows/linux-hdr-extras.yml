@@ -11,43 +11,33 @@ permissions:
   contents: read
 
 jobs:
-  versions:
-    name: KWin/Mutter in ${{ matrix.image }}
+  cachyos:
+    name: CachyOS packaging of KWin and Mutter
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - ubuntu:26.04
-          - ubuntu:26.10
-          - debian:13
-          - debian:testing
-          - fedora:43
-          - fedora:44
-          - fedora:45
-          - archlinux:latest
-          - opensuse/tumbleweed:latest
-          - opensuse/leap:16.0
-          - cachyos/cachyos:latest
-          - cachyos/cachyos-v3:latest
-          - cachyos/cachyos-v4:latest
-    container: ${{ matrix.image }}
+    container: cachyos/cachyos-v3:latest
     steps:
       - name: Query
-        shell: sh
+        shell: bash
         run: |
-          . /etc/os-release; echo "$PRETTY_NAME"
-          if command -v apt-get >/dev/null; then
-            apt-get update -qq >/dev/null
-            apt-cache policy kwin-wayland mutter-common | grep -E '^[a-z]|Candidate'
-          elif command -v dnf >/dev/null; then
-            dnf -q repoquery --latest-limit=1 --qf '%{name} %{evr} %{repoid}\n' kwin kwin-wayland mutter gnome-shell plasma-workspace | sort -u
-          elif command -v pacman >/dev/null; then
-            grep '^\[' /etc/pacman.conf
-            pacman -Sy >/dev/null
-            pacman -Sl | awk '$2=="kwin"||$2=="mutter"||$2=="gnome-shell"||$2=="qt6-base"'
-            pacman -Si kwin mutter | grep -E '^(Repository|Name|Version|Packager|Build Date)'
-            grep -E '^(CFLAGS|CXXFLAGS|LDFLAGS|OPTIONS)=' /etc/makepkg.conf || true
-          elif command -v zypper >/dev/null; then
-            zypper -q -n refresh >/dev/null; zypper -q -n info kwin6 mutter | grep -E '^(Name|Version|Repository)'
-          fi
+          set -x
+          ls /etc/pacman.d
+          grep -vE '^\s*(#|$)' /etc/pacman.conf
+          head -5 /etc/pacman.d/cachyos-v3-mirrorlist /etc/pacman.d/cachyos-mirrorlist || true
+          pacman -Sy --noconfirm git >/dev/null
+          git clone -q --depth 1 https://github.com/CachyOS/CachyOS-PKGBUILDS /tmp/cp
+          ls /tmp/cp | grep -iE 'mutter|kwin|gnome-shell' || true
+          for d in /tmp/cp/*mutter* /tmp/cp/*kwin*; do
+            [ -d "$d" ] || continue
+            echo "== $d"; ls "$d"
+            grep -E '^(pkgname|pkgbase|pkgver|pkgrel|epoch|_commit|_tag)=' "$d/PKGBUILD"
+            sed -n '/^source=/,/)/p' "$d/PKGBUILD"
+            grep -nE 'patch|git apply|meson|prepare\(' "$d/PKGBUILD" | head -40
+          done
+          for v in v4 znver4; do
+            for u in "https://mirror.cachyos.org/repo/x86_64_v4/cachyos-extra-$v/cachyos-extra-$v.db" \
+                     "https://cdn77.cachyos.org/repo/x86_64_v4/cachyos-extra-$v/cachyos-extra-$v.db"; do
+              if curl -fsSL -o /tmp/$v.db "$u"; then
+                echo "$u"; tar -tf /tmp/$v.db | grep -E '^(kwin|mutter|qt6-base)-[0-9]' | grep /$ ; break
+              fi
+            done
+          done
