@@ -1,7 +1,7 @@
 # Handoff: prebuilt Linux HDR extras and Umbra 0.5.2 for Linux
 
-Written 2026-10-14 (about 20:45 UTC) by the Claude Code cloud session that did this work, for a Claude
-agent on the maintainer's own machine. Read it from this branch:
+Written 2026-10-14 by the Claude Code cloud session that did this work, for a Claude agent on the
+maintainer's own machine. Read it from this branch:
 
 ```sh
 git fetch origin claude/great-pascal-njfsyf
@@ -9,33 +9,33 @@ git show origin/claude/great-pascal-njfsyf:docs/handoff/umbra-linux-0.5.2-hdr-ex
 ```
 
 This file is a working note, not product documentation. It is the newest commit on
-`claude/great-pascal-njfsyf`, after the release's packaging commit, so it is **not** part of the
-release. Leave it out of `release/umbra-linux-0.5` (fast-forward that branch to `7456c15`, not to the
-branch head), or delete it once the work is finished.
+`claude/great-pascal-njfsyf`, after the release's packaging commit `7456c15`. Delete it
+(`git rm`) in the commit you tag, so it is not part of the release (section 6).
 
-## 1. Read this first: who is driving the release right now
+## 1. Your job, and who is driving
 
-The cloud session was publishing Umbra 0.5.2 for Linux when this was written. It has a scheduled
-check-in at **21:07 UTC on 2026-10-14**. At that check-in, if the CI runs in section 5 passed, it
-will move `release/umbra-linux-0.5` to `7456c15`, push the tag `umbra-linux-v0.5.2`, and let the release
-workflow publish. The maintainer may tell it to stop and hand over to you instead.
+**You now own the release. The cloud session has stopped:** it will not tag, publish or push anything
+more. Nothing is published yet: no tag `umbra-linux-v0.5.2`, no release, release branches unchanged.
 
-**Before you change anything, find out which of these happened:**
+The maintainer's plan, in order:
+
+1. **Hardware tests first** (section 7), with the release candidate builds CI already made (section 5).
+2. **Record the results** in the TESTED texts, release notes, READMEs and website (section 7, "Recording
+   results"), so each download states how far it has been tested.
+3. **Publish** (section 6), once the maintainer has seen the results and says go. If a test fails, fix
+   it first (section 7, "If a test fails").
+
+Check the state before acting, in case anything changed since this was written:
 
 ```sh
-git ls-remote --tags origin umbra-linux-v0.5.2                 # does the tag exist?
-git ls-remote origin refs/heads/release/umbra-linux-0.5        # 7456c15… once moved
-gh release view umbra-linux-v0.5.2 --repo PreceptorOfMagic/Umbra   # is the release published?
-gh run list --repo PreceptorOfMagic/Umbra --workflow linux-release.yml --limit 5
+git ls-remote --tags origin umbra-linux-v0.5.2                 # expect nothing until you tag
+git ls-remote origin refs/heads/release/umbra-linux-0.5        # expect f9cff84… until you publish
+gh release view umbra-linux-v0.5.2 --repo PreceptorOfMagic/Umbra   # expect "release not found"
 ```
 
-- If the tag exists, **never move, delete or re-push it**. A failed release run publishes nothing (the
-  publish job runs only after every build passes); fix the cause on the branch and ask the maintainer
-  how to proceed (a new tag such as `umbra-linux-v0.5.3`, or re-running failed jobs if the failure
-  was infrastructure).
-- If the release exists, skip to section 6 (the remaining steps after publishing).
-- Ask the maintainer before taking over steps the cloud session may still be doing. Two agents pushing
-  the same tag or merging the same branch at once is the main risk here.
+Once a tag `umbra-linux-v0.5.2` exists, never move, delete or re-push it. A failed release run
+publishes nothing (the publish job runs only after every build passes). Fix the cause on the branch, then
+re-run the failed jobs if the failure was infrastructure, or ask the maintainer about a new tag.
 
 ## 2. What the maintainer asked for (verbatim, in order)
 
@@ -47,10 +47,12 @@ gh run list --repo PreceptorOfMagic/Umbra --workflow linux-release.yml --limit 5
 4. "I want you to publish everything and make the changes to the website needed. For each of them
    mention the amount of testing limited"
 5. "I want you to write a handoff that a local Claude agent can access" (this file)
+6. "I will be getting the agent to run hardware tests first so once you are finished do any updates to
+   the handover and give me the prompt to give to the local agent"
 
-Request 4 means: publish all 14 extras with the Flatpak as a new release, and update the website. Every
-download's testing limits must be stated wherever it is offered. Only the Ubuntu 26.04 extras have ever
-run on hardware.
+Requests 4 and 6 together mean: publish all 14 extras with the Flatpak as Umbra 0.5.2 for Linux and
+update the website, but run the hardware tests first. Every download's testing limits must be stated
+wherever it is offered, updated with whatever the hardware tests show.
 
 ## 3. What exists now
 
@@ -58,13 +60,13 @@ run on hardware.
 
 | Repo | Branch | State |
 |---|---|---|
-| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `7456c15` = release packaging commit, `62ea2d0` = release code commit; this handoff on top |
-| `PreceptorOfMagic/Umbra` | `release/umbra-linux-0.5` | Still at `f9cff84` (0.5.1 docs). Fast-forward to `7456c15` at release (`7456c15` descends from it) |
+| `PreceptorOfMagic/Umbra` | `claude/great-pascal-njfsyf` | All work. `62ea2d0` = release code commit (the Flatpak builds it), `7456c15` = packaging commit pinning it; this handoff on top. Add test results here, then tag (section 6) |
+| `PreceptorOfMagic/Umbra` | `release/umbra-linux-0.5` | Still at `f9cff84` (0.5.1 docs). Fast-forward to the commit you tag (the claude branch descends from it) |
 | `PreceptorOfMagic/Umbra` | `release/umbra-0.5` (default branch) | At `fee8b4e`. Needs the README/workflow commit in section 6 after release |
 | `PreceptorOfMagic/Eclipse-Umbra-Project-Hub` | `claude/great-pascal-njfsyf` | Website and docs for 0.5.2 (`2208f00`, on top of `dfae32f`, `7fd5d88`). Merge to `main` after release; Pages deploys from `main` |
 
 No pull requests exist. The cloud session only ever pushed to `claude/great-pascal-njfsyf`; moving the
-release branches is part of "publish everything".
+release branches is part of "publish everything", after the hardware tests.
 
 ### The HDR extras build (`packaging/linux/hdr-extras/`)
 
@@ -165,49 +167,52 @@ Last all-green extras run at the near-final code:
 <https://github.com/PreceptorOfMagic/Umbra/actions/runs/38612599567> (commit `b05af93`, 14/14). The
 commits since then change only README.txt wording, workflows and docs.
 
-## 5. CI in flight when this was written
+## 5. The release candidates CI built
 
-| Run | What | Expected |
-|---|---|---|
-| [38631968229](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38631968229) | Flatpak dry run 1 (pin `b05af93`, old bundle check) | First proof that the Flatpak builds on GitHub runners (started 20:27; expect 1–2.5 h) |
-| [38632835077](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38632835077) | Flatpak dry run 2 on `7456c15` (final pin, upgrade-over-0.5.1 check) | Must pass before tagging |
-| [38632834823](https://github.com/PreceptorOfMagic/Umbra/actions/runs/38632834823) | Extras run 15 on `7456c15` (new README.txt text) | 14/14 |
+<!-- CANDIDATES -->
 
-Neither Flatpak build had finished at handoff. Untested risks: the runner's flatpak-builder 1.4.x;
-`flatpak run` without a desktop session in the check step; `curl` of the 0.5.1 bundle; the sources tar
-step. If a check step fails for a CI-environment reason and not a bundle problem, fix the workflow on
-the branch: a push re-runs the dry run.
+## 6. Publishing, after the hardware tests and the maintainer's go-ahead
 
-## 6. Remaining steps
+### A. Tag and publish
 
-### A. Publish (only once section 5's dry run 2 and extras run 15 are green, and nobody else did it)
+Commit the recorded results on `claude/great-pascal-njfsyf` (section 7) and delete this handoff in the
+same or a following commit, then:
 
 ```sh
 git fetch origin
-git push origin 7456c15b03e4246c21188f71b090172070ba6b41:refs/heads/release/umbra-linux-0.5   # fast-forward
-git tag -a umbra-linux-v0.5.2 7456c15b03e4246c21188f71b090172070ba6b41 -m "Umbra 0.5.2 for Linux"
+git switch --detach origin/claude/great-pascal-njfsyf      # the commit you will release
+test ! -e docs/handoff/umbra-linux-0.5.2-hdr-extras.md     # the handoff is gone
+git merge-base --is-ancestor origin/release/umbra-linux-0.5 HEAD && echo fast-forward ok
+grep -n 'BUILD_VERSION\|COMMIT:' packaging/linux/flatpak-umbra/io.github.PreceptorOfMagic.Umbra.yml
+git push origin HEAD:refs/heads/release/umbra-linux-0.5
+git tag -a umbra-linux-v0.5.2 -m "Umbra 0.5.2 for Linux" HEAD
 git push origin umbra-linux-v0.5.2
 gh run watch --repo PreceptorOfMagic/Umbra $(gh run list --repo PreceptorOfMagic/Umbra --workflow linux-release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 ```
 
-Expect about 2–3 h. Arch KDE once took 56 min to build. Then check:
+- The manifest pins the code commit `62ea2d0`: the release builds the same Umbra code as the candidate
+  Flatpak you tested. Leave the pin alone unless you changed Umbra's code (section 7, "If a test
+  fails"). Commits after it that only change docs, README.txt text or the notes need no new pin; the
+  release workflow takes those from the tag.
+- The extras are rebuilt at tag time from each distribution's current packages. Compare the release's
+  table (package version column) with the candidates you tested. If a distribution updated KWin or
+  Mutter in between, the published build is not the one you tested: say so in its row, or retest.
+- Expect 2–3 h; Arch KDE once took 56 min to build. Then check:
 
 ```sh
 gh release view umbra-linux-v0.5.2 --repo PreceptorOfMagic/Umbra --json assets --jq '.assets[].name'
-gh release download umbra-linux-v0.5.2 --repo PreceptorOfMagic/Umbra --pattern 'SHA256SUMS' --pattern '*.sha256' -D /tmp/rel
+mkdir -p /tmp/rel && cd /tmp/rel && gh release download umbra-linux-v0.5.2 --repo PreceptorOfMagic/Umbra && sha256sum -c SHA256SUMS
 ```
 
-Expect 14 extras plus 14 source tarballs, each with `.sha256`; the Flatpak, its sources archive and
-the project source, each with `.sha256`; and `SHA256SUMS`. Read the published notes: the extras table
-must have 14 rows.
+Expect 14 extras and 14 source tarballs, each with `.sha256`; the Flatpak, its sources archive and the
+project source, each with `.sha256`; and `SHA256SUMS`. Read the published notes: the extras table must
+have 14 rows, with your hardware results.
 
 ### B. Default branch (`release/umbra-0.5`), after the release exists
 
-The cloud session prepared commit `e180dce` locally (not pushed). Recreate it:
-
 ```sh
 git switch -c default-0.5.2 origin/release/umbra-0.5
-git checkout origin/claude/great-pascal-njfsyf -- .github/README.md .github/workflows/linux-hdr-extras.yml
+git checkout origin/release/umbra-linux-0.5 -- .github/README.md .github/workflows/linux-hdr-extras.yml
 git commit -m "README: Umbra 0.5.2 for Linux, and how far each HDR extra is tested [skip ci]"   # plus the trailers in section 8
 git push origin default-0.5.2:release/umbra-0.5
 ```
@@ -218,8 +223,10 @@ With the workflow file there, the weekly run (`17 4 * * 1`) and manual dispatch 
 
 ### C. Website (Hub), after the release exists
 
-Merge `claude/great-pascal-njfsyf` into `main` in `Eclipse-Umbra-Project-Hub` and push; `pages.yml`
-validates and deploys. Validate locally first:
+`Eclipse-Umbra-Project-Hub` branch `claude/great-pascal-njfsyf` has the 0.5.2 pages: `docs/installation.md`
+and `site/setup.html` (a row per extra with its testing), `docs/umbra.md`, `site/umbra.html`,
+`ACKNOWLEDGEMENTS.md`. Add your hardware results there (the same rows as the release notes), then merge
+into `main` and push; `pages.yml` validates and deploys. Validate locally first:
 
 ```sh
 node scripts/launch/check_hub_boundary.mjs && node scripts/launch/check_public_site.mjs
@@ -227,31 +234,92 @@ node --test scripts/launch/check_publication_limits.test.mjs scripts/launch/chec
 ```
 
 The site's download buttons (`site/assets/downloads.mjs`) find the newest `umbra-linux-v*` release by
-themselves. The hard-coded fallback links and text already say 0.5.2.
-
-The website lists compositor series (KWin 6.6/6.7, Mutter 50/51), not exact versions. If the
-published release's table shows a series change, update `docs/installation.md` and `site/setup.html`.
+themselves. The hard-coded fallback links and text already say 0.5.2. The website lists compositor
+series (KWin 6.6/6.7, Mutter 50/51), not exact versions.
 
 ### D. Tell the maintainer
 
-Report what was published, with links, and repeat the testing limits of section 4.
+Report what was published, with links, and the final testing state of each download.
 
-## 7. What a local agent can add: hardware testing
+## 7. Hardware testing (do this first)
 
-The cloud session had no hardware. These are the biggest gaps, in order of value. Record results the
-way the existing records do (the patch READMEs' measurement sections, `docs/umbra-linux-coop.md`). Then
-update the TESTED text (`tested_note` in `build.sh`, `hardware()` in `release-table.sh`), the README,
-the release notes (`gh release edit`) and the website tables.
+The cloud session had no hardware, so everything in section 4 marked "No" or "None" is untested on a
+real PC. Ask the maintainer which machines and distributions are available. Earlier records name the
+Ubuntu 26.04.1 PC "VEGA" (RTX 2060 SUPER, NVIDIA 595.99.02), an AMD Radeon RX Vega, and Eclipse on an
+LG G5 as the client. Reuse the probes and methods of those records where they exist (the measurement
+sections of `packaging/linux/kwin-virtual-hdr/README.md` and `packaging/linux/mutter-virtual-hdr/README.md`,
+`docs/umbra-linux-coop.md`, the private `test-records/`). Note exact package versions, Umbra version,
+GPU and driver, and what was measured, not impressions.
 
-1. **Umbra 0.5.2 on the Ubuntu 26.04 machine** (KDE Plasma 6.6 and GNOME), as 0.5.1 was tested: install
-   over 0.5.1 with `--reinstall`, then a stream with its own virtual display, co-op, and HDR with each
-   extra. This confirms the `kde-output.c` change did not regress KWin 6.6.
-2. **The Mutter 50 revision 2 extra on Ubuntu 26.04** (`+umbrahdr2`): an HDR stream as in the Mutter
-   README. It is the only HDR extra shipped untested on hardware for a hardware-tested setup.
-3. **KDE Plasma 6.7** on any of the KWin 6.7 distributions (a live USB of Fedora 44/45 KDE or Ubuntu
-   26.10 works): Umbra 0.5.2 streams with its own virtual display at the requested mode (the
-   59.963 Hz match), co-op, then the KDE extra for that distribution: HDR and `ABGR_210LE`.
-4. **Mutter 51** (Fedora 45 Workstation, Ubuntu 26.10, Arch): GNOME HDR with that extra.
+Install the candidate Flatpak over 0.5.1 as a user would:
+
+```sh
+flatpak install --user --reinstall Umbra-0.5.2-linux-x86_64.flatpak
+flatpak info --user io.github.PreceptorOfMagic.Umbra | grep -i version       # 0.5.2
+```
+
+Useful signals: the host log line `KDE virtual displays offer HDR` / `GNOME virtual displays offer
+HDR`; `curl -s http://localhost:47989/serverinfo` (`UmbraCoopHdr` 0 -> 1, `ServerCodecModeSupport`
+0x101 -> 0x301); `kscreen-doctor -o` (KDE: the virtual output, its mode and HDR state); the client's
+`HDR_MODE enabled=1`; frame counts over a fixed time. Each extra's README.txt has its install, VERIFY and
+rollback commands.
+
+In order of value:
+
+1. **Umbra 0.5.2 on Ubuntu 26.04, KDE Plasma 6.6** (stock KWin, then the KDE extra `+umbrahdr4`): an
+   ordinary stream on its own virtual display at the client's mode, co-op with a Windows host,
+   Disconnect/Resume/Quit; then with the extra: HDR desktop stream and HDR co-op pane. Compare with the
+   KWin README's measurements. This checks that the `kde-output.c` change (registry fallback, nearest
+   mode) did not regress KWin 6.6.
+2. **Umbra 0.5.2 on Ubuntu 26.04, GNOME 50.1** with the GNOME extra `+umbrahdr2` (patch revision 2): as
+   in the Mutter README (HDR desktop, HDR co-op pane, SDR unchanged). Revision 2 fixes two memory leaks,
+   so also watch `gnome-shell`'s memory (`ps -o rss= -C gnome-shell`) over a long HDR stream (30 min or
+   more); it should stay flat.
+3. **KDE Plasma 6.7** on any KWin 6.7 distribution (Fedora 44/45 KDE, Ubuntu 26.10, openSUSE Tumbleweed,
+   Arch, CachyOS): Umbra 0.5.2 gets its own virtual display at the requested mode (KWin reports 60 Hz as
+   59.963 Hz; `kscreen-doctor -o` shows it), co-op, then that distribution's KDE extra: HDR stream,
+   `UmbraCoopHdr` 1. Also check that Umbra 0.5.1 really fails there (no virtual display), as the docs
+   claim.
+4. **Mutter 51** (Fedora 45 Workstation, Ubuntu 26.10, Arch, CachyOS): that distribution's GNOME extra,
+   HDR stream.
+5. Any other extra on its own distribution. Each one tested moves its row from "None".
+
+### Recording results
+
+Change only what was actually run. For each hardware result update all of:
+
+- `packaging/linux/hdr-extras/build.sh`, `tested_note()`: the "On hardware" lines for that target and
+  series. This is the README.txt the release builds.
+- `packaging/linux/hdr-extras/release-table.sh`, `hardware()`: the same, one line, for the notes table.
+- `packaging/linux/release-notes/umbra-linux-v0.5.2.md`: "How far this release is tested" (the Flatpak
+  bullet) and "What was tested" (the desktop table; the KDE Plasma 6.7 row says "untested on hardware").
+- `.github/README.md`: "How far 0.5.2 is tested", the desktop table, and the HDR extras table.
+- The patch READMEs: a new "Measured on ..." section, like the existing ones.
+- `docs/umbra-linux-coop.md`, if the result belongs in the development record.
+- Hub: `docs/installation.md`, `site/setup.html` ("How far it is tested", the desktop table, the per-extra
+  table), and the testing sentence in `docs/umbra.md` / `site/umbra.html`.
+
+Test the generated text before committing. This prints README.txt's TESTED for one target without a
+build:
+
+```sh
+sed -n '/^tested_note() {/,/^}/p;/^series_status() {/,/^}/p' packaging/linux/hdr-extras/build.sh > /tmp/tn.sh
+bash -c 'source /tmp/tn.sh; target=ubuntu26.04 component=kwin series=6.6 compositor=KWin distro_name="Ubuntu 26.04"; tested_note'
+```
+
+Pushing changes to `packaging/linux/hdr-extras/**` starts a 14-build extras run (about 1 h), which also
+re-checks the new text.
+
+### If a test fails
+
+- A patch problem: fix the patch, raise that series in `packaging/linux/hdr-extras/revisions`, and push.
+  The extras workflow rebuilds and smoke-tests; download the new candidates and retest.
+- An Umbra problem: fix it on the branch, then pin the manifest (`BUILD_VERSION` stays `v0.5.2`;
+  `COMMIT` and the git source `commit` become the fix commit) in a separate packaging commit, as `7456c15`
+  did. The push starts a Flatpak dry run (`linux-release.yml`, about 1.5–2.5 h); download that bundle
+  and retest. Update the release notes ("Nothing else changed: ..." names what changed since 0.5.1).
+- Something that cannot be fixed now: state it as a known limit in the notes, README and website, and
+  ask the maintainer whether to publish with it.
 
 ## 8. Conventions the work has followed
 
