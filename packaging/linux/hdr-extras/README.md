@@ -47,8 +47,8 @@ predates. Umbra 0.5.1 therefore finds no KDE output on Plasma 6.7: no virtual di
 no co-op and no HDR there, with or without the extra. `kde-output.c` now uses the registry when
 KWin offers it, and the old per-output globals otherwise. KWin 6.7 also generates custom modes with
 libxcvt and reports their real refresh rate (1920x1080 at 60 Hz becomes 59.963 Hz), so the stream's
-mode is now matched within 2% rather than exactly. The KWin 6.7 extras need an Umbra release with
-both changes, and their README.txt says so. The smoke test builds `kde-output.c` from the
+mode is now matched within 2% rather than exactly. Umbra 0.5.2 has both changes; the KWin 6.7
+extras need it, and their README.txt says so. The smoke test builds `kde-output.c` from the
 checkout, so it checks the version being released.
 
 CachyOS:
@@ -114,12 +114,19 @@ On a push or pull request that touches the patches or this directory, and weekly
 The weekly run notices when a distribution update leaves a published extra stale or brings a
 version no patch fits. Each run's summary lists the versions it built.
 
-To publish, run the workflow by hand with `release_tag` set to an existing release. Every build and
-smoke test must pass first. It then attaches the tarballs (replacing older ones of the same name)
-and updates the release's `SHA256SUMS`. GitHub offers a workflow to start by hand only from the
-default branch (`release/umbra-0.5`), so the workflow file must be there too; its `ref` input,
-`release/umbra-linux-0.5` unless set, picks the patches and scripts it builds. `targets` limits a
-run to some distributions, for example to refresh the Fedora 44 extras after a Fedora KWin update.
+A new Linux release publishes them: pushing its tag (`umbra-linux-vX.Y.Z`) starts the
+[Linux release workflow](../../../.github/workflows/linux-release.yml), which calls this one and
+publishes the release only after every build and smoke test, and the Flatpak, have passed. Its notes
+get a table of the extras made by [`release-table.sh`](release-table.sh): what each fits and how far
+it has been tested.
+
+To refresh the extras of an existing release, for example after a Fedora KWin update, run this
+workflow by hand with `release_tag` set to that release and `targets` to the distributions to
+rebuild. Every build and smoke test must pass first. It then attaches the tarballs (replacing older
+ones of the same name) and updates the release's `SHA256SUMS`. GitHub offers a workflow to start by
+hand only from the default branch (`release/umbra-0.5`), so the workflow file is there too; its `ref`
+input, `release/umbra-linux-0.5` unless set, picks the patches and scripts it builds, as the weekly
+run does.
 
 Locally, with podman or docker:
 
@@ -140,7 +147,9 @@ patch changes.
 
 ## Tested
 
-Only the Ubuntu 26.04 extras have run on hardware: KWin 6.6.6 and Mutter 50.1, with the
-measurements in each patch's README. Every other build carries the smoke test above and says so in
-its README.txt. So far that covers the KWin 6.7 and Mutter 51 patches, and the Mutter 50 patch on
-Fedora and openSUSE.
+Only the Ubuntu 26.04 extras have run on hardware, with Umbra 0.5.1: KWin 6.6.6, and Mutter 50.1 in
+revision 1 of its patch (revision 2 adds two memory-leak fixes), with the measurements in each
+patch's README. Every build, those two included, passes the smoke test above before release, and its
+README.txt says what of this applies to it (TESTED: on hardware, automated, and what neither
+covers). The KWin 6.7 and Mutter 51 patches, and the Mutter 50 patch on Fedora and openSUSE, have
+run only in the smoke test.

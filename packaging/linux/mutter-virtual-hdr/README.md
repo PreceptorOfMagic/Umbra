@@ -33,8 +33,10 @@ nothing else changes.
 [`../hdr-extras`](../hdr-extras/) builds these patches into each major distribution's own Mutter
 package: Ubuntu 26.04 and 26.10, Fedora 44 and 45, openSUSE Tumbleweed, Arch Linux and CachyOS (its own
 Mutter build). A release carries them as `Umbra-HDR-GNOME-<distribution>.tar.gz`, each with a `README.txt`
-for that distribution, and their source as `Umbra-HDR-GNOME-<distribution>-source.tar.gz`. The Umbra
-0.5.1 for Linux release carries the Ubuntu 26.04 revision 1 packages (`Umbra-HDR-GNOME-ubuntu26.04.tar.gz`):
+for that distribution, and their source as `Umbra-HDR-GNOME-<distribution>-source.tar.gz`. Umbra 0.5.2
+for Linux carries all seven, with revision 2 of the Mutter 50 patch and how far each has been tested.
+The Umbra 0.5.1 for Linux release carries the Ubuntu 26.04 revision 1 packages
+(`Umbra-HDR-GNOME-ubuntu26.04.tar.gz`), the ones measured below:
 
 ```
 sudo dpkg -i gir1.2-mutter-18_50.1-0ubuntu2.4+umbrahdr1_amd64.deb \

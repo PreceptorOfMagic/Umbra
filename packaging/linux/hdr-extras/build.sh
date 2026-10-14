@@ -68,39 +68,50 @@ series_of() {
   esac
 }
 
-# What has been measured, per target and patch series. Only Ubuntu 26.04 has run on hardware.
+# What has been tested, per target and patch series, in three parts: hardware (only Ubuntu 26.04 has
+# run on hardware), the automated test every build passes before release, and what no test covers.
 tested_note() {
+  echo "On hardware:"
   case "$target/$component-$series" in
     ubuntu26.04/kwin-6.6)
-      echo "Ubuntu 26.04.1, KDE Plasma 6.6 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
-      echo "(driver 595.99.02) and an AMD Radeon RX Vega."
+      echo "  Ubuntu 26.04.1, KDE Plasma 6.6 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
+      echo "  (driver 595.99.02) and an AMD Radeon RX Vega: HDR streams, as measured in the KWin patch's"
+      echo "  README. Umbra 0.5.2 has not run on hardware with these packages; its changed KDE output"
+      echo "  control is covered only by the automated test below."
       ;;
     ubuntu26.04/mutter-50)
-      echo "Ubuntu 26.04.1, GNOME 50.1 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
-      echo "(driver 595.99.02) and an AMD Radeon RX Vega (revision 1; revision 2 adds only the two"
-      echo "memory-leak fixes Mutter made to the code this patch copies)."
+      echo "  Ubuntu 26.04.1, GNOME 50.1 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
+      echo "  (driver 595.99.02) and an AMD Radeon RX Vega, as measured in the Mutter patch's README:"
+      echo "  revision 1 of the patch. These packages carry revision 2, which adds only the two"
+      echo "  memory-leak fixes Mutter made to the code the patch copies; revision 2 has run only in"
+      echo "  the automated test below."
       ;;
     *)
-      echo "Not on hardware with this distribution yet. These packages are built automatically from"
-      echo "$(fam_repo_label) source package; the $compositor $series patch they carry has $(series_status)."
-      echo "Before release, each build is installed over the distribution's own packages in a clean"
-      echo "$distro_name container, checked with the commands above and rolled back again;"
-      if [ "$component" = mutter ]; then
-        echo "Mutter then runs without a GPU and must offer HDR and 10-bit capture on the virtual monitor"
-        echo "Umbra asks for (stock Mutter must not)."
-      else
-        echo "KWin then runs without a GPU, on a virtual KMS device, and must make the virtual output"
-        echo "Umbra asks for HDR-capable, switch it to HDR and offer 10-bit capture (stock KWin must not)."
-      fi
+      echo "  None. These packages have not run on a real PC. $(series_status)"
       ;;
   esac
+  echo "Automated, for every build before release:"
+  echo "  installed over the distribution's own packages in a clean $distro_name container,"
+  echo "  checked with the commands above and rolled back again. In between, $compositor runs without"
+  if [ "$component" = mutter ]; then
+    echo "  a GPU (software rendering) and must offer HDR and 10-bit capture on the virtual monitor"
+    echo "  Umbra asks for, as stock Mutter must not."
+  else
+    echo "  a GPU, on a virtual KMS device with software rendering, and Umbra's own output control must"
+    echo "  find and resize the virtual output Umbra asks for, make it HDR-capable, switch it to HDR"
+    echo "  and get 10-bit capture, as stock KWin must not."
+  fi
+  echo "Not covered by the automated test: a real GPU or display, HDR on a real screen, Umbra's"
+  echo "encoding and the stream itself, games, and other $compositor versions."
 }
 
 series_status() {
   case "$component-$series" in
-    kwin-6.6) echo "been measured with Umbra 0.5.1 on Ubuntu 26.04 (KWin 6.6.6)" ;;
-    mutter-50) echo "been measured with Umbra 0.5.1 on Ubuntu 26.04 (Mutter 50.1)" ;;
-    *) echo "been built, but not yet measured on hardware" ;;
+    kwin-6.6) echo "The KWin 6.6 patch has run on hardware on Ubuntu 26.04 (KWin 6.6.6)." ;;
+    mutter-50) echo "The Mutter 50 patch has run on hardware on Ubuntu 26.04 (Mutter 50.1), in revision 1; these packages carry revision 2 (two memory-leak fixes)." ;;
+    kwin-6.7) echo "The KWin 6.7 patch has not run on hardware anywhere yet." ;;
+    mutter-51) echo "The Mutter 51 patch has not run on hardware anywhere yet." ;;
+    *) echo "The $compositor $series patch has not run on hardware anywhere yet." ;;
   esac
 }
 
@@ -209,9 +220,9 @@ EOF
   echo
   if [ "$component" = kwin ] && [ "$series" != 6.6 ]; then
     # KWin 6.7 announces its outputs only through kde_output_device_registry_v2 (plasma-wayland-
-    # protocols 1.21); Umbra's KDE output control learned it after 0.5.1.
+    # protocols 1.21) and reports custom modes at their libxcvt refresh rate; Umbra 0.5.2 handles both.
     echo "REQUIRES"
-    echo "An Umbra newer than 0.5.1. KWin 6.7 announces its outputs only through a newer protocol than"
+    echo "Umbra 0.5.2 or newer. KWin 6.7 announces its outputs only through a newer protocol than"
     echo "Umbra 0.5.1 knows, so Umbra 0.5.1 finds no KDE output to control: on KDE Plasma 6.7 it streams"
     echo "the desktop without a virtual display per stream, co-op or HDR, with or without these packages."
     echo

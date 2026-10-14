@@ -95,11 +95,21 @@ jobs:
           ls -l dist
 
       - name: Check the bundle
-        # Installed as a user would: the version it reports, and every library of the host finds its
-        # libraries inside the runtime. Nothing here streams; that stays a hardware test.
+        # Installed as a user would, over the previous release: settings are kept, it reports its
+        # version, and every library of the host finds its libraries inside the runtime. Nothing here
+        # streams; that stays a hardware test.
+        env:
+          PREVIOUS: https://github.com/PreceptorOfMagic/Umbra/releases/download/umbra-linux-v0.5.1/Umbra-0.5.1-linux-x86_64.flatpak
         run: |
-          flatpak install --user -y --noninteractive "dist/Umbra-$VERSION-linux-x86_64.flatpak"
+          curl -fsSL -o previous.flatpak "$PREVIOUS"
+          flatpak install --user -y --noninteractive previous.flatpak
+          settings=~/.var/app/$APP_ID/config/sunshine
+          mkdir -p "$settings" && echo kept > "$settings/upgrade-check"
+          flatpak install --user -y --noninteractive --reinstall "dist/Umbra-$VERSION-linux-x86_64.flatpak"
           flatpak info --user "$APP_ID"
+          [ "$(cat "$settings/upgrade-check" 2>/dev/null)" = kept ] ||
+            { echo "::error::installing over the previous release lost its settings"; exit 1; }
+          rm "$settings/upgrade-check"
           out=$(flatpak run --command=sunshine "$APP_ID" --version 2>&1 || true)
           echo "$out"
           grep -q "$VERSION" <<<"$out" || { echo "::error::the bundle does not report version $VERSION"; exit 1; }
@@ -169,9 +179,20 @@ jobs:
           ls | grep -v '\.sha256$' | sort | xargs sha256sum > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Release notes
+        # The notes' HDR extras table is made from the extras built here: what each fits, from its
+        # README.txt, and how far it has been tested.
+        run: |
+          packaging/linux/hdr-extras/release-table.sh dist > extras-table.md
+          cat extras-table.md
+          grep -q '^<!-- HDR extras table -->$' "packaging/linux/release-notes/$TAG.md" ||
+            { echo "::error::the release notes have no HDR extras table marker"; exit 1; }
+          sed -e '/^<!-- HDR extras table -->$/{r extras-table.md' -e 'd}' \
+            "packaging/linux/release-notes/$TAG.md" > notes.md
+
       - name: Publish
         run: |
           # Linux releases do not replace the Windows release as the repository's latest.
           gh release create "$TAG" dist/* --verify-tag --latest=false \
-            --title "Umbra $VERSION for Linux" --notes-file "packaging/linux/release-notes/$TAG.md"
+            --title "Umbra $VERSION for Linux" --notes-file notes.md
           gh release view "$TAG" --json url,assets --jq '.url, (.assets | length | tostring) + " assets"'

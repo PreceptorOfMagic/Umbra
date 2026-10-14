@@ -1,12 +1,14 @@
 # Umbra Linux development Flatpak
 
-This recipe builds the published Umbra 0.5.1 for Linux bundle (tag `umbra-linux-v0.5.1`). It fetches
-the Umbra commit it pins from the public repository. To build it from a checkout of the tag (a
+This recipe builds the published Umbra 0.5.2 for Linux bundle (tag `umbra-linux-v0.5.2`). It fetches
+the Umbra commit it pins from the public repository. The [Linux release workflow](../../../.github/workflows/linux-release.yml)
+builds the release this way on GitHub from the tag, with the HDR extras, and publishes it once
+everything has passed. To build it from a checkout of the tag (a
 recursive clone fails: the `third-party/build-deps` submodule pins a commit no longer on any branch,
 which the manifest fetches as an archive instead):
 
 ```
-git clone --branch umbra-linux-v0.5.1 https://github.com/PreceptorOfMagic/Umbra.git && cd Umbra
+git clone --branch umbra-linux-v0.5.2 https://github.com/PreceptorOfMagic/Umbra.git && cd Umbra
 git submodule update --init packaging/linux/flatpak/deps/shared-modules
 flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo build \
   packaging/linux/flatpak-umbra/io.github.PreceptorOfMagic.Umbra.yml
@@ -24,7 +26,7 @@ virtual-display controls must not prevent ordinary desktop streaming.
 
 The final release also requires the custom GPU HEVC encoder for mixed-hardware co-op with Windows
 behavioral parity, plus HDR wherever capture, encoding and presentation support it. The development package now includes the Linux custom encoder and portal HDR path.
-Both are in the 0.5.1 release; the repository README lists the setups it was tested on. The
+Both are in the 0.5.1 and 0.5.2 releases; the repository README lists the setups they were tested on. The
 development record is [the Linux co-op record](../../../docs/umbra-linux-coop.md).
 
 ## Build choices

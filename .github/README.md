@@ -36,37 +36,41 @@ Windows 11 x64 on RTX 4070, RTX 3070 and Radeon RX Vega is the current physical 
 
 ### Linux x86_64 (Flatpak)
 
-Download `Umbra-0.5.1-linux-x86_64.flatpak` from the [Umbra 0.5.1 for Linux release](https://github.com/PreceptorOfMagic/Umbra/releases/tag/umbra-linux-v0.5.1).
+Download `Umbra-0.5.2-linux-x86_64.flatpak` from the [Umbra 0.5.2 for Linux release](https://github.com/PreceptorOfMagic/Umbra/releases/tag/umbra-linux-v0.5.2).
 
-1. Install Flatpak and add Flathub if you have not already: `sudo apt install flatpak`, then `flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo`.
-2. Check the download: `sha256sum -c Umbra-0.5.1-linux-x86_64.flatpak.sha256`.
-3. Install it: `flatpak install --user Umbra-0.5.1-linux-x86_64.flatpak`. Flatpak fetches the Freedesktop 25.08 runtime and, on NVIDIA, the driver extension matching your installed driver.
+1. Install Flatpak and add Flathub if you have not already (on Ubuntu: `sudo apt install flatpak`), then `flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo`.
+2. Check the download: `sha256sum -c Umbra-0.5.2-linux-x86_64.flatpak.sha256`.
+3. Install it: `flatpak install --user Umbra-0.5.2-linux-x86_64.flatpak` (from 0.5.1, add `--reinstall`; settings and pairings are kept). Flatpak fetches the Freedesktop 25.08 runtime and, on NVIDIA, the driver extension matching your installed driver.
 4. Start **Umbra** from the application menu. Accept **Input Setup** when it is offered: it adds the input rule streamed controllers, mouse and keyboard need, through your desktop's administrator prompt, and can start Umbra when you sign in. If the desktop asks to allow screen sharing, allow it.
 5. Open `https://localhost:47990`, create the administrator login and pair Eclipse using its PIN.
 
 | Desktop | Streaming | Per-client virtual display | Co-op | HDR |
 |---|---|---|---|---|
-| KDE Plasma, Wayland (tested: Ubuntu 26.04, KWin 6.6.6) | Yes | Yes | Yes | With the KDE HDR extra |
+| KDE Plasma 6.6, Wayland (tested: Ubuntu 26.04, KWin 6.6.6) | Yes | Yes | Yes | With the KDE HDR extra |
+| KDE Plasma 6.7, Wayland (KWin 6.7.5) | Expected; untested on hardware | Automated test only | Untested | With the KDE HDR extra; automated test only |
 | GNOME, Wayland (tested: Ubuntu 26.04, Mutter 50.1) | Yes | Yes | Yes | With the GNOME HDR extra; a physical HDR monitor streams HDR without it |
 | X11 desktops (Cinnamon, Xfce, MATE …) | Yes (tested during development on Linux Mint 22.3) | No | No | No |
 | Sway, Hyprland and other wlroots desktops, COSMIC | Not supported | | | |
 
+- **How far 0.5.2 is tested:** it is 0.5.1 with one change, Umbra's KDE output control, which KDE Plasma 6.7 needs (Umbra 0.5.1 finds no KDE output there, so it streams the desktop without a virtual display per stream, co-op or HDR). The "Yes" rows were tested on hardware with 0.5.1. 0.5.2 itself was built and checked automatically, but has not run on hardware; its Plasma 6.7 support has been tested only with each distribution's real KWin 6.7.5 on a virtual display device without a GPU.
 - GPUs: NVIDIA (tested: RTX 2060 SUPER, driver 595) and AMD (tested: Radeon RX Vega). The only AMD card available for testing is a Radeon RX Vega from 2017: its video encoder reaches about 60 fps at 4K and 165 fps only at 1080p, and its co-op panes about 35 fps. The same card hit the same 4K limit on Windows (62 fps), so its age, not Umbra, is the likely limit; newer AMD cards could not be tested. Intel GPUs and multi-GPU systems are untested.
 - Other distributions running KDE Plasma or GNOME on Wayland are expected to behave like those rows but are untested.
-- **KDE Plasma 6.7** (Ubuntu 26.10, Fedora 44 and 45, openSUSE Tumbleweed, Arch, CachyOS): KWin 6.7 announces its outputs through a newer protocol than Umbra 0.5.1 knows, so Umbra 0.5.1 finds no KDE output to control and streams the desktop there without a virtual display per stream, co-op or HDR. The fix is on the Linux release branch for the next Linux release; the KDE HDR extras for those distributions need it.
 - A Linux host and a Windows host can share one co-op session (tested with Umbra 0.5.0 on Windows).
-- **HDR extras** (optional): stock KWin and Mutter keep the virtual displays Umbra streams SDR. Small patches to KWin (KDE) and Mutter (GNOME) add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. The release carries them prebuilt, each built from that distribution's own KWin or Mutter package:
+- **HDR extras** (optional): stock KWin and Mutter keep the virtual displays Umbra streams SDR. Small patches to KWin (KDE) and Mutter (GNOME) add HDR virtual displays and 10-bit screen capture; Umbra detects them automatically. The release carries them prebuilt, each built from that distribution's own KWin or Mutter package. Their testing is limited, and differs per extra:
 
   | Distribution | KDE extra | GNOME extra |
   |---|---|---|
-  | Ubuntu 26.04 | Yes (tested) | Yes (tested) |
-  | Ubuntu 26.10 | Yes | Yes |
-  | Fedora 44, 45 | Yes | Yes |
-  | openSUSE Tumbleweed | Yes | Yes |
-  | Arch Linux | Yes | Yes |
-  | CachyOS | Yes | Yes (for CachyOS's own Mutter) |
+  | Ubuntu 26.04 | KWin 6.6: tested on hardware with Umbra 0.5.1 | Mutter 50: tested on hardware with Umbra 0.5.1, in the patch's previous revision; this revision (two memory-leak fixes) automated test only |
+  | Ubuntu 26.10 | KWin 6.7: automated test only | Mutter 51: automated test only |
+  | Fedora 44 | KWin 6.7: automated test only | Mutter 50: automated test only |
+  | Fedora 45 | KWin 6.7: automated test only | Mutter 51: automated test only |
+  | openSUSE Tumbleweed | KWin 6.7: automated test only | Mutter 50: automated test only |
+  | Arch Linux | KWin 6.7: automated test only | Mutter 51: automated test only |
+  | CachyOS | KWin 6.7: automated test only | Mutter 51 (CachyOS's own): automated test only |
 
-  Download `Umbra-HDR-KDE-<distribution>.tar.gz` or `Umbra-HDR-GNOME-<distribution>.tar.gz`. Its `README.txt` names the exact KWin or Mutter version it fits (install it over no other) and has the install, verify and rollback steps. Only the Ubuntu 26.04 extras have been tested on hardware; the others are built automatically and smoke-tested (installed over the distribution's packages and rolled back in a clean container, and the patched compositor run without a GPU), not tested on hardware. They replace your desktop's compositor packages, a distribution update of KWin or Mutter replaces them again (streams are SDR until a matching extra is published), and reinstalling the distribution's package undoes them. Debian 13, openSUSE Leap 16.0 and Fedora 43 ship KWin, Mutter or PipeWire too old for the patches. On other distributions, add the matching patch from [kwin-virtual-hdr](../packaging/linux/kwin-virtual-hdr/) or [mutter-virtual-hdr](../packaging/linux/mutter-virtual-hdr/) to your own `kwin` or `mutter` package and rebuild it; [hdr-extras](../packaging/linux/hdr-extras/) shows how the prebuilt ones are made.
+  The automated test runs for every extra before it is published: it is installed over its distribution's own packages in a clean container of that distribution and checked with its `README.txt` commands, the patched compositor runs without a GPU and must offer HDR and 10-bit capture on the virtual display Umbra asks for (the stock one must not), and it is rolled back. It does not use a real GPU or display, does not stream and does not show HDR on a screen. The KWin 6.7 and Mutter 51 patches have not run on hardware anywhere yet; the KWin 6.7 extras need Umbra 0.5.2.
+
+  Download `Umbra-HDR-KDE-<distribution>.tar.gz` or `Umbra-HDR-GNOME-<distribution>.tar.gz`. Its `README.txt` names the exact KWin or Mutter version it fits (install it over no other), says how far it has been tested, and has the install, verify and rollback steps. They replace your desktop's compositor packages, a distribution update of KWin or Mutter replaces them again (streams are SDR until a matching extra is published), and reinstalling the distribution's package undoes them. Debian 13, openSUSE Leap 16.0 and Fedora 43 ship KWin, Mutter or PipeWire too old for the patches. On other distributions, add the matching patch from [kwin-virtual-hdr](https://github.com/PreceptorOfMagic/Umbra/tree/umbra-linux-v0.5.2/packaging/linux/kwin-virtual-hdr) or [mutter-virtual-hdr](https://github.com/PreceptorOfMagic/Umbra/tree/umbra-linux-v0.5.2/packaging/linux/mutter-virtual-hdr) to your own `kwin` or `mutter` package and rebuild it; [hdr-extras](https://github.com/PreceptorOfMagic/Umbra/tree/umbra-linux-v0.5.2/packaging/linux/hdr-extras) shows how the prebuilt ones are made.
 - To remove Umbra: `flatpak run --command=remove-additional-install.sh io.github.PreceptorOfMagic.Umbra` removes the input rule and sign-in start, then `flatpak uninstall --user io.github.PreceptorOfMagic.Umbra` removes the app.
 
 ## What Umbra provides
@@ -92,6 +96,6 @@ Working co-op defaults are separate from ordinary streaming settings. The Co-op 
 
 Use [Umbra issues](https://github.com/PreceptorOfMagic/Umbra/issues/new/choose) for installation, capture, virtual display, host service, pairing or encoder problems. Include both app versions, Windows or Linux distribution and desktop, GPU/driver, reproduction steps and the [reviewed diagnostic bundle](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/installation.md#diagnostics).
 
-[Windows build guide](../docs/umbra-windows-build.md) · [Linux Flatpak build](../packaging/linux/flatpak-umbra/DEVELOPMENT.md) · [Development and milestones](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
+[Windows build guide](../docs/umbra-windows-build.md) · [Linux Flatpak build](https://github.com/PreceptorOfMagic/Umbra/blob/umbra-linux-v0.5.2/packaging/linux/flatpak-umbra/DEVELOPMENT.md) · [Development and milestones](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/docs/development.md) · [Acknowledgements](https://github.com/PreceptorOfMagic/Eclipse-Umbra-Project-Hub/blob/main/ACKNOWLEDGEMENTS.md)
 
 [Eclipse/Umbra licence & notices](../LICENSES.md) · [GPL-3.0](../LICENSE)

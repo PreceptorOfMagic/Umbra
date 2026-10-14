@@ -1,6 +1,6 @@
 # Linux Co-op Pane: Flatpak capture feasibility
 
-Status: **released as Umbra 0.5.1 for Linux** (Flatpak, tag `umbra-linux-v0.5.1`). This file is the development record; the supported setups are listed in the repository README.
+Status: **released as Umbra 0.5.1 for Linux** (Flatpak, tag `umbra-linux-v0.5.1`); Umbra 0.5.2 for Linux (tag `umbra-linux-v0.5.2`) adds KDE Plasma 6.7 output control and prebuilt HDR extras. This file is the development record; the supported setups are listed in the repository README.
 The chosen product is one Apollo-based Umbra Flatpak for broad Linux distribution support. A separate
 Vibepollo Linux edition is deferred. Borrowing compatible GPL capture code remains an option.
 Paths written `test-records/...` below name the project's private test records (logs, captures);

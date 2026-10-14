@@ -31,7 +31,8 @@ changes.
 package: Ubuntu 26.04 and 26.10, Fedora 44 and 45, openSUSE Tumbleweed, Arch Linux and CachyOS.
 A release carries them as `Umbra-HDR-KDE-<distribution>.tar.gz`, with install, verify and rollback
 steps in its `README.txt`, and their source as `Umbra-HDR-KDE-<distribution>-source.tar.gz`. The
-Umbra 0.5.1 for Linux release carries the Ubuntu 26.04 one.
+Umbra 0.5.1 for Linux release carries the Ubuntu 26.04 one; Umbra 0.5.2 for Linux carries all seven,
+with how far each has been tested. The KWin 6.7 ones need Umbra 0.5.2 or newer.
 
 ## Other distributions
 
