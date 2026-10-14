@@ -17,7 +17,7 @@ opensuse_evr() { # <package>: the version-release zypper would install
 fam_repo_label() { echo "openSUSE's"; }
 
 fam_setup() {
-  zypper -n -q install rpm-build patch gawk tar gzip findutils >/dev/null
+  zypper -n -q install rpm-build debugedit patch gawk tar gzip findutils >/dev/null
   # The image lists its source repository but leaves it disabled.
   local alias found=
   for alias in $(zypper -n lr -u | awk -F'|' 'tolower($0) ~ /\/source\// { gsub(/ /, "", $2); print $2 }'); do
@@ -45,7 +45,7 @@ fam_build() {
   local patch=$1 rev=$2 release
   release="${distro_version##*-}.umbrahdr$rev"
   rpm_prepare_spec "$spec" "$patch" "$release"
-  rpm_build "$spec"
+  rpm_build "$spec" strip
   built_version="$upstream_version-$release"
 }
 

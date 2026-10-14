@@ -36,9 +36,13 @@ rpm_prepare_spec() {
   mv "$spec.umbra" "$spec"
 }
 
-# <spec>: build binary and source packages; the distribution's tests and debuginfo are skipped.
+# <spec> [strip]: build binary and source packages; the distribution's tests are skipped. Fedora
+# strips binaries on its own, so its debuginfo step is skipped too. openSUSE strips only in that
+# step ("strip"), so there it runs, and the debuginfo packages it makes stay out of the extra.
 rpm_build() {
-  rpmbuild -ba --nocheck --define 'debug_package %{nil}' --define "_smp_mflags -j$(nproc)" "$1"
+  local debug=(--define 'debug_package %{nil}')
+  [ "${2:-}" = strip ] && debug=()
+  rpmbuild -ba --nocheck "${debug[@]}" --define "_smp_mflags -j$(nproc)" "$1"
   find "$rpm_topdir/RPMS" -name '*.rpm' -exec mv {} "$work/bin/" \;
   find "$rpm_topdir/SRPMS" -name '*.src.rpm' -exec mv {} "$work/src/" \;
 }
