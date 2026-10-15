@@ -77,6 +77,43 @@ KWin reports an HDR output to clients by its blending space (`wayland-info`: BT.
 `tf_named: gamma22`, max 1000, reference 200), not PQ. Umbra therefore trusts its own HDR switch
 for its virtual output rather than the colour-management query.
 
+## Measured on VEGA (AMD Radeon RX Vega, Umbra 0.5.2), 2026-10-15
+
+Umbra 0.5.2 for Linux (the Flatpak), each distribution with its own KWin and with its KDE extra. Frames
+received per 25 s probe; the RX Vega's encoder tops out at about 59 fps at 4K and 35 fps per co-op pane.
+
+| Distribution | KWin | Packages | 4K desktop | Co-op pane, 8-bit | Co-op pane, 10-bit HDR | Disconnect + resume |
+|---|---|---|---|---|---|---|
+| Ubuntu 26.04 | 6.6.6 | Ubuntu's | 1470 | 881 | (SDR) | 1697 |
+| Ubuntu 26.04 | 6.6.6 | `4:6.6.6-0ubuntu0.1+umbrahdr4` | 1470 | 891 | 889 | 1722 |
+| Ubuntu 26.10 | 6.7.5 | Ubuntu's | 1459 | 863 | (SDR) | 1737 |
+| Ubuntu 26.10 | 6.7.5 | `4:6.7.5-0ubuntu1+umbrahdr1` | 1463 | 859 | 910 | 1622 |
+| Fedora 44 | 6.7.5 | Fedora's | 1494 | 767 | (SDR) | 1596 |
+| Fedora 44 | 6.7.5 | `6.7.5-1.fc44.umbrahdr1` | 1465 | 866 | 893 | 1733 |
+| Fedora 45 (pre-release) | 6.7.5 | Fedora's | 1454 | 320\* | (SDR) | 850\* |
+| Fedora 45 (pre-release) | 6.7.5 | `6.7.5-1.fc45.umbrahdr1` | 1476 | 897 | 906 | 1778 |
+| openSUSE Tumbleweed | 6.7.5 | openSUSE's | 1467 | 952 | (SDR) | 1939 |
+| openSUSE Tumbleweed | 6.7.5 | `6.7.5-1.1.umbrahdr1` | 1464 | 994 | 923 | 1885 |
+
+- With the extra: host log `KDE virtual displays offer HDR`, `/serverinfo` `UmbraCoopHdr` 0 -> 1. The HDR
+  co-op pane goes through the GPU HEVC encoder (`GPU frames 1920x2176 PQ`), the client reports
+  `HDR_MODE enabled=1`, and the recorded stream is `Main 10, yuv420p10le, bt2020nc, smpte2084, bt2020`:
+  a white area reads 576-589 in 10-bit luma (an SDR pane reads 935-944), and the tone-mapped frame shows
+  the desktop. `ServerCodecModeSupport` stays 0x101: the RX Vega's video encoder has no Main 10 profile,
+  so the HDR desktop stream measured on NVIDIA above cannot run on this card.
+- Without the extra every stream works and stays SDR; the 4K desktop and 8-bit pane rates match.
+- KWin 6.7 reports Umbra's 165 Hz custom modes at its real rate (164.95 Hz at 3840x2160 and 164.85 Hz
+  at 1920x2176 on Ubuntu 26.10 and openSUSE Tumbleweed, 164.99 Hz on Fedora); Umbra 0.5.2 takes the
+  nearest mode of that size.
+- Flatpak 1.18.4 (Ubuntu 26.10, Fedora 44 and 45, openSUSE Tumbleweed) exports Umbra's desktop file
+  without `X-KDE-Wayland-Interfaces`, and KWin then refuses Umbra its screen-cast protocol. On Ubuntu
+  26.10 the copy of the desktop file that keeps the key was made by hand. On Fedora 44, Fedora 45 and
+  Tumbleweed, Umbra 0.5.2 wrote it at its first start through the application-menu entry's command; on
+  a fresh Fedora 44 that first start already offered HDR.
+- Umbra builds: the final 0.5.2 for Ubuntu 26.04 with the extra, Fedora 44 with the extra, Fedora 45 and
+  Tumbleweed; earlier 0.5.2 candidates, which differ only in the desktop-file helper, for the other rows.
+- \* Taken while a Mutter build ran on the same PC.
+
 ## Leg test in this directory
 
 - GPU-frame hand-off probes moved to `../gpu-frames-probes/`.

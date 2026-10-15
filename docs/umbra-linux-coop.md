@@ -711,3 +711,47 @@ source; the rusticl GL-sharing sequence is bit-exact; an import failure returns
 `UMBRA_GPU_FRAMES_CUDA=0`: GL sharing is negotiated, NVIDIA refuses it, read-back hand-off ~46 fps
 (old capture read-back ~32). CUDA path after the change: co-op 8-bit 3563 frames, 10-bit HDR 3493.
 Owed: one run on an AMD GPU (radeonsi exporting the texture to rusticl).
+
+## Umbra 0.5.2 on AMD, five distributions — 2026-10-15
+
+Final candidate: Flatpak dry run 38682377979 (manifest `66b42fd`, Umbra `f4fe158`, bundle sha256 `1fd0d5dc…`);
+earlier rows ran candidates that differ only in `umbra-kde-entry.sh`. PC: VEGA, AMD Radeon RX Vega (Vega 10),
+Secure Boot on. Each test OS was installed on a spare partition and started through its own Microsoft-signed
+shim: Ubuntu 26.04 (kernel 7.0.0-38), Ubuntu 26.10 (7.3.0-9), Fedora 44 (7.2.10-200), Fedora 45 pre-release
+(7.2.10-300; SELinux permissive on both Fedoras, as the files were written from outside them) and openSUSE
+Tumbleweed (7.2.9-1). Arch Linux and CachyOS have no Microsoft-signed boot path, so they were not run.
+
+Per desktop, with the stock compositor and with the HDR extra, 25 s probes against the installed host:
+A2 4K desktop on its own virtual display, A3 HDR desktop, A4 co-op pane 8-bit, A5 co-op pane 10-bit HDR,
+A7 a recorded HDR pane (ffprobe colour tags and the 10-bit luma of a white area: PQ ~576-595, SDR ~935-974,
+plus a tone-mapped frame read by eye), A6 co-op disconnect and resume at a new size. Every A2, A4 and A6 passed
+everywhere; A5 and A7 passed with every extra and correctly stayed SDR without one. A3 cannot pass on this card:
+its VA-API encoder has no HEVC Main 10. Frame counts per run are in `packaging/linux/kwin-virtual-hdr/README.md`
+and `packaging/linux/mutter-virtual-hdr/README.md`. On AMD the co-op encoder took `hand-off=gl-sharing`
+(radeonsi texture to rusticl), the hand-off the previous section owed a run of; panes ran 27-39 fps (Tumbleweed
+GNOME and one Fedora 45 run during a concurrent build aside), the 4K
+desktop ~59 fps (the VA-API encoder's limit on this card).
+
+**Flatpak 1.18.4.** Ubuntu 26.10, Fedora 44 and 45, Tumbleweed, Arch and CachyOS ship it; it exports desktop
+files through a key allowlist (the 2026-09-28 security fix) that drops `X-KDE-Wayland-Interfaces`, so KWin
+refused `zkde_screencast_unstable_v1`: 0.5.2 as first built fell back to the portal on Plasma 6.7 exactly like
+0.5.1 (no virtual display, co-op or HDR). `umbra-kde-entry.sh` (`472ba0b`, `b9f111e`, `f4fe158`) writes a user
+copy that keeps the key from the launcher, Input Setup and removal helper. KWin reloads its service cache a
+moment after `kbuildsycoca6`: a start at once still fell back (2/2), 2 s later it got the virtual displays
+(2/2), hence the wait after a new copy. On a fresh Fedora 44 the first launcher start offered HDR at once;
+Fedora 45 and Tumbleweed wrote the copy at first start; on Ubuntu 26.04 (Flatpak 1.16.6) no copy is made.
+
+**Other measurements.** KWin 6.7 reports 165 Hz custom modes as 164.95 Hz (3840x2160), 164.85 Hz (1920x2176)
+or 164.99 Hz (Fedora); 0.5.2's nearest-mode match took them. GNOME extra revision 2 on Ubuntu 26.04: seven
+290 s HDR pane streams, gnome-shell RSS 244,976 -> 244,476 KiB (peak 246,464); the test window moved only for
+the first 180 s of stream 1 (`acceptance-gears.sh` stops at 180 s), so streams 2-7 carried a still desktop at
+the 16.5 fps minimum rate. Tumbleweed GNOME panes ran ~20 fps with either Mutter (encoder 25-67 ms per frame);
+0.5.1 measured the same there (462/541/812 frames), KDE on that install did not; cause not found. Fedora's
+Mutter moved (50.5 -> 50.6, 51.0 -> 51.1) after the extras candidates were built, so those two extras ran as
+local builds (`run-local.sh`) of the new versions. One Fedora 45 boot reset ~10 s in, right after installing
+the GNOME extra; the next two boots on the same packages were clean.
+
+Not run: NVIDIA, the HDR desktop stream, a two-host co-op session, Input Setup's polkit prompt and streamed
+input (deferred on every test OS), Arch Linux and CachyOS. Harness trap found on the way: after a KDE -> GNOME
+switch GNOME takes `wayland-1` / `:1`, so scripts that hard-coded `wayland-0` / `:0` silently fell back to CPU
+frames or never started the test window (two runs voided and repeated).

@@ -83,4 +83,42 @@ DEB_BUILD_OPTIONS="nocheck nodoc noautodbgsym" dpkg-buildpackage -b -uc -us
 - Cost: the HDR stream re-renders the stage, so HDR rates are below KDE's (desktop ~152 vs ~161 fps).
   Rendering the virtual view itself at 10 bits would allow a blit instead (not done).
 
+## Measured on VEGA (AMD Radeon RX Vega, Umbra 0.5.2), 2026-10-15
+
+Umbra 0.5.2 for Linux (the Flatpak), each distribution with its own Mutter and with its GNOME extra
+(revision 2 of the Mutter 50 patch). Frames received per 25 s probe; the RX Vega's encoder tops out at
+about 59 fps at 4K and 35 fps per co-op pane.
+
+| Distribution | Mutter | Packages | 4K desktop | Co-op pane, 8-bit | Co-op pane, 10-bit HDR | Disconnect + resume |
+|---|---|---|---|---|---|---|
+| Ubuntu 26.04 | 50.1 | Ubuntu's | 1444 | 919 | (SDR) | 1709 |
+| Ubuntu 26.04 | 50.1 | `50.1-0ubuntu2.4+umbrahdr2` | 1440 | 949 | 884 | 1783 |
+| Ubuntu 26.10 | 51.0 | Ubuntu's | 1453 | 958 | (SDR) | 1726 |
+| Ubuntu 26.10 | 51.0 | `51.0-1ubuntu3+umbrahdr1` | 1450 | 966 | 895 | 1760 |
+| Fedora 44 | 50.6 | Fedora's | 1498 | 693 | (SDR) | 1332 |
+| Fedora 44 | 50.6 | `50.6-1.fc44.umbrahdr2`\* | 1482 | 867 | 865 | 1656 |
+| Fedora 45 (pre-release) | 51.1 | Fedora's | 1499 | 686 | (SDR) | 1377 |
+| Fedora 45 (pre-release) | 51.1 | `51.1-1.fc45.umbrahdr1`\* | 1468 | 921 | 892 | 1658 |
+| openSUSE Tumbleweed | 50.5 | openSUSE's | 1432 | 480 | (SDR) | 762 |
+| openSUSE Tumbleweed | 50.5 | `50.5-3.1.umbrahdr2` | 1416 | 537 | 501 | 754 |
+
+- With the extra: host log `GNOME virtual displays offer HDR`, `/serverinfo` `UmbraCoopHdr` 0 -> 1, and
+  the virtual monitor switches to colour mode 1 for an HDR pane. The pane goes through the GPU HEVC
+  encoder, the client reports `HDR_MODE enabled=1`, and the recorded stream is `Main 10, yuv420p10le,
+  bt2020nc, smpte2084, bt2020`: a white area reads 588-595 in 10-bit luma (an SDR pane reads 955-974), and
+  the tone-mapped frame shows the desktop. The RX Vega has no Main 10 video encoder, so the HDR desktop
+  stream measured on NVIDIA above cannot run on this card.
+- Revision 2's leak fixes: seven back-to-back 290 s HDR co-op streams on Ubuntu 26.04, gnome-shell's
+  resident memory 244,976 KiB before and 244,476 KiB after (peak 246,464). The test window moved only
+  for the first 180 s of stream 1 (8,247 frames); the other streams carried a still desktop at Umbra's
+  minimum rate (about 4,800 frames each).
+- Without the extra every stream works and stays SDR.
+- On Tumbleweed the co-op panes ran at about 20 fps with either Mutter: Umbra's GPU HEVC encoder took
+  25-67 ms per frame there. Umbra 0.5.1 measured the same on that install (462, 541 and 812 frames),
+  and KDE on the same install ran its panes at the usual rate; the cause was not found.
+- Umbra builds: the final 0.5.2 for Ubuntu 26.04 with the extra, Fedora 45 and Tumbleweed; earlier
+  0.5.2 candidates, which differ only in a KDE desktop-file helper, for the other rows.
+- \* Built on that PC with `../hdr-extras/run-local.sh` from the same patch: Fedora updated Mutter
+  (50.5 to 50.6, 51.0 to 51.1) after the release candidates were built.
+
 Upstreaming: not yet submitted to GNOME.
