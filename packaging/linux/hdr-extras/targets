@@ -10,7 +10,9 @@
 ubuntu26.04            ubuntu:26.04                  deb       kde gnome
 ubuntu26.10            ubuntu:26.10                  deb       kde gnome
 fedora44               fedora:44                     fedora    kde gnome
-fedora45               fedora:45                     fedora    kde gnome
+# fedora45 gnome is left out of the 0.5.2 release build (2026-10-15): its mirrors served the Mutter 51.1 package
+# but only the 51.0 source, so build.sh refused it. It is attached to the release separately once it builds.
+fedora45               fedora:45                     fedora    kde
 arch                   archlinux:latest              arch      kde gnome
 cachyos                cachyos/cachyos-v3:latest     cachyos   kde gnome
 opensuse-tumbleweed    opensuse/tumbleweed:latest    opensuse  kde gnome
