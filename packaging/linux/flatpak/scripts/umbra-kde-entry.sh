@@ -16,8 +16,11 @@ flatpak-spawn --host sh -c '
   id=$1 key=$2 action=$3
   data=${XDG_DATA_HOME:-$HOME/.local/share}
   dest=$data/applications/$id.desktop
+  # KWin finds the desktop file through KDE'"'"'s service cache, which otherwise catches up a few seconds later
+  # (measured: a launch right after writing the copy still fell back to the portal). Refresh it now.
+  refresh() { if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 >/dev/null 2>&1 || true; fi; }
   if [ "$action" = remove ]; then
-    if grep -qx "$key" "$dest" 2>/dev/null; then rm -f "$dest"; fi
+    if grep -qx "$key" "$dest" 2>/dev/null; then rm -f "$dest"; refresh; fi
     exit 0
   fi
   src=
@@ -29,7 +32,7 @@ flatpak-spawn --host sh -c '
     exit 1
   fi
   if grep -qx "$key" "$src"; then
-    if grep -qx "$key" "$dest" 2>/dev/null; then rm -f "$dest"; fi
+    if grep -qx "$key" "$dest" 2>/dev/null; then rm -f "$dest"; refresh; fi
     exit 0
   fi
   mkdir -p "$data/applications"
@@ -38,5 +41,5 @@ flatpak-spawn --host sh -c '
   sed "/^X-KDE-Wayland-Interfaces=/d; /^\[Desktop Entry\]\$/a $key" "$src" > "$tmp"
   grep -qx "$key" "$tmp"
   chmod 0644 "$tmp"
-  if ! cmp -s "$tmp" "$dest"; then mv -f "$tmp" "$dest"; fi
+  if ! cmp -s "$tmp" "$dest"; then mv -f "$tmp" "$dest"; refresh; fi
 ' sh "$app_id" X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1 "$action"
