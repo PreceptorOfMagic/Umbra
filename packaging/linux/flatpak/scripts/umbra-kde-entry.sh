@@ -41,5 +41,7 @@ flatpak-spawn --host sh -c '
   sed "/^X-KDE-Wayland-Interfaces=/d; /^\[Desktop Entry\]\$/a $key" "$src" > "$tmp"
   grep -qx "$key" "$tmp"
   chmod 0644 "$tmp"
-  if ! cmp -s "$tmp" "$dest"; then mv -f "$tmp" "$dest"; refresh; fi
+  # KWin reloads the refreshed cache shortly afterwards: Umbra started at once still fell back to the portal,
+  # 2 s later it got the virtual displays (measured twice each, Fedora 44 / KWin 6.7.5). Only when the copy changes.
+  if ! cmp -s "$tmp" "$dest"; then mv -f "$tmp" "$dest"; refresh; sleep 2; fi
 ' sh "$app_id" X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1 "$action"
