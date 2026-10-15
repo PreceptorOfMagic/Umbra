@@ -68,28 +68,52 @@ series_of() {
   esac
 }
 
-# What has been tested, per target and patch series, in three parts: hardware (only Ubuntu 26.04 has
-# run on hardware), the automated test every build passes before release, and what no test covers.
+# What has been tested, per target and patch series, in three parts: hardware (listed in
+# hardware-tested), the automated test every build passes before release, and what no test covers.
+# Prints the extra's version that ran on hardware, how it was built and the distribution's own version.
+hardware_run() {
+  awk -v t="$target" -v c="$component" '!/^#/ && $1 == t && $2 == c { print $3, $4, $5 }' "$here/hardware-tested"
+}
 tested_note() {
+  local ran how own where
+  read -r ran how own <<< "$(hardware_run)"
+  para() { echo "$*" | fold -s -w 96 | sed 's/^/  /; s/ *$//'; }
   echo "On hardware:"
-  case "$target/$component-$series" in
-    ubuntu26.04/kwin-6.6)
-      echo "  Ubuntu 26.04.1, KDE Plasma 6.6 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
-      echo "  (driver 595.99.02) and an AMD Radeon RX Vega: HDR streams, as measured in the KWin patch's"
-      echo "  README. Umbra 0.5.2 has not run on hardware with these packages; its changed KDE output"
-      echo "  control is covered only by the automated test below."
-      ;;
-    ubuntu26.04/mutter-50)
-      echo "  Ubuntu 26.04.1, GNOME 50.1 on Wayland, with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER"
-      echo "  (driver 595.99.02) and an AMD Radeon RX Vega, as measured in the Mutter patch's README:"
-      echo "  revision 1 of the patch. These packages carry revision 2, which adds only the two"
-      echo "  memory-leak fixes Mutter made to the code the patch copies; revision 2 has run only in"
-      echo "  the automated test below."
-      ;;
-    *)
-      echo "  None. These packages have not run on a real PC. $(series_status)"
-      ;;
-  esac
+  if [ -z "$ran" ]; then
+    case "$target" in
+      arch|cachyos)
+        para "None. These packages have not run on a real PC: Arch Linux and CachyOS cannot start on" \
+          "the test PC without changing its Secure Boot setup, so they were not tested. $(series_status)" ;;
+      *) para "None. These packages have not run on a real PC. $(series_status)" ;;
+    esac
+  else
+    where="$distro_name, $desktop_name on Wayland ($compositor $own)"
+    if [ "$ran" != "$built_version" ]; then
+      para "$where: version $ran of this extra ran with Umbra 0.5.2 on an AMD Radeon RX Vega," \
+        "2026-10-15. These packages, version $built_version, have not run on hardware."
+    elif [ "$how" = local ]; then
+      para "$where: a build of this same version, made on the test PC with this extra's build" \
+        "script from the same source package and patch, ran with Umbra 0.5.2 on an AMD Radeon RX Vega," \
+        "2026-10-15."
+    else
+      para "$where: these packages ran with Umbra 0.5.2 on an AMD Radeon RX Vega, 2026-10-15."
+    fi
+    para "A co-op pane streamed in 10-bit HDR (Main 10, BT.2020, PQ, checked in the recorded stream)," \
+      "and 4K desktop, co-op pane and co-op resume streams ran as on the distribution's own" \
+      "$compositor. Not run there: an HDR desktop stream, which needs a GPU with a 10-bit video" \
+      "encoder (the RX Vega has none), and NVIDIA GPUs."
+    case "$target/$component-$series" in
+      ubuntu26.04/kwin-6.6)
+        para "Earlier, the KWin 6.6 patch ran with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER (driver" \
+          "595.99.02): HDR desktop and co-op streams, as measured in the KWin patch's README." ;;
+      ubuntu26.04/mutter-50)
+        para "gnome-shell's memory stayed flat over seven 290 s HDR co-op streams, of which the first three" \
+          "minutes showed a moving picture (this revision adds two memory-leak fixes). Revision 1 of the" \
+          "patch also ran with Umbra 0.5.1 on an NVIDIA RTX 2060" \
+          "SUPER (driver 595.99.02): HDR desktop and co-op streams, as measured in the Mutter patch's" \
+          "README." ;;
+    esac
+  fi
   echo "Automated, for every build before release:"
   echo "  installed over the distribution's own packages in a clean $distro_name container,"
   echo "  checked with the commands above and rolled back again. In between, $compositor runs without"
@@ -108,9 +132,9 @@ tested_note() {
 series_status() {
   case "$component-$series" in
     kwin-6.6) echo "The KWin 6.6 patch has run on hardware on Ubuntu 26.04 (KWin 6.6.6)." ;;
-    mutter-50) echo "The Mutter 50 patch has run on hardware on Ubuntu 26.04 (Mutter 50.1), in revision 1; these packages carry revision 2 (two memory-leak fixes)." ;;
-    kwin-6.7) echo "The KWin 6.7 patch has not run on hardware anywhere yet." ;;
-    mutter-51) echo "The Mutter 51 patch has not run on hardware anywhere yet." ;;
+    mutter-50) echo "This revision of the Mutter 50 patch has run on hardware on Ubuntu 26.04 (Mutter 50.1), Fedora 44 (Mutter 50.6) and openSUSE Tumbleweed (Mutter 50.5)." ;;
+    kwin-6.7) echo "The KWin 6.7 patch has run on hardware on Ubuntu 26.10, Fedora 44 and 45 and openSUSE Tumbleweed (KWin 6.7.5)." ;;
+    mutter-51) echo "The Mutter 51 patch has run on hardware on Ubuntu 26.10 (Mutter 51.0) and Fedora 45 (Mutter 51.1)." ;;
     *) echo "The $compositor $series patch has not run on hardware anywhere yet." ;;
   esac
 }

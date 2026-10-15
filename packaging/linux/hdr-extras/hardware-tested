@@ -1,0 +1,18 @@
+# HDR extras that have run on hardware; build.sh (README.txt, TESTED) and release-table.sh (the release
+# notes) read it. One PC (VEGA: AMD Radeon RX Vega) with Umbra 0.5.2, 2026-10-15.
+# Columns: target, component, the extra's version that ran, how it was built ("release": the release
+# candidate's packages; "local": built on that PC with build.sh from the same source package and patch,
+# because the distribution had updated its package after the candidates were built), and the
+# distribution's own version it replaced.
+# Arch Linux and CachyOS are absent: that PC starts only through Microsoft's 2011 UEFI CA, and neither
+# distribution ships a boot loader signed with it.
+ubuntu26.04   kwin    4:6.6.6-0ubuntu0.1+umbrahdr4   release  6.6.6
+ubuntu26.04   mutter  50.1-0ubuntu2.4+umbrahdr2      release  50.1
+ubuntu26.10   kwin    4:6.7.5-0ubuntu1+umbrahdr1     release  6.7.5
+ubuntu26.10   mutter  51.0-1ubuntu3+umbrahdr1        release  51.0
+fedora44      kwin    6.7.5-1.fc44.umbrahdr1         release  6.7.5
+fedora44      mutter  50.6-1.fc44.umbrahdr2          local    50.6
+fedora45      kwin    6.7.5-1.fc45.umbrahdr1         release  6.7.5
+fedora45      mutter  51.1-1.fc45.umbrahdr1          local    51.1
+opensuse-tumbleweed  kwin    6.7.5-1.1.umbrahdr1    release  6.7.5
+opensuse-tumbleweed  mutter  50.5-3.1.umbrahdr2     release  50.5

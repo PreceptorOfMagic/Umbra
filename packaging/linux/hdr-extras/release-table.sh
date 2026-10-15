@@ -3,19 +3,33 @@
 #
 #   release-table.sh <directory with Umbra-HDR-*.tar.gz>
 #
-# What each fits comes from its own README.txt. How far each has been tested comes from the list
-# below, by distribution and patch series; it matches the TESTED section build.sh writes.
+# What each fits comes from its own README.txt. How far each has been tested on hardware comes from
+# hardware-tested, as in the TESTED section build.sh writes.
 set -euo pipefail
 
 dir=${1:?usage: release-table.sh <directory>}
 here=$(cd "$(dirname "$0")" && pwd)
 
-hardware() { # <target> <component> <series>
-  case "$1/$2-$3" in
-    ubuntu26.04/kwin-6.6) echo "Yes, with Umbra 0.5.1 (NVIDIA RTX 2060 SUPER, AMD Radeon RX Vega). Not yet with Umbra 0.5.2" ;;
-    ubuntu26.04/mutter-50) echo "Patch revision 1, with Umbra 0.5.1 (NVIDIA RTX 2060 SUPER, AMD Radeon RX Vega). This revision 2 (two memory-leak fixes): automated test only" ;;
-    */mutter-50) echo "None. The same patch ran on hardware on Ubuntu 26.04 (revision 1)" ;;
-    *) echo "None. This patch has not run on hardware anywhere" ;;
+hardware() { # <target> <component> <package version>
+  local ran how own
+  read -r ran how own < <(awk -v t="$1" -v c="$2" '!/^#/ && $1 == t && $2 == c { print $3, $4, $5 }' "$here/hardware-tested") || true
+  if [ -z "$ran" ]; then
+    case "$1" in
+      arch|cachyos) echo "None: Arch Linux and CachyOS cannot start on the test PC without changing its Secure Boot setup" ;;
+      *) echo "None" ;;
+    esac
+    return
+  fi
+  local what="Umbra 0.5.2 on an AMD Radeon RX Vega: HDR co-op pane; HDR desktop stream and NVIDIA untested"
+  if [ "$ran" != "$3" ]; then echo "Version \`$ran\` ran with $what. This version has not run on hardware"; return; fi
+  case "$how" in
+    local) printf 'Yes, as a build of this version made on the test PC, with %s' "$what" ;;
+    *) printf 'Yes, with %s' "$what" ;;
+  esac
+  case "$1/$2" in
+    ubuntu26.04/kwin) echo ". The patch also ran with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER (HDR desktop and co-op)" ;;
+    ubuntu26.04/mutter) echo ". gnome-shell memory flat over seven HDR stream starts and stops. Revision 1 also ran with Umbra 0.5.1 on an NVIDIA RTX 2060 SUPER (HDR desktop and co-op)" ;;
+    *) echo ;;
   esac
 }
 
@@ -30,9 +44,7 @@ while read -r target _ _ desktops; do
     title=$(head -n1 <<<"$readme")                         # ... - <distribution> (<Compositor> <version>)
     distro=$(sed -n 's/^.* - \(.*\) (.*)$/\1/p' <<<"$title")
     compositor=$(sed -n 's/^.*(\(.*\))$/\1/p' <<<"$title")
-    upstream=${compositor##* }
-    case $component in kwin) series=$(cut -d. -f1-2 <<<"$upstream") ;; mutter) series=${upstream%%.*} ;; esac
     version=$(sed -n 's/^PACKAGES (version \(.*\))$/\1/p' <<<"$readme")
-    echo "| \`$(basename "$f")\` | $distro, $compositor | \`$version\` | $(hardware "$target" "$component" "$series") | Passed |"
+    echo "| \`$(basename "$f")\` | $distro, $compositor | \`$version\` | $(hardware "$target" "$component" "$version") | Passed |"
   done
 done < <(grep -v '^#' "$here/targets" | awk 'NF >= 4')
