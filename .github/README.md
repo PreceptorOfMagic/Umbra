@@ -64,7 +64,7 @@ Download `Umbra-0.5.2-linux-x86_64.flatpak` from the [Umbra 0.5.2 for Linux rele
   | Ubuntu 26.04 | KWin 6.6: tested on hardware with Umbra 0.5.2 (AMD) and 0.5.1 (NVIDIA, AMD) | Mutter 50: tested on hardware with Umbra 0.5.2 (AMD); its previous revision also with 0.5.1 (NVIDIA, AMD) |
   | Ubuntu 26.10 | KWin 6.7: tested on hardware with Umbra 0.5.2 (AMD) | Mutter 51: tested on hardware with Umbra 0.5.2 (AMD) |
   | Fedora 44 | KWin 6.7: tested on hardware with Umbra 0.5.2 (AMD) | Mutter 50: a build of the same version tested on hardware with Umbra 0.5.2 (AMD) |
-  | Fedora 45 | KWin 6.7: tested on hardware with Umbra 0.5.2 (AMD) | Mutter 51: **in progress**, not in the release yet (Fedora 45's mirrors served the 51.1 package but only the 51.0 source); a build of the same version was tested on hardware with Umbra 0.5.2 (AMD) |
+  | Fedora 45 | KWin 6.7: tested on hardware with Umbra 0.5.2 (AMD) | Mutter 51: a build of the same version tested on hardware with Umbra 0.5.2 (AMD); attached to the release after the other extras |
   | openSUSE Tumbleweed | KWin 6.7: tested on hardware with Umbra 0.5.2 (AMD) | Mutter 50: tested on hardware with Umbra 0.5.2 (AMD) |
   | Arch Linux | KWin 6.7: automated test only (cannot start on the test PC with Secure Boot on) | Mutter 51: automated test only (same) |
   | CachyOS | KWin 6.7: automated test only (same) | Mutter 51 (CachyOS's own): automated test only (same) |
@@ -95,7 +95,7 @@ Everything below ran on one test PC. The Umbra 0.5.2 tests used its AMD Radeon R
 | Fedora 44 | KDE Plasma 6.7.5 | KWin `6.7.5-1.fc44`; extra `6.7.5-1.fc44.umbrahdr1` | The smoke test with each. On a fresh install, the first start from the application-menu entry wrote the desktop-file copy and offered HDR at once |
 | Fedora 44 | GNOME 50.6 | Mutter `50.6-1.fc44`; extra `50.6-1.fc44.umbrahdr2`, built on the test PC | The smoke test with each. Fedora updated Mutter after the release's extras were first built, so the extra was built on the test PC from the same patch; the published one is rebuilt the same way |
 | Fedora 45 (pre-release) | KDE Plasma 6.7.5 | KWin `6.7.5-1.fc45`; extra `6.7.5-1.fc45.umbrahdr1` | The smoke test with each; the first start wrote the desktop-file copy |
-| Fedora 45 (pre-release) | GNOME 51.1 | Mutter `51.1-1.fc45`; extra `51.1-1.fc45.umbrahdr1`, built on the test PC | The smoke test with each, as for Fedora 44 GNOME. **The extra is in progress:** it is not in the release yet, because Fedora 45's mirrors served the Mutter 51.1 package but only the 51.0 source when the release was built |
+| Fedora 45 (pre-release) | GNOME 51.1 | Mutter `51.1-1.fc45`; extra `51.1-1.fc45.umbrahdr1`, built on the test PC | The smoke test with each, as for Fedora 44 GNOME. The extra was attached to the release after the others, once Fedora 45's mirrors served the Mutter 51.1 source as well as the package |
 | openSUSE Tumbleweed | KDE Plasma 6.7.5 | kwin6 `6.7.5-1.1`; extra `6.7.5-1.1.umbrahdr1` | The smoke test with each; the first start wrote the desktop-file copy |
 | openSUSE Tumbleweed | GNOME 50.5 | mutter `50.5-3.1`; extra `50.5-3.1.umbrahdr2` | The smoke test with each. Co-op panes ran at about 20 fps here (27 to 39 fps elsewhere), with or without the extra; Umbra 0.5.1 measured the same |
 

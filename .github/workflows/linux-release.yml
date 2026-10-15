@@ -188,7 +188,8 @@ jobs:
         working-directory: dist
         run: |
           sha256sum -c ./*.sha256
-          ls | grep -v '\.sha256$' | sort | xargs sha256sum > SHA256SUMS
+          # SHA256SUMS itself is created by the redirection before ls runs: leave it out, or it lists an empty file.
+          ls | grep -v -e '\.sha256$' -e '^SHA256SUMS$' | sort | xargs sha256sum > SHA256SUMS
           cat SHA256SUMS
 
       - name: Release notes
