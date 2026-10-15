@@ -14,5 +14,6 @@ fi
 flatpak-spawn --host systemctl --user disable --now "$app_id.service" 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/$app_id.service"
 rm -f "$HOME/.config/autostart/$app_id.desktop"
+/app/bin/umbra-kde-entry.sh remove || true
 flatpak-spawn --host systemctl --user daemon-reload || true
 echo 'Optional host integration removed. Existing device permissions reset on logout or reboot.'

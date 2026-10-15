@@ -7,6 +7,9 @@ rules=/app/share/sunshine/udev/rules.d/60-sunshine.rules
 unit=/app/share/sunshine/systemd/user/sunshine.service
 [ -r "$rules" ] && [ -r "$unit" ] || { echo 'The Flatpak is missing its integration files.' >&2; exit 1; }
 
+# KDE: the desktop-file key KDE needs to grant Umbra's virtual displays (umbra-kde-entry.sh); no admin prompt.
+/app/bin/umbra-kde-entry.sh || echo 'KDE virtual displays may stay unavailable; run Input Setup again to retry.' >&2
+
 echo 'Your desktop will ask for administrator permission to enable streamed input.'
 if ! flatpak-spawn --host pkexec sh -c '
   set -eu

@@ -3,6 +3,8 @@
 PORT=47990
 
 if ! curl -k https://localhost:$PORT > /dev/null 2>&1; then
+  # KDE: restore the desktop-file key KDE needs to grant Umbra's virtual displays (umbra-kde-entry.sh).
+  /app/bin/umbra-kde-entry.sh >/dev/null 2>&1 || true
   # Only graphical launch asks about input. The service runs sunshine directly.
   if [ -x /app/bin/umbra-input-setup ]; then
     /app/bin/umbra-input-setup --first-run || true
