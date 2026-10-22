@@ -20,7 +20,7 @@ Open [Umbra releases](https://github.com/PreceptorOfMagic/Umbra/releases), choos
 |---|---|---|
 | Windows x64 gaming PC | Umbra Windows installer, with bundled virtual-display and device components | [Windows steps](#windows-x64) |
 | Linux x86_64 gaming PC | Umbra Flatpak bundle, plus optional HDR extras for Ubuntu, Fedora, openSUSE Tumbleweed, Arch and CachyOS | [Linux steps](#linux-x86_64-flatpak) |
-| LG TV / Android TV (NVIDIA SHIELD) / Windows / Linux display device | Eclipse client, from its own repository | [Eclipse downloads](https://github.com/PreceptorOfMagic/Eclipse#downloads-and-installation) |
+| LG TV / NVIDIA SHIELD / Windows / Linux display device | Eclipse client, from its own repository | [Eclipse downloads](https://github.com/PreceptorOfMagic/Eclipse#downloads-and-installation) |
 
 ### Windows x64
 
