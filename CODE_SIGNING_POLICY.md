@@ -42,7 +42,7 @@ In practice, Umbra:
 
 - streams only to devices you pair with it, and announces itself on your local network (mDNS) so those devices can find it;
 - maps its ports on your router through UPnP only if you turn that setting on (it is off by default);
-- has a settings page that, when you open it in your browser, asks GitHub for the latest Apollo and Umbra releases, to tell you whether an update is out.
+- has a settings page that, when you open it in your browser, asks GitHub for the latest Apollo release and downloads the Project Hub's list of Umbra releases (`https://preceptorofmagic.github.io/Eclipse-Umbra-Project-Hub/updates.json`), to tell you whether an update is out.
 
 It has no telemetry or analytics.
 
