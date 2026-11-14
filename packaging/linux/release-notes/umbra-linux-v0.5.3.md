@@ -4,7 +4,7 @@ Umbra 0.5.3 for Linux is the host side of **Eclipse 1.3.7** on Linux: it shows w
 
 ## What's new in 0.5.3
 
-- **Update notice.** The web interface shows when a newer Umbra is out, with what it brings, from the Project Hub's release list (Settings can turn the check off). Apart from that and its privacy note in `CODE_SIGNING_POLICY.md`, 0.5.3 is the code of 0.5.2.
+- **Update notice.** The web interface shows when a newer Umbra is out, with what it brings, from the Project Hub's release list. Apart from that and its privacy note in `CODE_SIGNING_POLICY.md`, 0.5.3 is the code of 0.5.2.
 - With Eclipse 1.3.7, the PC you play on can be one of the two co-op PCs on Linux (GNOME or KDE Plasma). That needs Umbra running on that PC, but no pairing with it and nothing new from Umbra.
 
 ## How far this release is tested
