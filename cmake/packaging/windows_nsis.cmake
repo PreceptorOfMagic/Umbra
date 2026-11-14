@@ -35,6 +35,13 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         GamepadReboot:
         SetRebootFlag true
         GamepadReady:
+        IfFileExists \\\"$INSTDIR\\\\scripts\\\\install-hidhide.ps1\\\" 0 HidHideReady
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\install-hidhide.ps1\\\"'
+        Pop $0
+        StrCmp $0 3010 0 HidHideReady
+        SetRebootFlag true
+        HidHideReady:
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\install-service.bat\\\"'
         Pop $0
         StrCmp $0 0 HostServiceReady
@@ -83,6 +90,14 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
             GamepadRemovedReboot:
             SetRebootFlag true
         NoGamepad:
+        IfSilent NoHidHide
+        IfFileExists \\\"$INSTDIR\\\\scripts\\\\uninstall-hidhide.ps1\\\" 0 NoHidHide
+            nsExec::ExecToLog \
+              'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\scripts\\\\uninstall-hidhide.ps1\\\"'
+            Pop $0
+            StrCmp $0 3010 0 NoHidHide
+            SetRebootFlag true
+        NoHidHide:
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove SudoVDA Virtual Display Driver?' \
             /SD IDNO IDNO NoSudoVDA

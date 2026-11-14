@@ -65,6 +65,18 @@ above identify inputs; they are not by themselves a completed source delivery.
 - **Terms:** BSD 3-Clause; Copyright (c) 2016-2020, Nefarius Software
   Solutions e.U. See `licenses/ViGEmBus-BSD-3-Clause.txt`.
 
+## HidHide
+
+- **Shipped form:** the upstream `HidHide_1.5.230_x64.exe` installer is bundled as
+  `scripts/hidhide_installer.exe` and installed silently by Umbra setup when HidHide is not
+  already present (removed with Umbra only if Umbra installed it).
+- **Source/release pin:** tag
+  [`v1.5.230.0`](https://github.com/nefarius/HidHide/releases/tag/v1.5.230.0).
+- **Installer SHA-256:**
+  `f4bbbcb82e6258641b887c74bc81c4c5f66e4aa811808dfc304347687b7605f6`.
+- **Terms:** MIT; Copyright (c) 2020 Eric Korff de Gidts, Copyright (c) 2021-2023 Benjamin
+  Höglinger-Stelzer. See `licenses/HidHide-MIT.txt`.
+
 ## qrcodejs
 
 - **Shipped form:** minified web asset

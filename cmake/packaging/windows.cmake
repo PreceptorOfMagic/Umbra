@@ -18,6 +18,22 @@ install(FILES ${VIGEMBUS_INSTALLER}
         RENAME "vigembus_installer.exe"
         COMPONENT gamepad)
 
+# HidHide installer (Nefarius, MIT; signed by Nefarius Software Solutions e.U.): Eclipse uses it to keep the
+# controllers given to the other co-op PC away from this PC's games when this PC is one of the two co-op PCs.
+# Installed silently by scripts/install-hidhide.ps1; removed with Umbra only if Umbra installed it.
+set(HIDHIDE_INSTALLER "${CMAKE_BINARY_DIR}/hidhide_installer.exe")
+file(DOWNLOAD
+        "https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/HidHide_1.5.230_x64.exe"
+        ${HIDHIDE_INSTALLER}
+        SHOW_PROGRESS
+        EXPECTED_HASH SHA256=f4bbbcb82e6258641b887c74bc81c4c5f66e4aa811808dfc304347687b7605f6
+        TIMEOUT 60
+)
+install(FILES ${HIDHIDE_INSTALLER}
+        DESTINATION "scripts"
+        RENAME "hidhide_installer.exe"
+        COMPONENT gamepad)
+
 # Adding tools
 # Aurora Link ships next to sunshine.exe, in the SAME component as the
 # application, so it is installed and uninstalled with Umbra -- the whole point

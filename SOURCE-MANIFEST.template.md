@@ -53,6 +53,7 @@ anchors forward without checking them.
 | `libhdr10plus.a` | inspected SHA-256 `f7280580ebc36c397b401b55a23ab8e9f5b0303d7a824b53d0cf0e381768cfd7`; release value `[fill]` |
 | ViGEmClient | commit `8d71f6740ffff4671cdadbca255ce528e3cd3fef`; archive URL/SHA-256 `[fill]` |
 | ViGEmBus installer | tag `v1.21.442.0`; SHA-256 `155c50f1eec07bdc28d2f61a3e3c2c6c132fee7328412de224695f89143316bc`; release value `[fill]` |
+| HidHide installer | tag `v1.5.230.0`; SHA-256 `f4bbbcb82e6258641b887c74bc81c4c5f66e4aa811808dfc304347687b7605f6`; release value `[fill]` |
 | qrcodejs minified asset | commit `04f46c6a0708418cb7b96fc563eacae0fbf77674`; SHA-256 `c541ef06327885a8415bca8df6071e14189b4855336def4f36db54bde8484f36`; release value `[fill]` |
 
 Record every other submodule, downloaded binary, static library, DLL, driver,
