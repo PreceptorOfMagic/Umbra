@@ -16,6 +16,9 @@ $code = $installer.ExitCode
 if ($code -eq 0 -or $code -eq 3010) {
     New-Item -ItemType Directory -Force -Path $markerDir | Out-Null
     Set-Content -Path $marker -Value 'HidHide was installed by Umbra setup; Umbra removes it when Umbra is uninstalled.'
+    # HidHide's installer puts its configuration tool on every user's desktop (MEASURED 2026-11-15). Umbra users
+    # never need it -- Eclipse sets HidHide up itself -- so the shortcut goes; the tool stays in HidHide's folder.
+    Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:PUBLIC 'Desktop\HidHide Configuration Client.lnk')
 }
 # 3010 = installed, a restart completes it; NSIS records it without restarting the PC.
 exit $code
